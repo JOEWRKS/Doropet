@@ -56,6 +56,10 @@ The behavior priority is:
 
 A higher-priority event may interrupt a lower-priority autonomous state. Otherwise, a state observes its minimum duration before changing. Each triggered response consumes its event and has a cooldown so the same continuing cursor condition cannot retrigger it every update.
 
+### Decision record — direct interaction priority (2026-08-26)
+
+An earlier conversational draft placed STARTLED before CLICK_REACTION. During specification self-review, direct interaction was deliberately moved ahead of the automatic approach reaction and the user approved that refinement. A confirmed body click expresses clearer user intent than STARTLED, which is inferred from the same cursor movement; allowing STARTLED to win could make a deliberate click produce only a startled response. Therefore CLICK_REACTION interrupts STARTLED once release confirms a click, and a pending primary body press suspends new proximity reactions until it resolves as click or drag. With no direct body interaction, fast approach still enters STARTLED normally.
+
 ### IDLE
 
 Dororong pauses for a randomly selected 2–5 seconds, breathes, and occasionally blinks. At the end it chooses WALK or another IDLE interval.

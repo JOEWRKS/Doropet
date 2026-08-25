@@ -9,5 +9,5 @@
   | Persist approved M1 product and technical design | Current spec inspected and JOENESS contract linked | Complete |
   | Implement and verify M1 | Automated core checks, Release publish, and all actual-Windows acceptance checks in the spec pass | Pending |
 
-- Blockers / decisions / links: no current blocker; approved choices are WPF with a separated behavior core, curious-and-slightly-timid personality, primary-monitor scope, replaceable vector placeholder, and `docs/specs` as the method-independent specification path.
+- Blockers / decisions / links: no current blocker; approved choices are WPF with a separated behavior core, curious-and-slightly-timid personality, primary-monitor scope, replaceable vector placeholder, `docs/specs` as the method-independent specification path, and confirmed direct clicks taking priority over inferred STARTLED reactions.
 - Evidence / reviewed: 2026-08-26 — user proposal and section-by-section design approval reviewed; build, tests, publish output, and runtime behavior are pending implementation.
