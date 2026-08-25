@@ -1,0 +1,196 @@
+# Dororong Desktop Pet — Milestone 1 Design
+
+- Status: approved
+- Approved: 2026-08-26
+- Target: Windows desktop, C# / .NET 8 / WPF
+- Product personality: curious and slightly timid
+
+## 1. Product outcome
+
+Dororong is a small desktop companion that lives autonomously above ordinary Windows applications and responds naturally to meaningful mouse interaction without disrupting normal computer work.
+
+Milestone 1 is successful only when a user can run the application on Windows and directly observe Dororong wandering, reacting differently to slow and fast mouse approaches, responding to a click, being dragged, sleeping after inactivity, and waking naturally. Source code or a successful build alone is not completion.
+
+## 2. Scope
+
+Milestone 1 includes:
+
+- a lightweight Windows-only WPF application targeting `net8.0-windows`;
+- a borderless, transparent, always-on-top character window hidden from the taskbar and Alt+Tab;
+- autonomous IDLE and WALK behavior within the primary monitor work area;
+- distinguishable IDLE, WALK, CURIOUS, STARTLED, CLICK_REACTION, DRAGGED, and SLEEP states;
+- slow-approach, fast-approach, click, drag, inactivity, and wake interactions;
+- transparent pixels that do not block input to applications underneath;
+- a right-click character menu with an explicit Exit action;
+- replaceable presentation assets, beginning with lightweight WPF vector artwork;
+- a framework-dependent `win-x64` Release publish output for the .NET 8 Desktop Runtime;
+- concise run, verification, limitation, and continuation documentation.
+
+The following are out of scope: progression systems, multiple pets, accounts, cloud storage, AI conversation, weather or external services, a complex settings screen, auto-start, sound, large animation production, polished multi-monitor behavior, and a general game or plugin engine.
+
+## 3. Solution structure
+
+The solution has three projects and no third-party runtime framework:
+
+- `src/Dororong.Core`: behavior state, transitions, movement, screen-boundary decisions, cooldowns, and deterministic timing/randomness seams. It does not reference WPF.
+- `src/Dororong.App`: the WPF window, global cursor sampling, click/drag input, animation presentation, process lifetime, and minimal Win32 interop.
+- `tests/Dororong.Core.Tests`: deterministic unit tests for the behavior core.
+
+The UI layer owns operating-system mechanics; the core owns product behavior. The initial vector artwork maps a core presentation result to WPF visuals. Replacing it with sprite frames must not require changes to state-transition logic.
+
+No MVVM framework, dependency-injection container, game engine, generic plugin system, or speculative animation framework is introduced.
+
+## 4. Update loop and data flow
+
+`Dororong.App` runs a UI-thread update at a nominal 33 ms interval. Each update gathers elapsed time, the primary work area, the current global cursor position when available, and any queued body input. It sends one immutable input snapshot to `Dororong.Core`.
+
+The core returns the current state, screen position, facing direction, and presentation phase. The app applies only that result to the WPF window and character presenter. Elapsed time drives movement so a delayed frame does not change long-term speed. A single update delta is clamped to 100 ms to prevent a debugger pause or temporary stall from causing a large jump.
+
+Click and drag events do not choose visual behavior directly. They become core input events. Random choices are supplied through a small injectable random source so production remains varied and tests remain repeatable.
+
+## 5. State model and priority
+
+The behavior priority is:
+
+`DRAGGED > CLICK_REACTION > STARTLED > CURIOUS > SLEEP / IDLE / WALK`
+
+A higher-priority event may interrupt a lower-priority autonomous state. Otherwise, a state observes its minimum duration before changing. Each triggered response consumes its event and has a cooldown so the same continuing cursor condition cannot retrigger it every update.
+
+### IDLE
+
+Dororong pauses for a randomly selected 2–5 seconds, breathes, and occasionally blinks. At the end it chooses WALK or another IDLE interval.
+
+### WALK
+
+Dororong walks for a randomly selected 3–7 seconds at a calm speed. It faces its direction of travel and uses a small body bob. Approaching a work-area boundary turns the heading inward; the final position is always clamped inside the work area.
+
+### CURIOUS
+
+When the cursor newly enters the near zone at a non-startling closing speed, Dororong looks toward it and tilts for about 1.2–2 seconds. The near zone uses separate entry and exit distances to prevent oscillation. A cursor that simply remains nearby does not repeatedly trigger CURIOUS.
+
+### STARTLED
+
+When the cursor closes distance quickly enough inside the reaction zone, Dororong briefly squashes, opens its eyes, and retreats a short distance away from the approach direction. The response lasts about 0.6–0.9 seconds and then resolves to IDLE. Cursor speed away from Dororong does not trigger this state.
+
+### CLICK_REACTION
+
+A body press followed by release without crossing the system drag threshold produces a roughly 0.5-second wakeful bounce and then IDLE. Right-click is reserved for the context menu and does not trigger this reaction.
+
+### DRAGGED
+
+A body press that moves beyond the Windows system drag threshold enters DRAGGED. Dororong follows the cursor while preserving the original grab offset and appears to hang slightly toward the grab point. While captured, ordinary proximity reactions are suppressed. Release ends capture, clamps the character inside the work area, plays a brief settling motion, and returns to IDLE.
+
+### SLEEP
+
+After 90 seconds without meaningful interaction, Dororong waits for the current autonomous action to finish and enters SLEEP from IDLE. It lowers its body, closes its eyes, and breathes slowly.
+
+Wake transitions are explicit:
+
+- slow new approach: `SLEEP -> CURIOUS -> IDLE`;
+- fast approach: `SLEEP -> STARTLED -> IDLE`;
+- press and release below the drag threshold: `SLEEP -> CLICK_REACTION -> IDLE`;
+- press and movement beyond the drag threshold: `SLEEP -> DRAGGED -> IDLE`.
+
+On mouse-down during SLEEP, the wake pose begins immediately. Release or threshold-crossing determines whether the final interaction is a click or drag. Every meaningful interaction resets the inactivity timer.
+
+## 6. Interaction classification and tuning
+
+Initial behavior constants live in one `BehaviorTuning` value owned by the core, not in WPF code. They include autonomous duration ranges, walk speed, near-entry and near-exit distances, fast-closing threshold, response durations, retreat distance, cooldowns, and the 90-second sleep delay.
+
+Approach is based on the filtered rate at which the cursor-to-character distance decreases, not cursor speed alone. The initial near and fast thresholds are implementation calibration values rather than user-facing settings. They may be tuned during actual Windows observation without changing the state model or scope.
+
+The Windows system drag distance determines click versus drag. A primary body press starts one pending direct interaction and resets the inactivity timer. While that interaction is pending, proximity reactions are suspended: crossing the drag threshold enters DRAGGED immediately, while release below the threshold emits CLICK_REACTION. This guarantees that a deliberate body click is not replaced by a simultaneous approach reaction.
+
+## 7. Window behavior and non-interference
+
+The WPF window uses `WindowStyle=None`, `AllowsTransparency=true`, a transparent client surface, `Topmost=true`, and tool-window behavior. It does not appear in the taskbar or Alt+Tab. It uses no filled rectangular background behind the character.
+
+The layered window surface keeps all pixels outside the visible character at alpha zero so Windows passes input through those pixels to the application underneath. Only visible character body pixels are intentionally interactive. WPF visual hit testing alone is not treated as proof of cross-process click-through.
+
+The window must not take keyboard focus from the active work application during ordinary body click or drag. Minimal Win32 no-activation behavior may be used for this purpose. Right-clicking the visible character opens a small WPF context menu containing Exit. Choosing Exit stops updates, releases any mouse capture, closes the window, and terminates the process.
+
+Click-through and focus preservation are release checks on actual Windows, including transparent corners and margins while the character is in IDLE, WALK, SLEEP, and a changing animation frame.
+
+Milestone 1 uses only the primary monitor work area and respects the taskbar boundary. Refined multi-monitor behavior is explicitly deferred.
+
+## 8. Presentation contract
+
+The core exposes state, facing, and normalized phase; it does not know about images, storyboards, or WPF controls. `Dororong.App` maps these values to a replaceable character presenter.
+
+The initial WPF vector presenter makes states visibly distinct through pose and motion:
+
+- IDLE: breathing and blinking;
+- WALK: facing and body bob;
+- CURIOUS: gaze and head tilt;
+- STARTLED: squash/stretch and retreat;
+- CLICK_REACTION: widened eyes and a short bounce;
+- DRAGGED: hanging stretch toward the grab point;
+- SLEEP: lowered body, closed eyes, and slow breathing.
+
+Changing to real Dororong artwork replaces presenter assets and state-to-frame mapping. It does not alter the behavior core or input classification.
+
+## 9. Failure and cleanup behavior
+
+If global cursor sampling fails for one update, the app omits pointer-derived reactions for that update and continues autonomous behavior using the last valid character state. It does not retry outside the normal next update or crash solely for that failure.
+
+Application shutdown and unexpected UI-loop failure stop the update timer and release mouse capture in a `finally`-equivalent cleanup path. A fatal startup or rendering error is shown as an ordinary error and exits; the application must not leave an invisible topmost input window running.
+
+The app stores no account data, external service state, or persistent progression in this milestone.
+
+## 10. Verification strategy
+
+### Automated core verification
+
+Tests cover:
+
+- deterministic IDLE/WALK timing and seeded random choices;
+- minimum state duration and priority interruption;
+- slow versus fast approach classification;
+- near-zone hysteresis and reaction cooldowns;
+- fast motion away from Dororong not causing STARTLED;
+- click versus drag classification using a supplied drag threshold;
+- direct click priority over a simultaneous approach reaction;
+- every SLEEP wake path, including click without drag;
+- drag release clamping at all four work-area edges;
+- no movement beyond each work-area boundary;
+- invalid or oversized elapsed-time handling.
+
+Tests use real core objects. Operating-system input is isolated at the app boundary rather than mocked inside the behavior model.
+
+### Actual Windows acceptance
+
+A Release build is run on the current Windows x64 environment. Acceptance requires direct observation of:
+
+1. a borderless transparent character above ordinary windows;
+2. autonomous IDLE and WALK without continuous user input;
+3. containment inside the primary work area;
+4. visibly different CURIOUS and STARTLED responses to slow and fast approach;
+5. a click response distinct from drag;
+6. dragging with grab-offset preservation and clean release;
+7. SLEEP after approximately 90 seconds and natural wake by slow approach, fast approach, click, and drag;
+8. clicks on transparent pixels reaching a known control in the application underneath while body clicks do not;
+9. ordinary body click and drag not stealing keyboard focus from the work application;
+10. right-click Exit ending the process cleanly;
+11. no rapid state flapping or repeated response while the cursor condition remains unchanged.
+
+Motion and rendering acceptance is checked from the produced executable, not inferred from XAML or tests. Any required behavior not observed remains unverified and prevents a complete milestone claim.
+
+## 11. Deliverables and handoff
+
+The repository will contain the solution and three projects above, this specification, the JOENESS `TASKS.md` ledger, project `AGENTS.md` managed through the installed setup procedure, and a concise `README.md` with build, test, run, publish, behavior, and known-limit information.
+
+Generated publish artifacts are not source-controlled. The documented Release publish command produces a framework-dependent `win-x64` executable for machines with the .NET 8 Desktop Runtime.
+
+At the milestone boundary, `TASKS.md` records the actual status and evidence references. The handoff identifies implemented behavior, verified checks, remaining limitations, and shallow next candidates without adding them to Milestone 1 scope.
+
+## 12. Definition of done
+
+Milestone 1 is complete only when all of the following are true:
+
+- the full automated test command exits successfully with zero failures;
+- the Release build and documented `win-x64` publish command exit successfully;
+- the published executable launches and exits cleanly on the current Windows environment;
+- every required actual-Windows acceptance observation in section 10 is recorded as passing;
+- the implementation still matches this approved scope and non-goals;
+- the README and JOENESS ledger accurately describe current run commands, verified behavior, and limitations;
+- no required check is unknown, stale, or inferred from build success alone.
