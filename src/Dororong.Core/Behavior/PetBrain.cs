@@ -15,6 +15,11 @@ public sealed class PetBrain
 
     public PetBrain(BehaviorTuning tuning, IRandomSource random, PointD initialPosition)
     {
+        ArgumentNullException.ThrowIfNull(tuning);
+        ArgumentNullException.ThrowIfNull(random);
+        ValidateAutonomousDurationRange(tuning.IdleMin, tuning.IdleMax, nameof(tuning.IdleMin));
+        ValidateAutonomousDurationRange(tuning.WalkMin, tuning.WalkMax, nameof(tuning.WalkMin));
+
         _tuning = tuning;
         _random = random;
         _state = PetState.Idle;
@@ -40,28 +45,25 @@ public sealed class PetBrain
             return Current;
         }
 
-        if (_state == PetState.Walk)
-        {
-            Move(delta, input.WorkArea, input.PetSize);
-        }
+        NormalizePosition(input.WorkArea, input.PetSize);
 
-        _stateElapsed += delta;
-        if (_stateElapsed >= _stateDuration)
+        var remaining = delta;
+        while (remaining > TimeSpan.Zero)
         {
-            if (_state == PetState.Idle)
+            var untilStateBoundary = _stateDuration - _stateElapsed;
+            var consumed = remaining < untilStateBoundary ? remaining : untilStateBoundary;
+
+            if (_state == PetState.Walk)
             {
-                if (_random.NextUnit() < _tuning.IdleToWalkProbability)
-                {
-                    StartWalk();
-                }
-                else
-                {
-                    StartIdle();
-                }
+                Move(consumed, input.WorkArea, input.PetSize);
             }
-            else if (_state == PetState.Walk)
+
+            _stateElapsed += consumed;
+            remaining -= consumed;
+
+            if (_stateElapsed >= _stateDuration)
             {
-                StartIdle();
+                AdvanceAutonomousState();
             }
         }
 
@@ -76,6 +78,25 @@ public sealed class PetBrain
         }
 
         return delta > _tuning.MaxDelta ? _tuning.MaxDelta : delta;
+    }
+
+    private void AdvanceAutonomousState()
+    {
+        if (_state == PetState.Idle)
+        {
+            if (_random.NextUnit() < _tuning.IdleToWalkProbability)
+            {
+                StartWalk();
+            }
+            else
+            {
+                StartIdle();
+            }
+        }
+        else if (_state == PetState.Walk)
+        {
+            StartIdle();
+        }
     }
 
     private void StartIdle()
@@ -99,16 +120,33 @@ public sealed class PetBrain
     {
         var distance = _tuning.WalkSpeed * delta.TotalSeconds;
         var moved = _position + new PointD(_heading.X * distance, _heading.Y * distance);
-        var clamped = workArea.ClampTopLeft(moved, petSize);
+        _position = moved;
+        NormalizePosition(workArea, petSize);
+    }
 
-        if (clamped.X != moved.X)
+    private void NormalizePosition(RectD workArea, SizeD petSize)
+    {
+        var clamped = workArea.ClampTopLeft(_position, petSize);
+        if (_state != PetState.Walk)
         {
-            _heading = _heading with { X = -_heading.X };
+            _position = clamped;
+            return;
         }
 
-        if (clamped.Y != moved.Y)
+        if (clamped.X != _position.X)
         {
-            _heading = _heading with { Y = -_heading.Y };
+            _heading = _heading with
+            {
+                X = clamped.X > _position.X ? Math.Abs(_heading.X) : -Math.Abs(_heading.X)
+            };
+        }
+
+        if (clamped.Y != _position.Y)
+        {
+            _heading = _heading with
+            {
+                Y = clamped.Y > _position.Y ? Math.Abs(_heading.Y) : -Math.Abs(_heading.Y)
+            };
         }
 
         _position = clamped;
@@ -123,6 +161,14 @@ public sealed class PetBrain
         }
 
         return minimum + TimeSpan.FromTicks((long)((maximum - minimum).Ticks * _random.NextUnit()));
+    }
+
+    private static void ValidateAutonomousDurationRange(TimeSpan minimum, TimeSpan maximum, string parameterName)
+    {
+        if (minimum <= TimeSpan.Zero || maximum < minimum)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, "Autonomous state durations must be positive and ordered.");
+        }
     }
 
     private double GetPhase() => _state switch
@@ -140,6 +186,14 @@ public sealed class PetBrain
     private static double RepeatingPhase(TimeSpan elapsed, TimeSpan period) =>
         elapsed.Ticks % period.Ticks / (double)period.Ticks;
 
-    private double FinitePhase(TimeSpan duration) =>
-        Math.Clamp(_stateElapsed.Ticks / (double)duration.Ticks, 0, 1);
+    private double FinitePhase(TimeSpan duration)
+    {
+        if (duration <= TimeSpan.Zero)
+        {
+            return 0;
+        }
+
+        var phase = _stateElapsed.Ticks / (double)duration.Ticks;
+        return Math.Clamp(phase, 0, Math.BitDecrement(1d));
+    }
 }
