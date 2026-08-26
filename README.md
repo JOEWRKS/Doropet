@@ -35,7 +35,7 @@ Transparent parts of Dororong's window are intended to pass pointer input throug
 
 ## Milestone 1 boundaries
 
-Milestone 1 uses the primary monitor's work area only; polished multi-monitor behavior is not included. The presenter uses the exact user-supplied canonical Dororong raster art. That character has no tail: the white shapes behind the rose and bow are ribbons. Production frames preserve the canonical character identity without redraw, recolor, added geometry, or other reinterpretation; only the bounded eye regions may differ in the deterministic sleep/blink frame.
+Milestone 1 uses the primary monitor's work area only; polished multi-monitor behavior is not included. The presenter uses the exact user-supplied canonical Dororong raster art. That character has no tail: the white shapes behind the rose and bow are ribbons. The pinned source remains byte-identical; production changes are limited to the fixed body-outline thinning fixture and, for sleep/blink, the two explicit eye stencils. All pixels outside those approved fixtures preserve canonical character identity without redraw, added geometry, or other reinterpretation.
 
 There are no settings screen, sound, auto-start, saved preferences or progression, accounts, cloud persistence, or polished multi-monitor behavior in this milestone.
 

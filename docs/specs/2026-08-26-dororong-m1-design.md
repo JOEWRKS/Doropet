@@ -121,7 +121,11 @@ Milestone 1 uses only the primary monitor work area and respects the taskbar bou
 
 The core exposes state, facing, and normalized phase; it does not know about images, storyboards, or WPF controls. `Dororong.App` maps these values to a replaceable character presenter.
 
-The presenter uses the exact user-supplied canonical Dororong source. Dororong has no tail; the white shapes behind the rose and bow are ribbons. The persisted source is the visual authority and must not be regenerated, redrawn, beautified, recolored, widened, or otherwise reinterpreted. The transparent production frame removes only near-white background connected to the source image boundary, retains source RGB and coordinates for every character pixel, adds no geometry, shadow, decoration, or filled transparent rectangle, and supplies the same canonical frame to every state except sleep and blink. A deterministic sleep/blink frame may change only bounded eye regions to closed-eye marks; every pixel outside those regions must match the canonical production frame.
+The presenter uses the exact user-supplied canonical Dororong source. Dororong has no tail; the white shapes behind the rose and bow are ribbons. The persisted source is the visual authority and remains byte-identical at pinned SHA-256 `F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504`; it must not be regenerated, redrawn, beautified, recolored, widened, or otherwise reinterpreted.
+
+The transparent production frame removes only near-white background connected to the source image boundary and preserves the resulting exterior silhouette and alpha fringe. Its sole RGB exception is the explicit, fixed body-outline fixture in the canonical-art generator: approved inner dark-core pixels on the rear rim and clean leg-side contours are replaced with adjacent source-derived body color so the audited dark core is two pixels. Every production pixel outside that fixture retains source RGB and coordinates; no global erosion, threshold transform, new geometry, shadow, decoration, or filled transparent rectangle is permitted.
+
+The deterministic sleep/blink frame starts from that corrected production frame, retains identical alpha, and may change RGB only inside the explicit left eye stencil within `x=43..72,y=105..143` and right eye stencil within `x=86..118,y=105..143`. Those stencils remove the open eyes with gradients derived from pinned local face pixels and add centered two-pixel dark-core lids. Opaque `#FADCE0` fill ellipses and broad unclipped patches are forbidden; bangs, hair borders, and every pixel outside the two eye stencils remain bit-identical to the corrected production frame.
 
 Existing presenter transforms make states visibly distinct through pose and motion:
 
@@ -133,7 +137,7 @@ Existing presenter transforms make states visibly distinct through pose and moti
 - DRAGGED: hanging stretch toward the grab point;
 - SLEEP: lowered body, closed eyes, and slow breathing.
 
-Canonical-art asset identity, boundary-connected transparency, retained pixels, bounded eye changes, and presenter state-to-frame mapping are automated contracts. Those checks do not prove cross-process click-through, focus preservation, or the rendered Windows appearance; those remain actual-Windows observations.
+Canonical-art asset identity, boundary-connected transparency, the exact body-fixture allowlist and audited two-pixel probes, explicit eye-stencil confinement, open/closed alpha identity, forbidden eye-patch color absence, closed-lid presence, and presenter state-to-frame mapping are automated contracts. Those checks do not prove cross-process click-through, focus preservation, or the rendered Windows appearance; those remain actual-Windows observations.
 
 ## 9. Failure and cleanup behavior
 
