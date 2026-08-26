@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dororong.Core", "src\Dororo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dororong.Core.Tests", "tests\Dororong.Core.Tests\Dororong.Core.Tests.csproj", "{A114D0E1-C5FE-40AC-A08A-81C9CE543376}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dororong.App", "src\Dororong.App\Dororong.App.csproj", "{2E1C713B-EF73-4452-985F-0CA8516B54E7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -43,6 +45,18 @@ Global
 		{A114D0E1-C5FE-40AC-A08A-81C9CE543376}.Release|x64.Build.0 = Release|Any CPU
 		{A114D0E1-C5FE-40AC-A08A-81C9CE543376}.Release|x86.ActiveCfg = Release|Any CPU
 		{A114D0E1-C5FE-40AC-A08A-81C9CE543376}.Release|x86.Build.0 = Release|Any CPU
+		{2E1C713B-EF73-4452-985F-0CA8516B54E7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2E1C713B-EF73-4452-985F-0CA8516B54E7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2E1C713B-EF73-4452-985F-0CA8516B54E7}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2E1C713B-EF73-4452-985F-0CA8516B54E7}.Debug|x64.Build.0 = Debug|Any CPU
+		{2E1C713B-EF73-4452-985F-0CA8516B54E7}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2E1C713B-EF73-4452-985F-0CA8516B54E7}.Debug|x86.Build.0 = Debug|Any CPU
+		{2E1C713B-EF73-4452-985F-0CA8516B54E7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2E1C713B-EF73-4452-985F-0CA8516B54E7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2E1C713B-EF73-4452-985F-0CA8516B54E7}.Release|x64.ActiveCfg = Release|Any CPU
+		{2E1C713B-EF73-4452-985F-0CA8516B54E7}.Release|x64.Build.0 = Release|Any CPU
+		{2E1C713B-EF73-4452-985F-0CA8516B54E7}.Release|x86.ActiveCfg = Release|Any CPU
+		{2E1C713B-EF73-4452-985F-0CA8516B54E7}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -50,5 +64,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{2C75239D-ED8F-4152-87C5-8A7AE316E5CB} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{A114D0E1-C5FE-40AC-A08A-81C9CE543376} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{2E1C713B-EF73-4452-985F-0CA8516B54E7} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal
