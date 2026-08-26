@@ -35,7 +35,7 @@ Transparent parts of Dororong's window are intended to pass pointer input throug
 
 ## Milestone 1 boundaries
 
-Milestone 1 uses the primary monitor's work area only; polished multi-monitor behavior is not included. The presenter uses the exact user-supplied canonical Dororong raster art. That character has no tail: the white shapes behind the rose and bow are ribbons. The pinned source remains byte-identical; production changes are limited to the fixed body-outline thinning fixture and, for sleep/blink, the two explicit eye stencils. All pixels outside those approved fixtures preserve canonical character identity without redraw, added geometry, or other reinterpretation.
+Milestone 1 uses the primary monitor's work area only; polished multi-monitor behavior is not included. The exact user-supplied 225x225 Dororong PNG remains the byte-identical visual authority. That character has no tail: the white shapes behind the rose and bow are ribbons. The generator performs boundary-connected transparency and the reviewed sleep/blink eye derivation at 225px, then deterministically downsamples premultiplied-alpha open and closed frames to separate native 96x96 runtime PNGs. Only at 96px, a narrow body-only band replaces the irregular downsampled body ink with one continuous uniform contour while preserving alpha and every RGB pixel outside the band. On the current verified 96-DPI / 100%-scale target, WPF presents those resources at exactly 96x96 DIPs without another bitmap resize; other DPI/scaling targets remain unverified for this one-to-one rendering claim.
 
 There are no settings screen, sound, auto-start, saved preferences or progression, accounts, cloud persistence, or polished multi-monitor behavior in this milestone.
 

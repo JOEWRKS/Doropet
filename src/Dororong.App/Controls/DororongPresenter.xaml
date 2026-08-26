@@ -30,8 +30,9 @@
             </Canvas.RenderTransform>
 
             <controls:AlphaHitTestImage x:Name="DororongImage"
-                                        Width="108"
+                                        Width="96"
                                         Height="96"
+                                        Canvas.Left="6"
                                         RenderOptions.BitmapScalingMode="HighQuality"
                                         Source="/Dororong.App;component/Assets/dororong-canonical.png"
                                         Stretch="Uniform" />

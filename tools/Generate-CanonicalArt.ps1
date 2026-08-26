@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$SourcePath,
     [Parameter(Mandatory = $true)]
-    [string]$OutputDirectory
+    [string]$OutputDirectory,
+    [string]$BaselineOutputDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,35 +18,6 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $SourcePath).Hash -ne $expected
 Add-Type -AssemblyName System.Drawing
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
-$bodyFixtureRuns = @(
-    '140:174-174', '141:174-174', '142:174-174', '143:174-174', '144:174-174',
-    '145:174-174', '146:174-174', '147:174-174', '148:174-174', '149:174-174',
-    '150:173-174', '151:173-173', '152:173-173', '153:172-173', '154:172-172',
-    '155:172-172', '156:171-172', '157:170-171', '158:170-170', '159:169-170',
-    '160:168-169', '161:168-169', '162:167-168', '163:166-167', '164:166-166',
-    '165:165-166', '166:164-165', '167:164-164', '168:163-164', '169:163-163',
-    '170:162-162', '171:162-162', '172:162-162', '173:162-162', '174:161-161',
-    '175:161-162',
-    '177:44-45:R', '178:45-45:R', '179:45-45:R', '180:45-46:R', '181:46-46:R',
-    '182:46-47:R', '183:47-48:R', '184:48-48:R', '185:48-49:R',
-    '177:60-60:L', '178:60-60:L', '179:60-60:L', '180:60-60:L', '181:60-60:L',
-    '182:60-60:L', '183:60-60:L', '184:60-60:L', '185:59-60:L', '186:59-59:L', '187:58-59:L',
-    '180:81-81:R', '181:81-82:R', '182:82-82:R', '183:82-82:R', '184:83-83:R',
-    '185:83-83:R', '186:83-84:R', '187:84-84:R', '188:84-85:R', '189:85-86:R',
-    '190:86-87:R', '191:86-87:R', '192:87-88:R', '193:88-89:R', '194:89-90:R', '195:90-91:R',
-    '181:110-111:L', '183:110-111:L', '184:111-111:L', '185:111-111:L', '186:111-111:L',
-    '187:111-111:L', '188:111-111:L', '189:111-111:L', '190:111-111:L', '191:111-111:L',
-    '192:110-111:L', '193:111-111:L', '194:110-111:L', '195:110-110:L', '196:110-110:L',
-    '197:109-110:L', '198:109-110:L', '199:108-109:L',
-    '177:141-141:R', '178:141-141:R', '179:141-141:R', '180:141-141:R', '181:141-142:R',
-    '182:142-142:R', '183:142-143:R', '184:143-143:R', '185:143-144:R', '186:144-144:R',
-    '187:144-145:R', '188:145-146:R', '189:146-146:R', '190:146-147:R', '191:147-148:R',
-    '192:148-149:R', '193:149-150:R', '194:150-152:R',
-    '176:162-162:L', '177:162-162:L', '178:162-162:L', '179:162-162:L', '180:162-163:L',
-    '181:162-163:L', '182:163-163:L', '183:163-163:L', '184:163-163:L', '185:163-163:L',
-    '186:163-163:L', '187:163-163:L', '188:162-162:L', '189:162-162:L', '190:161-162:L',
-    '191:161-161:L', '192:159-161:L', '193:158-160:L', '194:156-159:L'
-)
 $leftEyeStencilRuns = @(
     '114:43-59', '115:44-60', '116:44-62', '117:43-63',
     '118:43-64', '119:43-64', '120:43-65', '121:43-64', '122:43-64',
@@ -107,6 +79,248 @@ function Get-BilinearFaceColor(
     }
 
     return [System.Drawing.Color]::FromArgb(255, $channels[0], $channels[1], $channels[2])
+}
+
+function Resize-ToNative96([System.Drawing.Bitmap]$Bitmap)
+{
+    $premultiplied = [System.Drawing.Bitmap]::new(
+        96,
+        96,
+        [System.Drawing.Imaging.PixelFormat]::Format32bppPArgb)
+    try
+    {
+        $graphics = [System.Drawing.Graphics]::FromImage($premultiplied)
+        try
+        {
+            $graphics.Clear([System.Drawing.Color]::Transparent)
+            $graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
+            $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+            $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
+            $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+            $attributes = [System.Drawing.Imaging.ImageAttributes]::new()
+            try
+            {
+                $attributes.SetWrapMode([System.Drawing.Drawing2D.WrapMode]::TileFlipXY)
+                $graphics.DrawImage(
+                    $Bitmap,
+                    [System.Drawing.Rectangle]::new(0, 0, 96, 96),
+                    0,
+                    0,
+                    $Bitmap.Width,
+                    $Bitmap.Height,
+                    [System.Drawing.GraphicsUnit]::Pixel,
+                    $attributes)
+            }
+            finally
+            {
+                $attributes.Dispose()
+            }
+        }
+        finally
+        {
+            $graphics.Dispose()
+        }
+
+        $result = [System.Drawing.Bitmap]::new(
+            96,
+            96,
+            [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        for ($y = 0; $y -lt 96; $y++)
+        {
+            for ($x = 0; $x -lt 96; $x++)
+            {
+                $pixel = $premultiplied.GetPixel($x, $y)
+                if ($pixel.A -eq 0)
+                {
+                    $result.SetPixel($x, $y, [System.Drawing.Color]::FromArgb(0, 0, 0, 0))
+                }
+                else
+                {
+                    $result.SetPixel($x, $y, [System.Drawing.Color]::FromArgb($pixel.A, $pixel.R, $pixel.G, $pixel.B))
+                }
+            }
+        }
+        return $result
+    }
+    finally
+    {
+        $premultiplied.Dispose()
+    }
+}
+
+function New-NativeBodyContour
+{
+    $path = [System.Drawing.Drawing2D.GraphicsPath]::new()
+    $path.StartFigure()
+    $path.AddBezier(18.8, 70.7, 18.6, 74.5, 18.4, 78.1, 21.2, 80.1)
+    $path.AddBezier(21.2, 80.1, 23.1, 81.5, 25.7, 80.5, 25.5, 77.3)
+    $path.AddBezier(25.5, 77.3, 25.3, 75.0, 24.7, 72.7, 25.2, 71.6)
+    $path.AddBezier(25.2, 71.6, 28.4, 74.2, 31.8, 75.4, 34.8, 76.5)
+    $path.AddBezier(34.8, 76.5, 35.4, 80.0, 37.0, 83.4, 40.3, 85.0)
+    $path.AddBezier(40.3, 85.0, 42.5, 86.3, 46.0, 85.1, 46.7, 82.2)
+    $path.AddBezier(46.7, 82.2, 47.1, 79.9, 46.6, 77.8, 47.0, 76.6)
+    $path.AddBezier(47.0, 76.6, 52.3, 76.3, 57.3, 74.3, 60.5, 71.3)
+    $path.AddBezier(60.5, 71.3, 60.2, 75.6, 60.7, 79.7, 63.6, 82.5)
+    $path.AddBezier(63.6, 82.5, 65.6, 84.5, 68.7, 83.8, 69.5, 81.2)
+    $path.AddBezier(69.5, 81.2, 70.3, 78.5, 68.9, 76.6, 69.4, 74.7)
+    $path.AddBezier(69.4, 74.7, 72.8, 69.0, 74.7, 64.4, 74.4, 59.7)
+    return $path
+}
+
+function New-PathMask(
+    [System.Drawing.Drawing2D.GraphicsPath]$Path,
+    [float]$Width)
+{
+    $scale = 4
+    $highResolutionMask = [System.Drawing.Bitmap]::new(
+        96 * $scale,
+        96 * $scale,
+        [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $graphics = [System.Drawing.Graphics]::FromImage($highResolutionMask)
+    try
+    {
+        $graphics.Clear([System.Drawing.Color]::Transparent)
+        $graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
+        $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+        $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
+        $scaledPath = $Path.Clone()
+        try
+        {
+            $matrix = [System.Drawing.Drawing2D.Matrix]::new()
+            try
+            {
+                $matrix.Scale($scale, $scale)
+                $scaledPath.Transform($matrix)
+            }
+            finally
+            {
+                $matrix.Dispose()
+            }
+            $pen = [System.Drawing.Pen]::new([System.Drawing.Color]::White, $Width * $scale)
+            try
+            {
+                $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
+                $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+                $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+                $graphics.DrawPath($pen, $scaledPath)
+            }
+            finally
+            {
+                $pen.Dispose()
+            }
+        }
+        finally
+        {
+            $scaledPath.Dispose()
+        }
+    }
+    finally
+    {
+        $graphics.Dispose()
+    }
+
+    $mask = [System.Drawing.Bitmap]::new(96, 96, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    for ($y = 0; $y -lt 96; $y++)
+    {
+        for ($x = 0; $x -lt 96; $x++)
+        {
+            $alphaSum = 0
+            for ($sampleY = 0; $sampleY -lt $scale; $sampleY++)
+            {
+                for ($sampleX = 0; $sampleX -lt $scale; $sampleX++)
+                {
+                    $alphaSum += $highResolutionMask.GetPixel(
+                        ($x * $scale) + $sampleX,
+                        ($y * $scale) + $sampleY).A
+                }
+            }
+            $alpha = [Math]::Round($alphaSum / ($scale * $scale))
+            $mask.SetPixel($x, $y, [System.Drawing.Color]::FromArgb($alpha, 255, 255, 255))
+        }
+    }
+    $highResolutionMask.Dispose()
+    return $mask
+}
+
+function Get-LocalBodyFill(
+    [System.Drawing.Bitmap]$Bitmap,
+    [int]$X,
+    [int]$Y)
+{
+    $best = [System.Drawing.Color]::FromArgb(255, 255, 255, 255)
+    $bestLuminance = -1
+    for ($radius = 1; $radius -le 4; $radius++)
+    {
+        for ($sampleY = [Math]::Max(0, $Y - $radius); $sampleY -le [Math]::Min(95, $Y + $radius); $sampleY++)
+        {
+            for ($sampleX = [Math]::Max(0, $X - $radius); $sampleX -le [Math]::Min(95, $X + $radius); $sampleX++)
+            {
+                $pixel = $Bitmap.GetPixel($sampleX, $sampleY)
+                if ($pixel.A -lt 224)
+                {
+                    continue
+                }
+                $luminance = (0.2126 * $pixel.R) + (0.7152 * $pixel.G) + (0.0722 * $pixel.B)
+                if ($luminance -gt $bestLuminance)
+                {
+                    $best = $pixel
+                    $bestLuminance = $luminance
+                }
+            }
+        }
+        if ($bestLuminance -ge 245)
+        {
+            break
+        }
+    }
+    return $best
+}
+
+function Apply-NativeBodyCorrection([System.Drawing.Bitmap]$Bitmap)
+{
+    $path = New-NativeBodyContour
+    $clearMask = New-PathMask $path 3.5
+    $strokeMask = New-PathMask $path 1.35
+    $baseline = $Bitmap.Clone()
+    try
+    {
+        $strokeColor = [System.Drawing.Color]::FromArgb(255, 31, 20, 25)
+        for ($y = 0; $y -lt 96; $y++)
+        {
+            for ($x = 0; $x -lt 96; $x++)
+            {
+                $original = $Bitmap.GetPixel($x, $y)
+                if ($original.A -eq 0)
+                {
+                    $Bitmap.SetPixel($x, $y, [System.Drawing.Color]::FromArgb(0, 0, 0, 0))
+                    continue
+                }
+                if ($clearMask.GetPixel($x, $y).A -eq 0)
+                {
+                    continue
+                }
+
+                $fill = Get-LocalBodyFill $baseline $x $y
+                $coverage = $strokeMask.GetPixel($x, $y).A / 255.0
+                if (($coverage * ($original.A / 255.0)) -lt 0.16)
+                {
+                    $coverage = 0.0
+                }
+                $red = [Math]::Round(($fill.R * (1.0 - $coverage)) + ($strokeColor.R * $coverage))
+                $green = [Math]::Round(($fill.G * (1.0 - $coverage)) + ($strokeColor.G * $coverage))
+                $blue = [Math]::Round(($fill.B * (1.0 - $coverage)) + ($strokeColor.B * $coverage))
+                $Bitmap.SetPixel($x, $y, [System.Drawing.Color]::FromArgb($original.A, $red, $green, $blue))
+            }
+        }
+    }
+    finally
+    {
+        $path.Dispose()
+        $clearMask.Dispose()
+        $strokeMask.Dispose()
+        $baseline.Dispose()
+    }
 }
 
 $source = [System.Drawing.Bitmap]::new($SourcePath)
@@ -172,24 +386,6 @@ try
             }
         }
 
-        foreach ($fixtureRun in $bodyFixtureRuns)
-        {
-            $run = ConvertFrom-CoordinateRun $fixtureRun
-            $sampleX = if ($run.SampleSide -eq 'R') { $run.EndX + 1 } else { $run.StartX - 1 }
-            $localBodyColor = $source.GetPixel($sampleX, $run.Y)
-            for ($x = $run.StartX; $x -le $run.EndX; $x++)
-            {
-                $alpha = $production.GetPixel($x, $run.Y).A
-                $production.SetPixel(
-                    $x,
-                    $run.Y,
-                    [System.Drawing.Color]::FromArgb($alpha, $localBodyColor.R, $localBodyColor.G, $localBodyColor.B))
-            }
-        }
-
-        $productionPath = Join-Path $OutputDirectory 'dororong-canonical.png'
-        $production.Save($productionPath, [System.Drawing.Imaging.ImageFormat]::Png)
-
         $closedEyes = $production.Clone()
         try
         {
@@ -235,9 +431,35 @@ try
                 }
             }
 
-            $closedEyes.Save(
-                (Join-Path $OutputDirectory 'dororong-closed-eyes.png'),
-                [System.Drawing.Imaging.ImageFormat]::Png)
+            $openBaseline = Resize-ToNative96 $production
+            $closedBaseline = Resize-ToNative96 $closedEyes
+            try
+            {
+                if ($BaselineOutputDirectory)
+                {
+                    New-Item -ItemType Directory -Force -Path $BaselineOutputDirectory | Out-Null
+                    $openBaseline.Save(
+                        (Join-Path $BaselineOutputDirectory 'dororong-canonical.png'),
+                        [System.Drawing.Imaging.ImageFormat]::Png)
+                    $closedBaseline.Save(
+                        (Join-Path $BaselineOutputDirectory 'dororong-closed-eyes.png'),
+                        [System.Drawing.Imaging.ImageFormat]::Png)
+                }
+
+                Apply-NativeBodyCorrection $openBaseline
+                Apply-NativeBodyCorrection $closedBaseline
+                $openBaseline.Save(
+                    (Join-Path $OutputDirectory 'dororong-canonical.png'),
+                    [System.Drawing.Imaging.ImageFormat]::Png)
+                $closedBaseline.Save(
+                    (Join-Path $OutputDirectory 'dororong-closed-eyes.png'),
+                    [System.Drawing.Imaging.ImageFormat]::Png)
+            }
+            finally
+            {
+                $openBaseline.Dispose()
+                $closedBaseline.Dispose()
+            }
         }
         finally
         {
@@ -254,4 +476,4 @@ finally
     $source.Dispose()
 }
 
-Write-Output 'Generated canonical transparent and bounded closed-eye Dororong frames.'
+Write-Output 'Generated deterministic native-96 open and closed Dororong runtime frames.'
