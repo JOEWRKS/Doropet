@@ -87,14 +87,14 @@ Frozen source observables before candidate inspection:
 1. no tail; rounded white body ends in the rear leg rather than a tail;
 2. pink bobbed hair surrounds the face on the left/front and overlaps the white body;
 3. the upper-right decoration orders rose, purple bow, then white ribbon elements behind it;
-4. two large purple eyes, small mouth, white rounded body, and four visible legs define the character mass;
+4. two large purple eyes, small mouth, white rounded body, and three separated visible leg silhouettes define the character mass;
 5. the character occupies the lower-left/middle of a square source with exterior white negative space.
 
 Checks:
 
 - Expected: source identity is exact. Observed: file is 225×225 and its SHA-256 is the binding `F96E...6504`. Verdict: PASS.
 - Expected: exterior background becomes true alpha without changing the character. Observed: native and 4× inspection show a clean exterior with the earlier neutral fringe removed; exhaustive pixel checks found alpha 0 exactly on the boundary-connected mask and identical retained RGB/coordinates elsewhere. Verdict: PASS.
-- Expected: no tail or geometry is added and the source structure is preserved. Observed: no tail appears; pink hair, face, four-leg white body, rose, bow, and white ribbons retain their source order, contact, scale, and orientation. Verdict: PASS.
+- Expected: no tail or geometry is added and the source structure is preserved. Observed: no tail appears; pink hair, face, three separated visible leg silhouettes, rose, bow, and white ribbons retain their source order, contact, scale, and orientation. Verdict: PASS.
 - Expected: the sleep/blink derivative changes only eye regions. Observed: the eye areas contain two dark closed-eye arcs; exhaustive comparison found every changed pixel inside the named eye bounds and every outside pixel identical to the canonical production frame. Verdict: PASS.
 
 Overall asset-level visual verdict: PASS for the exact files in implementation commit `41e66b4256ec8f4b31741fe1ecf319faa05c4fd2`.
@@ -116,3 +116,36 @@ Overall asset-level visual verdict: PASS for the exact files in implementation c
 ## Remaining boundary
 
 No actual application-window capture or coordinate-injection GUI acceptance was performed. Cross-process click-through, focus preservation, motion in the real 144×144 window, and the existing twelve-item Windows acceptance remain UNVERIFIED. The earlier automation limitation is preserved; automated asset, assembly, build, and runtime-composition results do not upgrade those GUI checks or complete Milestone 1.
+
+## Review fix round 1 — alpha-aware body hit testing
+
+Review found that the raster image was the only visual child of `BodyGroup` but had `IsHitTestVisible=False`; all ancestor backgrounds were null. The focused test was extended first to measure and arrange the presenter and call `InputHitTest` at an opaque canonical body coordinate.
+
+RED command:
+
+```powershell
+pwsh -NoProfile -File tests\Dororong.App.ExactArt.Tests.ps1 -Configuration Release
+```
+
+Observed exit: `1` with the expected regression failure:
+
+```text
+The arranged presenter did not hit-test an opaque canonical body point, so BodyGroup mouse input cannot originate.
+```
+
+The minimum production fix replaces the non-hit-testable WPF `Image` with `AlphaHitTestImage`. It maps arranged image coordinates back to the active raster frame, caches a BGRA pixel buffer per source frame, returns an image hit only when the mapped source alpha is nonzero, and returns null for alpha-zero pixels. The returned visible-body hit is a descendant of `BodyGroup`, so mouse events can bubble to its existing left-button handler and context menu. No filled rectangle, asset change, core change, window change, or focus change was introduced.
+
+During the first implementation check, WPF also short-circuited `InputHitTest` because a standalone arranged control remains `IsVisible=False`. The test harness was corrected to host the presenter in a real off-screen WPF window, derive the body coordinate through the image's actual arranged geometry, and close the window in `finally`. The corrected test still targets the original missing-body-hit regression rather than source structure or a mock.
+
+GREEN sequence:
+
+```powershell
+dotnet build DororongDesktopPet.sln --configuration Release --no-restore
+pwsh -NoProfile -File tests\Dororong.App.ExactArt.Tests.ps1 -Configuration Release
+pwsh -NoProfile -File tests\Dororong.App.RuntimeComposition.Tests.ps1 -Configuration Release
+pwsh -NoProfile -File tests\Dororong.App.DraggedAngle.Tests.ps1 -Configuration Release
+```
+
+All commands exited `0`: Release build reported 0 warnings and 0 errors; the focused test reported alpha-aware body hit testing PASS; runtime composition passed; and dragged angles remained center `0`, symmetric `-4/+4`, clamps `-8/+8`.
+
+The focused test also asserts that an alpha-zero raster margin returns no WPF hit. This protects against replacing the fix with a hit-testable rectangle, but it does not prove operating-system or cross-process click-through. Actual-Windows click-through, focus, right-click menu display, and end-to-end click/drag observations remain UNVERIFIED.

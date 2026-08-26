@@ -146,6 +146,40 @@ Assert-Equal 96.0 $bodyGroup.Height 'BodyGroup height changed.'
 Assert-Equal 18.0 ([System.Windows.Controls.Canvas]::GetLeft($bodyGroup)) 'BodyGroup horizontal placement changed.'
 Assert-Equal 24.0 ([System.Windows.Controls.Canvas]::GetTop($bodyGroup)) 'BodyGroup vertical placement changed.'
 
+$testWindow = [System.Windows.Window]::new()
+$testWindow.Width = 144
+$testWindow.Height = 144
+$testWindow.Left = -10000
+$testWindow.Top = -10000
+$testWindow.ShowActivated = $false
+$testWindow.ShowInTaskbar = $false
+$testWindow.WindowStyle = [System.Windows.WindowStyle]::None
+$testWindow.Content = $presenter
+try
+{
+    $testWindow.Show()
+    $presenter.UpdateLayout()
+
+    # Canonical pixel (100,175) is opaque body. Translate through the image's
+    # real arranged geometry rather than duplicating WPF's Stretch layout.
+    $opaqueBodyImagePoint = [System.Windows.Point]::new(
+        100 * $image.ActualWidth / 225,
+        175 * $image.ActualHeight / 225)
+    $opaqueBodyPoint = $image.TranslatePoint($opaqueBodyImagePoint, $presenter)
+    $visibleBodyHit = $presenter.InputHitTest($opaqueBodyPoint)
+    Assert-True ($null -ne $visibleBodyHit) 'The arranged presenter did not hit-test an opaque canonical body point, so BodyGroup mouse input cannot originate.'
+    Assert-True ($bodyGroup.IsAncestorOf($visibleBodyHit)) 'The opaque canonical body hit is not a descendant of BodyGroup, so its mouse events cannot bubble to the presenter handlers.'
+
+    $transparentMarginImagePoint = [System.Windows.Point]::new(0.25, 0.25)
+    $transparentMarginPoint = $image.TranslatePoint($transparentMarginImagePoint, $presenter)
+    $transparentMarginHit = $presenter.InputHitTest($transparentMarginPoint)
+    Assert-True ($null -eq $transparentMarginHit) 'The arranged presenter hit-tested an alpha-zero canonical margin as a filled rectangle.'
+}
+finally
+{
+    $testWindow.Close()
+}
+
 $stateType = [Dororong.Core.Behavior.PetState]
 $facing = [Dororong.Core.Behavior.FacingDirection]::Right
 foreach ($state in @($stateType::Idle, $stateType::Walk, $stateType::Curious, $stateType::Startled, $stateType::ClickReaction, $stateType::Dragged))
@@ -181,4 +215,4 @@ $blink = [Dororong.Core.Behavior.PetSnapshot]::new(
 $presenter.Render($blink)
 Assert-Frame $image 'dororong-closed-eyes.png' 'Idle blink'
 
-Write-Output 'EXACT ART PASS: source identity/dimensions, edge alpha and retained pixels, bounded eyes, presenter state mapping, and BodyGroup placement passed.'
+Write-Output 'EXACT ART PASS: source identity/dimensions, edge alpha and retained pixels, bounded eyes, presenter state mapping, BodyGroup placement, and alpha-aware body hit testing passed.'

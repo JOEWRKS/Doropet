@@ -1,6 +1,7 @@
 <UserControl x:Class="Dororong.App.Controls.DororongPresenter"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:Dororong.App.Controls"
              Width="144"
              Height="144"
              Background="{x:Null}">
@@ -28,13 +29,12 @@
                 </TransformGroup>
             </Canvas.RenderTransform>
 
-            <Image x:Name="DororongImage"
-                   Width="108"
-                   Height="96"
-                   IsHitTestVisible="False"
-                   RenderOptions.BitmapScalingMode="HighQuality"
-                   Source="/Dororong.App;component/Assets/dororong-canonical.png"
-                   Stretch="Uniform" />
+            <controls:AlphaHitTestImage x:Name="DororongImage"
+                                        Width="108"
+                                        Height="96"
+                                        RenderOptions.BitmapScalingMode="HighQuality"
+                                        Source="/Dororong.App;component/Assets/dororong-canonical.png"
+                                        Stretch="Uniform" />
         </Canvas>
     </Canvas>
 </UserControl>
