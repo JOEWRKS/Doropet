@@ -8,7 +8,7 @@ internal static class WindowStyleManager
         var updatedStyle = currentStyle | NativeMethods.WsExToolWindow | NativeMethods.WsExNoActivate;
 
         NativeMethods.SetWindowLongPtr(window, NativeMethods.GwlExStyle, new IntPtr(updatedStyle));
-        NativeMethods.SetWindowPos(
+        NativeMethods.SetWindowPosChecked(
             window,
             IntPtr.Zero,
             0,
