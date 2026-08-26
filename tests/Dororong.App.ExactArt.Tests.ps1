@@ -54,8 +54,9 @@ function Test-DarkCore([System.Drawing.Color]$Pixel)
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $sourcePath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical-source.png'
-$productionPath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical.png'
-$closedEyesPath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-closed-eyes.png'
+$repositoryProductionPath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical.png'
+$repositoryClosedEyesPath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-closed-eyes.png'
+$generatorPath = Join-Path $repositoryRoot 'tools/Generate-CanonicalArt.ps1'
 
 $bodyFixture = New-CoordinateSet @(
     '140:174-174', '141:174-174', '142:174-174', '143:174-174', '144:174-174',
@@ -87,35 +88,89 @@ $bodyFixture = New-CoordinateSet @(
     '191:161-161', '192:159-161', '193:158-160', '194:156-159'
 )
 $leftEyeStencil = New-CoordinateSet @(
-    '114:49-57', '115:46-60', '116:44-62', '117:43-63',
-    '118:43-64', '119:43-64', '120:43-64', '121:43-64', '122:43-64',
+    '114:43-59', '115:44-60', '116:44-62', '117:43-63',
+    '118:43-64', '119:43-64', '120:43-65', '121:43-64', '122:43-64',
     '123:43-64', '124:43-64', '125:43-64', '126:43-64', '127:43-64',
     '128:43-64', '129:43-64', '130:43-64', '131:44-63', '132:45-62',
     '133:46-61', '134:48-59', '135:51-57'
 )
 $rightEyeStencil = New-CoordinateSet @(
-    '114:92-100', '115:89-103', '116:87-105', '117:86-106',
+    '114:92-100', '115:89-103', '116:86-105', '117:86-106',
     '118:86-106', '119:86-106', '120:86-106', '121:86-106', '122:86-106',
     '123:86-106', '124:86-106', '125:86-106', '126:86-106', '127:86-106',
     '128:86-106', '129:86-106', '130:86-106', '131:86-106', '132:86-106',
-    '133:87-105', '134:88-104', '135:90-102', '136:93-99'
+    '133:87-105', '134:88-104', '135:90-103', '136:93-103',
+    '137:86-103', '138:86-102', '139:88-102', '140:89-101',
+    '141:99-101', '142:99-100', '143:99-100'
+)
+$leftOpenEyeComponent = New-CoordinateSet @(
+    '114:43-46', '114:56-59', '115:44-45', '115:58-60',
+    '116:44-45', '116:59-61', '117:43-44', '117:60-62',
+    '118:43-44', '118:61-63', '119:43-43', '119:62-64',
+    '120:43-43', '120:62-65', '121:43-43', '121:62-63',
+    '122:43-43', '122:62-63', '123:43-43', '123:62-62',
+    '124:43-43', '124:62-62', '125:43-44', '125:61-62',
+    '126:44-44', '126:61-62', '127:44-45', '127:60-61',
+    '128:45-46', '128:59-60', '129:46-47', '129:57-59',
+    '130:48-51', '130:53-57', '131:49-55'
+)
+$rightOpenEyeComponent = New-CoordinateSet @(
+    '115:97-99', '116:86-100', '117:86-102', '118:97-106',
+    '119:88-95', '119:99-106', '120:87-96', '120:101-103', '120:105-106',
+    '121:86-90', '121:94-98', '121:105-106', '122:86-87', '122:96-99', '122:106-106',
+    '123:86-86', '123:98-100', '123:105-106', '124:99-100', '124:105-105',
+    '125:100-101', '125:105-105', '126:100-101', '126:105-105',
+    '127:101-102', '127:105-105', '128:101-102', '128:104-105',
+    '129:101-102', '129:104-105', '130:101-102', '130:104-105',
+    '131:101-101', '131:104-104', '132:101-101', '132:104-104',
+    '133:101-101', '133:103-104', '134:100-101', '134:103-103',
+    '135:100-100', '135:103-103', '136:99-100', '136:103-103',
+    '137:98-99', '137:102-103', '138:97-98', '138:102-102',
+    '139:94-96', '139:101-102', '140:89-94', '140:101-101',
+    '141:101-101', '142:100-100', '143:99-100'
+)
+$leftLidFixture = New-CoordinateSet @(
+    '121:50-58', '122:48-60', '123:47-49', '123:59-61',
+    '124:46-48', '124:60-62', '125:46-47', '125:61-62'
+)
+$rightLidFixture = New-CoordinateSet @(
+    '121:92-100', '122:90-102', '123:89-91', '123:101-103',
+    '124:88-90', '124:102-104', '125:88-89', '125:103-104'
 )
 
 Assert-True (Test-Path -LiteralPath $sourcePath) 'The persisted canonical source asset is missing.'
-Assert-True (Test-Path -LiteralPath $productionPath) 'The transparent canonical production asset is missing.'
-Assert-True (Test-Path -LiteralPath $closedEyesPath) 'The bounded closed-eye frame is missing.'
+Assert-True (Test-Path -LiteralPath $repositoryProductionPath) 'The transparent canonical production asset is missing.'
+Assert-True (Test-Path -LiteralPath $repositoryClosedEyesPath) 'The bounded closed-eye frame is missing.'
 Assert-Equal `
     'F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504' `
     (Get-FileHash -Algorithm SHA256 -LiteralPath $sourcePath).Hash `
     'The repository source is not the exact user-supplied canonical PNG.'
 
 Add-Type -AssemblyName System.Drawing
-$source = [System.Drawing.Bitmap]::new($sourcePath)
-$production = [System.Drawing.Bitmap]::new($productionPath)
-$closedEyes = [System.Drawing.Bitmap]::new($closedEyesPath)
-
+$generatedOutputDirectory = Join-Path ([IO.Path]::GetTempPath()) "dororong-exact-art-$([Guid]::NewGuid().ToString('N'))"
 try
 {
+    $generatorOutput = & pwsh -NoProfile -File $generatorPath -SourcePath $sourcePath -OutputDirectory $generatedOutputDirectory 2>&1
+    Assert-Equal 0 $LASTEXITCODE "The canonical-art generator failed: $($generatorOutput -join [Environment]::NewLine)"
+
+    $productionPath = Join-Path $generatedOutputDirectory 'dororong-canonical.png'
+    $closedEyesPath = Join-Path $generatedOutputDirectory 'dororong-closed-eyes.png'
+    Assert-True (Test-Path -LiteralPath $productionPath) 'The generator did not create the transparent production asset.'
+    Assert-True (Test-Path -LiteralPath $closedEyesPath) 'The generator did not create the bounded closed-eye frame.'
+    Assert-Equal `
+        (Get-FileHash -Algorithm SHA256 -LiteralPath $repositoryProductionPath).Hash `
+        (Get-FileHash -Algorithm SHA256 -LiteralPath $productionPath).Hash `
+        'The committed production asset is stale relative to the generator.'
+    Assert-Equal `
+        (Get-FileHash -Algorithm SHA256 -LiteralPath $repositoryClosedEyesPath).Hash `
+        (Get-FileHash -Algorithm SHA256 -LiteralPath $closedEyesPath).Hash `
+        'The committed closed-eye asset is stale relative to the generator.'
+
+    $source = [System.Drawing.Bitmap]::new($sourcePath)
+    $production = [System.Drawing.Bitmap]::new($productionPath)
+    $closedEyes = [System.Drawing.Bitmap]::new($closedEyesPath)
+    try
+    {
     Assert-Equal 225 $source.Width 'The canonical source width changed.'
     Assert-Equal 225 $source.Height 'The canonical source height changed.'
     Assert-Equal $source.Width $production.Width 'The production frame width changed.'
@@ -163,10 +218,13 @@ try
     }
 
     Assert-Equal 185 $bodyFixture.Count 'The approved body-outline fixture coordinate count changed.'
+    Assert-Equal 38 $leftLidFixture.Count 'The left two-pixel lid fixture coordinate count changed.'
+    Assert-Equal 38 $rightLidFixture.Count 'The right two-pixel lid fixture coordinate count changed.'
 
     $changedBodyPixels = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $changedClosedEyePixels = 0
     $darkClosedEyePixels = 0
+    $darkClosedEyeCoordinates = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     for ($y = 0; $y -lt $source.Height; $y++)
     {
         for ($x = 0; $x -lt $source.Width; $x++)
@@ -196,6 +254,7 @@ try
                 if (Test-DarkCore $closedPixel)
                 {
                     $darkClosedEyePixels++
+                    [void]$darkClosedEyeCoordinates.Add($coordinate)
                 }
             }
         }
@@ -250,16 +309,61 @@ try
     }
 
     Assert-True ($changedClosedEyePixels -gt 0) 'The closed-eye frame contains no derived closed-eye marks.'
-    Assert-True ($darkClosedEyePixels -gt 0) 'The closed-eye frame contains no dark closed-lid marks.'
+    Assert-Equal 76 $darkClosedEyePixels 'The closed-eye frame changed a dark pixel outside the exact two-pixel lid fixtures.'
+    foreach ($coordinate in @($leftLidFixture) + @($rightLidFixture))
+    {
+        Assert-True $darkClosedEyeCoordinates.Contains($coordinate) "The exact lid fixture omitted $coordinate."
+    }
+
+    foreach ($coordinate in @('103,135', '103,136', '102,139', '101,141'))
+    {
+        $parts = $coordinate.Split(',')
+        Assert-True `
+            ($closedEyes.GetPixel([int]$parts[0], [int]$parts[1]).ToArgb() -ne $production.GetPixel([int]$parts[0], [int]$parts[1]).ToArgb()) `
+            "The rejected viewer-right open-eye remnant remains unchanged at $coordinate."
+    }
+
+    foreach ($component in @($leftOpenEyeComponent, $rightOpenEyeComponent))
+    {
+        foreach ($coordinate in $component)
+        {
+            $parts = $coordinate.Split(',')
+            Assert-True `
+                ($closedEyes.GetPixel([int]$parts[0], [int]$parts[1]).ToArgb() -ne $production.GetPixel([int]$parts[0], [int]$parts[1]).ToArgb()) `
+                "An original open-eye component pixel remains unchanged at $coordinate."
+        }
+    }
+
+    foreach ($centerProbe in @(@{ X = 54; StartY = 120; EndY = 123 }, @{ X = 96; StartY = 120; EndY = 123 }))
+    {
+        $darkCoreCount = 0
+        for ($y = $centerProbe.StartY; $y -le $centerProbe.EndY; $y++)
+        {
+            if (Test-DarkCore $closedEyes.GetPixel($centerProbe.X, $y))
+            {
+                $darkCoreCount++
+            }
+        }
+
+        Assert-Equal 2 $darkCoreCount "The closed lid does not retain a two-pixel core at x=$($centerProbe.X)."
+    }
     Assert-Equal 0 $production.GetPixel(0, 0).A 'The production frame lacks a true alpha-zero outer margin.'
     Assert-Equal 255 $production.GetPixel(112, 112).A 'An opaque canonical character point became transparent.'
     Assert-Equal 255 $production.GetPixel(100, 175).A 'The enclosed white body was incorrectly removed.'
+    }
+    finally
+    {
+        $source.Dispose()
+        $production.Dispose()
+        $closedEyes.Dispose()
+    }
 }
 finally
 {
-    $source.Dispose()
-    $production.Dispose()
-    $closedEyes.Dispose()
+    if ([IO.Directory]::Exists($generatedOutputDirectory))
+    {
+        [IO.Directory]::Delete($generatedOutputDirectory, $true)
+    }
 }
 
 $coreAssemblyPath = Join-Path $repositoryRoot "src/Dororong.Core/bin/$Configuration/net8.0/Dororong.Core.dll"
