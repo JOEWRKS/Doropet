@@ -163,6 +163,38 @@ public sealed class PetBrainAutonomyTests
     }
 
     [Fact]
+    public void Update_moves_inward_after_reflecting_at_the_top_work_area_edge()
+    {
+        var brain = PetTestInput.CreateBrain(
+            new SequenceRandomSource(0.0, 0.75, 0.0),
+            new PointD(100, 5));
+        brain.Update(PetTestInput.At(1.0));
+
+        var clamped = brain.Update(PetTestInput.At(0.5));
+        var inward = brain.Update(PetTestInput.At(0.25));
+
+        Assert.Equal(0, clamped.Position.Y, precision: 6);
+        Assert.Equal(10.5, inward.Position.Y, precision: 6);
+        Assert.Equal(PetState.Walk, inward.State);
+    }
+
+    [Fact]
+    public void Update_moves_inward_after_reflecting_at_the_bottom_work_area_edge()
+    {
+        var brain = PetTestInput.CreateBrain(
+            new SequenceRandomSource(0.0, 0.25, 0.0),
+            new PointD(100, 495));
+        brain.Update(PetTestInput.At(1.0));
+
+        var clamped = brain.Update(PetTestInput.At(0.5));
+        var inward = brain.Update(PetTestInput.At(0.25));
+
+        Assert.Equal(500, clamped.Position.Y, precision: 6);
+        Assert.Equal(489.5, inward.Position.Y, precision: 6);
+        Assert.Equal(PetState.Walk, inward.State);
+    }
+
+    [Fact]
     public void Update_keeps_phase_below_one_at_an_exact_walk_gait_cycle()
     {
         var tuning = BehaviorTuning.Default with
