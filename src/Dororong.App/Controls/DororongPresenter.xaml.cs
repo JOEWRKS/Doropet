@@ -72,7 +72,11 @@ public partial class DororongPresenter : UserControl
 
             case PetState.Dragged:
                 BodyScaleTransform.ScaleY = 1.12;
-                BodyRotateTransform.Angle = Math.Clamp(snapshot.GrabOffset?.X - 54 ?? 0, -8, 8);
+                var bodyCenterX = Canvas.GetLeft(BodyGroup) + (BodyGroup.Width / 2);
+                BodyRotateTransform.Angle = Math.Clamp(
+                    (snapshot.GrabOffset?.X ?? bodyCenterX) - bodyCenterX,
+                    -8,
+                    8);
                 break;
 
             case PetState.Sleep:

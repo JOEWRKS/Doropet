@@ -840,11 +840,14 @@ git commit -m "feat: add transparent non-activating WPF shell"
 **Files:**
 - Create: `src/Dororong.App/Controls/DororongPresenter.xaml`
 - Create: `src/Dororong.App/Controls/DororongPresenter.xaml.cs`
+- Create: `tests/Dororong.App.DraggedAngle.Tests.ps1`
 - Modify: `src/Dororong.App/MainWindow.xaml`
 
 **Interfaces:**
 - Consumes: `PetSnapshot.State`, `Facing`, `Phase`, `IsDirectInteractionPending`, and `GrabOffset`.
 - Produces: `DororongPresenter.Render(PetSnapshot)`, `BodyPrimaryPressed` with local press coordinates, and `ExitRequested` for Task 7.
+
+**Intentional correction — presenter-local DRAGGED rotation (2026-08-26):** `BodyPrimaryPressed` reports `e.GetPosition(this)`, so `GrabOffset.X` is expressed in the 144×144 presenter coordinate system. The earlier `-54` formula incorrectly treated it as body-local. Compute the rotation origin from `Canvas.GetLeft(BodyGroup) + BodyGroup.Width / 2` (currently `18 + 108 / 2 = 72`) so a center grab is 0 degrees and equal left/right offsets produce equal, opposite angles. This corrects the coordinate mapping without changing the approved product-design meaning.
 
 - [ ] **Step 1: Add the presenter host before the control exists and confirm the compile failure**
 
@@ -899,7 +902,7 @@ var bounce = Math.Sin(p * Math.PI);
 - CURIOUS: rotate `+7` degrees when facing right and `-7` when facing left; move both pupils two DIPs toward facing.
 - STARTLED: for the first half use `ScaleX = 1 + 0.18 * bounce` and `ScaleY = 1 - 0.14 * bounce`; eyes remain fully open.
 - CLICK_REACTION: `TranslateY = -10 * bounce`; eyes remain fully open.
-- DRAGGED: `ScaleY = 1.12`; rotate by `Math.Clamp(snapshot.GrabOffset?.X - 54 ?? 0, -8, 8)` degrees.
+- DRAGGED: `ScaleY = 1.12`; set `bodyCenterX = Canvas.GetLeft(BodyGroup) + BodyGroup.Width / 2`, then rotate by `Math.Clamp((snapshot.GrabOffset?.X ?? bodyCenterX) - bodyCenterX, -8, 8)` degrees.
 - SLEEP: `ScaleY = 0.82`, `TranslateY = 8`, collapse pupils, reduce eyes to one-DIP horizontal lines, and use the slow body cycle for breathing.
 - Pending direct interaction from SLEEP: render eyes opening at half height before click or drag resolution.
 
@@ -913,10 +916,18 @@ dotnet build src/Dororong.App/Dororong.App.csproj
 
 Expected: build exits 0. Confirm from the XAML and `Render` implementation that each `PetState` branch assigns the approved pose and that no filled element exists outside the body group. This is a code-structure check only; rendered-state and click-through acceptance remains in Task 8 and cannot pass here.
 
+Run the focused presenter-coordinate regression check:
+
+```powershell
+pwsh -NoProfile -STA -File tests/Dororong.App.DraggedAngle.Tests.ps1
+```
+
+Expected: exit 0 after observing center `0`, symmetric points `-4/+4`, and clamps `-8/+8` from the actual WPF presenter.
+
 - [ ] **Step 5: Commit the presenter**
 
 ```powershell
-git add src/Dororong.App/Controls src/Dororong.App/MainWindow.xaml
+git add src/Dororong.App/Controls src/Dororong.App/MainWindow.xaml tests/Dororong.App.DraggedAngle.Tests.ps1 docs/plans/2026-08-26-dororong-m1-implementation.md
 git commit -m "feat: add Dororong vector state presentation"
 ```
 
