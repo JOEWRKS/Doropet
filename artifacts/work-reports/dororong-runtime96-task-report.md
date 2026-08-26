@@ -101,7 +101,7 @@ Independent review of commit `2b05788dcd36610b5b7b42b1e3b7d32656019825` found an
 
 ### Regression and implementation evidence
 
-- Before production changes, the focused Release exact-art regression exited `1` with `The actual center/rear valley contains an isolated dark branch or dot. Expected '1', observed '2'.`
+- Before production changes, the focused Debug exact-art regression exited `1` with `The actual center/rear valley contains an isolated dark branch or dot. Expected '1', observed '2'.`
 - With the literal probes ordered first, the same unchanged implementation exited `1` with `Rejected resize-baseline body spur survived unchanged at (61,68).`
 - The body topology audit now enrolls every visible pixel in an independent exposed-contour corridor, including pixels unchanged from the resize baseline; adjacent hair/accessory fragments admitted by the broader edit-protection rectangles are excluded. The complete actual contour corridor must contain exactly one 8-connected component.
 - Intrinsic stroke width is measured once. White and RGB `(24,24,24)` surface checks now use actual alpha-composited luminance, require a measurable response to the selected background, and independently require the dark-contour transition on white plus the body/silhouette transition on dark.
