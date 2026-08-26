@@ -47,18 +47,25 @@ internal static class PetTestInput
         }, new SequenceRandomSource(Enumerable.Repeat(0.0, 32).ToArray()), initialPosition);
 
     public static PetBrain CreateSleepBrain() =>
+        CreateSleepBrain(TimeSpan.FromSeconds(1));
+
+    public static PetBrain CreateSleepBrain(TimeSpan sleepDelay) =>
         new(BehaviorTuning.Default with
         {
             MaxDelta = TimeSpan.FromMilliseconds(100),
             IdleMin = TimeSpan.FromSeconds(11),
             IdleMax = TimeSpan.FromSeconds(11),
-            SleepDelay = TimeSpan.FromSeconds(1)
+            SleepDelay = sleepDelay
         }, new SequenceRandomSource(Enumerable.Repeat(0.0, 32).ToArray()), new PointD(100, 100));
 
-    public static PetBrain CreateSleepingBrain()
+    public static PetBrain CreateSleepingBrain() =>
+        CreateSleepingBrain(TimeSpan.FromSeconds(1));
+
+    public static PetBrain CreateSleepingBrain(TimeSpan sleepDelay)
     {
-        var brain = CreateSleepBrain();
-        for (var update = 0; update < 10; update++)
+        var brain = CreateSleepBrain(sleepDelay);
+        var updateCount = (int)Math.Ceiling(sleepDelay.TotalSeconds / 0.1);
+        for (var update = 0; update < updateCount; update++)
         {
             brain.Update(At(0.1));
         }

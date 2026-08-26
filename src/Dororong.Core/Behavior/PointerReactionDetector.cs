@@ -65,7 +65,7 @@ internal sealed class PointerReactionDetector
 
         if (isMovingAway)
         {
-            return PointerReactionDecision.None;
+            return PointerReactionDecision.None with { EnteredNearZone = enteredNearZone };
         }
 
         if (distance <= _tuning.StartleReactionDistance &&
@@ -73,16 +73,16 @@ internal sealed class PointerReactionDetector
             _startledCooldown == TimeSpan.Zero)
         {
             _startledCooldown = _tuning.StartledCooldown;
-            return new PointerReactionDecision(PointerReaction.Startled, _lastApproachDirection);
+            return new PointerReactionDecision(PointerReaction.Startled, _lastApproachDirection, enteredNearZone);
         }
 
         if (enteredNearZone && _curiousCooldown == TimeSpan.Zero)
         {
             _curiousCooldown = _tuning.CuriousCooldown;
-            return new PointerReactionDecision(PointerReaction.Curious, null);
+            return new PointerReactionDecision(PointerReaction.Curious, null, EnteredNearZone: true);
         }
 
-        return PointerReactionDecision.None;
+        return PointerReactionDecision.None with { EnteredNearZone = enteredNearZone };
     }
 
     private static TimeSpan DecrementCooldown(TimeSpan cooldown, TimeSpan delta) =>
@@ -117,7 +117,10 @@ internal enum PointerReaction
     Startled
 }
 
-internal readonly record struct PointerReactionDecision(PointerReaction Reaction, PointD? ApproachDirection)
+internal readonly record struct PointerReactionDecision(
+    PointerReaction Reaction,
+    PointD? ApproachDirection,
+    bool EnteredNearZone)
 {
-    public static PointerReactionDecision None => new(PointerReaction.None, null);
+    public static PointerReactionDecision None => new(PointerReaction.None, null, EnteredNearZone: false);
 }

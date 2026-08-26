@@ -14,6 +14,9 @@ public sealed class PetBrain
     private TimeSpan _stateElapsed;
     private TimeSpan _stateDuration;
     private PointD _startledRetreatDirection;
+    private PointD? _pressPosition;
+    private PointD? _grabOffset;
+    private TimeSpan _inactivity;
 
     public PetBrain(BehaviorTuning tuning, IRandomSource random, PointD initialPosition)
     {
@@ -40,8 +43,8 @@ public sealed class PetBrain
         _position,
         _facing,
         GetPhase(),
-        IsDirectInteractionPending: false,
-        GrabOffset: null);
+        IsDirectInteractionPending: _pressPosition.HasValue,
+        GrabOffset: _grabOffset);
 
     public PetSnapshot Update(PetInput input)
     {
@@ -51,19 +54,33 @@ public sealed class PetBrain
             return Current;
         }
 
-        NormalizePosition(input.WorkArea, input.PetSize);
+        _inactivity += delta;
+
+        if (_state != PetState.Dragged)
+        {
+            NormalizePosition(input.WorkArea, input.PetSize);
+        }
+
+        var handledDirectInteraction = ProcessDirectInteraction(input);
 
         var petCenter = _position + new PointD(input.PetSize.Width / 2, input.PetSize.Height / 2);
         var reaction = _pointerReactionDetector.Update(
             input.Pointer,
             petCenter,
             delta,
-            isDirectInteractionPending: input.BodyPressPosition.HasValue);
-        if (reaction.Reaction == PointerReaction.Startled && _state != PetState.Startled)
+            isDirectInteractionPending: handledDirectInteraction || _pressPosition.HasValue || _state == PetState.Dragged);
+        if (reaction.EnteredNearZone || reaction.Reaction == PointerReaction.Startled)
+        {
+            ResetInactivity();
+        }
+
+        if (reaction.Reaction == PointerReaction.Startled &&
+            _state is not (PetState.Startled or PetState.ClickReaction or PetState.Dragged))
         {
             StartStartled(input.Pointer.Position, petCenter, reaction.ApproachDirection);
         }
-        else if (reaction.Reaction == PointerReaction.Curious && _state != PetState.Startled)
+        else if (reaction.Reaction == PointerReaction.Curious &&
+                 _state is not (PetState.Startled or PetState.ClickReaction or PetState.Dragged))
         {
             StartCurious(input.Pointer.Position, petCenter);
         }
@@ -92,6 +109,11 @@ public sealed class PetBrain
             }
         }
 
+        if (_state == PetState.Idle && _inactivity >= _tuning.SleepDelay)
+        {
+            StartSleep();
+        }
+
         return Current;
     }
 
@@ -118,10 +140,108 @@ public sealed class PetBrain
                 StartIdle();
             }
         }
-        else if (_state == PetState.Walk || _state == PetState.Curious || _state == PetState.Startled)
+        else if (_state is PetState.Walk or PetState.Curious or PetState.Startled or PetState.ClickReaction)
         {
             StartIdle();
         }
+    }
+
+    private bool ProcessDirectInteraction(PetInput input)
+    {
+        var handled = false;
+        if (input.BodyPressPosition is { } pressPosition &&
+            !_pressPosition.HasValue &&
+            _state != PetState.Dragged)
+        {
+            _pressPosition = pressPosition;
+            _grabOffset = pressPosition - _position;
+            ResetInactivity();
+            handled = true;
+        }
+
+        if (_state == PetState.Dragged)
+        {
+            handled = true;
+            if (input.PrimaryButtonDown)
+            {
+                ResetInactivity();
+                if (input.Pointer.IsAvailable && _grabOffset is { } dragOffset)
+                {
+                    _position = input.Pointer.Position - dragOffset;
+                }
+            }
+            else
+            {
+                ResetInactivity();
+                ClearDirectInteraction();
+                StartIdle();
+                NormalizePosition(input.WorkArea, input.PetSize);
+            }
+
+            return handled;
+        }
+
+        if (_pressPosition is not { } savedPressPosition)
+        {
+            return handled;
+        }
+
+        handled = true;
+        var crossedDragThreshold = input.Pointer.IsAvailable &&
+            (Math.Abs(input.Pointer.Position.X - savedPressPosition.X) >= input.DragThreshold.Width ||
+             Math.Abs(input.Pointer.Position.Y - savedPressPosition.Y) >= input.DragThreshold.Height);
+
+        if (input.PrimaryButtonDown)
+        {
+            if (crossedDragThreshold && _grabOffset is { } dragOffset)
+            {
+                ResetInactivity();
+                _state = PetState.Dragged;
+                _stateElapsed = TimeSpan.Zero;
+                _stateDuration = TimeSpan.MaxValue;
+                _position = input.Pointer.Position - dragOffset;
+            }
+
+            return handled;
+        }
+
+        ClearDirectInteraction();
+        if (crossedDragThreshold)
+        {
+            StartIdle();
+        }
+        else
+        {
+            ResetInactivity();
+            StartClickReaction();
+        }
+
+        return handled;
+    }
+
+    private void ClearDirectInteraction()
+    {
+        _pressPosition = null;
+        _grabOffset = null;
+    }
+
+    private void StartClickReaction()
+    {
+        _state = PetState.ClickReaction;
+        _stateElapsed = TimeSpan.Zero;
+        _stateDuration = _tuning.ClickReactionDuration;
+    }
+
+    private void StartSleep()
+    {
+        _state = PetState.Sleep;
+        _stateElapsed = TimeSpan.Zero;
+        _stateDuration = TimeSpan.MaxValue;
+    }
+
+    private void ResetInactivity()
+    {
+        _inactivity = TimeSpan.Zero;
     }
 
     private void StartIdle()
