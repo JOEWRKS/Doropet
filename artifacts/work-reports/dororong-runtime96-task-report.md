@@ -94,3 +94,39 @@ All commands ran in `D:\JOEWRKS\.worktrees\DororongDesktopPet-m1` against the fi
 - Actual-Windows attempt 5 and user acceptance are still required before claiming the user-visible defect fixed or M1 accepted.
 - The one-to-one presenter result is verified only at 96 DPI / 100% scale; other Windows scaling configurations remain unverified.
 - The publish result proves packaging only; it does not upgrade actual-Windows visual acceptance.
+
+## Fix round 1 — center/rear-valley residual ink
+
+Independent review of commit `2b05788dcd36610b5b7b42b1e3b7d32656019825` found an old-resize body-ink spur above the center/rear valley. The prior visual and connected-component claims did not cover that residue: pixels `(61,68)`, `(62,68)`, and `(62,69)` were byte-identical to the uncorrected baseline, while the topology set enrolled only changed pixels. The earlier no-isolated-dot visual verdict is therefore superseded by this fix-round evidence.
+
+### Regression and implementation evidence
+
+- Before production changes, the focused Release exact-art regression exited `1` with `The actual center/rear valley contains an isolated dark branch or dot. Expected '1', observed '2'.`
+- With the literal probes ordered first, the same unchanged implementation exited `1` with `Rejected resize-baseline body spur survived unchanged at (61,68).`
+- The body topology audit now enrolls every visible pixel in an independent exposed-contour corridor, including pixels unchanged from the resize baseline; adjacent hair/accessory fragments admitted by the broader edit-protection rectangles are excluded. The complete actual contour corridor must contain exactly one 8-connected component.
+- Intrinsic stroke width is measured once. White and RGB `(24,24,24)` surface checks now use actual alpha-composited luminance, require a measurable response to the selected background, and independently require the dark-contour transition on white plus the body/silhouette transition on dark.
+- The generator retains the original 1.35px stroke path and adds only a short center/rear-valley clear path. Its 2.5px supersampled mask is accepted at `>=128/255` coverage, clearing the rejected old branch without broadening or re-stroking the body contour.
+- Final literal RGB values are `(62,67)=255`, `(61,68)=255`, `(62,68)=255`, `(63,68)=255`, and `(62,69)=253`; the three rejected probes differ from the uncorrected baseline. Alpha remains unchanged, open/closed correction coordinates remain identical, and the correction bounds remain `x=17..76,y=58..87`.
+- The final correction contains 393 coordinates in each eye state. Hair, head, face, eyes/lids, mouth, rose, bow, ribbons, alpha, state mapping, transforms, motion, core behavior, and presenter layout were not changed.
+
+### Final fix-round artifacts and visual verdict
+
+| Artifact | Bytes | SHA-256 |
+|---|---:|---|
+| `dororong-canonical.png` | 9,869 | `4BCE82AADCCF34E72139AF2D2D98099309BE5FFF242EDBBCAAC6A0562870442D` |
+| `dororong-closed-eyes.png` | 9,833 | `483E32259ED69AD362C19ED4685AE31BC21A343AB4107DD8C9D98EA1613697C6` |
+
+Fresh inspection of the exact final hashes passed at native size and nearest-neighbor enlargement on white and RGB `(24,24,28)`: the upward gray spur/dot is absent, the center/rear-valley joins the continuous body contour without a new gap or knot, and the open/closed eye states remain integrated. Fresh Release `DororongPresenter` Idle and Sleep renders at 144x144/96 DPI also passed with the native resource arranged at 96 DIPs. No halo, accessory damage, or eye-state body mismatch was observed.
+
+### Fix-round verification
+
+| Check | Result |
+|---|---|
+| `pwsh -NoProfile -File tests/Dororong.App.ExactArt.Tests.ps1 -Configuration Release` | exit 0; exact hashes, literal spur probes, all-output body topology, background-responsive composites, profiles, eye semantics, presenter, hit testing, and state mapping passed |
+| `dotnet build DororongDesktopPet.sln --configuration Release --no-restore` | exit 0; 0 warnings, 0 errors |
+| `dotnet test DororongDesktopPet.sln --configuration Release --no-restore` | exit 0; 78 passed, 0 failed, 0 skipped |
+| `pwsh -NoProfile -File tests/Dororong.App.RuntimeComposition.Tests.ps1 -Configuration Release` | exit 0; startup/PetLoop composition passed |
+| `pwsh -NoProfile -File tests/Dororong.App.DraggedAngle.Tests.ps1 -Configuration Release` | exit 0; center, symmetric, and clamp angles passed |
+| `dotnet publish src/Dororong.App/Dororong.App.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts/publish/win-x64` | exit 0; `Dororong.App.exe`, 150,016 bytes, SHA-256 `48FD99C4B8D205222A7ABA8AC88958306161D312E5E50E1D00117442B07E9D0F` |
+
+The original remaining boundaries still apply: actual-Windows attempt 4 remains FAIL; attempt 5, user acceptance, and non-96-DPI rendering remain unverified. This fix round establishes only the repository/native-96/96-DPI presenter result.

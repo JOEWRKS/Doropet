@@ -37,21 +37,38 @@ function Test-InBodyProtectionBand([int]$X, [int]$Y)
         ($X -ge 65 -and $X -le 78 -and $Y -ge 57 -and $Y -le 84)
 }
 
-function Get-OpticalInk([System.Drawing.Color]$Pixel, [int]$Background)
+function Test-InBodyTopologyBand([int]$X, [int]$Y)
+{
+    if (-not (Test-InBodyProtectionBand $X $Y)) { return $false }
+
+    # Exclude hair/accessory fragments admitted by the deliberately broad protection rectangles.
+    return -not (($X -ge 73 -and $Y -le 58) -or
+        ($X -le 21 -and $Y -le 72) -or
+        ($X -ge 46 -and $X -le 48 -and $Y -le 70) -or
+        ($X -ge 39 -and $X -le 41 -and $Y -le 71) -or
+        ($X -eq 48 -and $Y -ge 84))
+}
+
+function Get-OpticalInk([System.Drawing.Color]$Pixel)
 {
     $alpha = $Pixel.A / 255.0
     $sourceLuminance = (0.2126 * $Pixel.R) + (0.7152 * $Pixel.G) + (0.0722 * $Pixel.B)
-    $compositeLuminance = ($alpha * $sourceLuminance) + ((1 - $alpha) * $Background)
-    $bodyFillLuminance = ($alpha * 255.0) + ((1 - $alpha) * $Background)
-    return [Math]::Max(0.0, ($bodyFillLuminance - $compositeLuminance) / 255.0)
+    return [Math]::Max(0.0, $alpha * (255.0 - $sourceLuminance) / 255.0)
 }
 
-function Get-Profile([System.Drawing.Bitmap]$Bitmap, [hashtable]$Definition, [int]$Background)
+function Get-CompositedLuminance([System.Drawing.Color]$Pixel, [int]$Background)
+{
+    $alpha = $Pixel.A / 255.0
+    $sourceLuminance = (0.2126 * $Pixel.R) + (0.7152 * $Pixel.G) + (0.0722 * $Pixel.B)
+    return ($alpha * $sourceLuminance) + ((1 - $alpha) * $Background)
+}
+
+function Get-Profile([System.Drawing.Bitmap]$Bitmap, [hashtable]$Definition)
 {
     $samples = @()
     foreach ($coordinate in $Definition.Samples)
     {
-        $samples += Get-OpticalInk ($Bitmap.GetPixel([int]$coordinate[0], [int]$coordinate[1])) $Background
+        $samples += Get-OpticalInk ($Bitmap.GetPixel([int]$coordinate[0], [int]$coordinate[1]))
     }
     $support = @($samples | Where-Object { $_ -ge 0.10 }).Count
     $runs = 0
@@ -131,6 +148,10 @@ try
                 Assert-Equal $openBasePixel.A $openPixel.A "Open alpha changed at ($x,$y)."
                 Assert-Equal $closedBasePixel.A $closedPixel.A "Closed alpha changed at ($x,$y)."
                 Assert-Equal $openPixel.A $closedPixel.A "Open/closed alpha differs at ($x,$y)."
+                if ((Test-InBodyTopologyBand $x $y) -and (Get-OpticalInk $openPixel) -ge 0.10)
+                {
+                    [void]$visibleBodySupport.Add($coordinate)
+                }
                 if ($openPixel.A -eq 0)
                 {
                     Assert-Equal 0 ($openPixel.R + $openPixel.G + $openPixel.B) "Alpha-zero open RGB contamination exists at ($x,$y)."
@@ -140,7 +161,6 @@ try
                 {
                     Assert-True (Test-InBodyProtectionBand $x $y) "Open RGB changed outside the body protection band at ($x,$y)."
                     [void]$openCorrection.Add($coordinate)
-                    if ((Get-OpticalInk $openPixel 255) -ge 0.10) { [void]$visibleBodySupport.Add($coordinate) }
                     $bounds.MinX = [Math]::Min($bounds.MinX, $x); $bounds.MinY = [Math]::Min($bounds.MinY, $y)
                     $bounds.MaxX = [Math]::Max($bounds.MaxX, $x); $bounds.MaxY = [Math]::Max($bounds.MaxY, $y)
                 }
@@ -169,6 +189,17 @@ try
             Assert-Equal $open.GetPixel([int]$parts[0], [int]$parts[1]).ToArgb() `
                 $closed.GetPixel([int]$parts[0], [int]$parts[1]).ToArgb() "Body correction differs by eye state at $coordinate."
         }
+        foreach ($spurProbe in @(@(61,68), @(62,68), @(62,69)))
+        {
+            $x = [int]$spurProbe[0]; $y = [int]$spurProbe[1]
+            $pixel = $open.GetPixel($x, $y)
+            Assert-True ($pixel.ToArgb() -ne $baselineOpen.GetPixel($x, $y).ToArgb()) `
+                "Rejected resize-baseline body spur survived unchanged at ($x,$y)."
+            Assert-True ((Get-CompositedLuminance $pixel 255) -ge 230.0) `
+                "Rejected body spur remains visibly dark at ($x,$y)."
+        }
+
+        # Audit the actual rendered body band, not only pixels changed from the resize baseline.
         $remainingSupport = [Collections.Generic.HashSet[string]]::new($visibleBodySupport, [StringComparer]::Ordinal)
         $componentSizes = [Collections.Generic.List[int]]::new()
         while ($remainingSupport.Count -gt 0)
@@ -187,8 +218,9 @@ try
             }
             $componentSizes.Add($componentSize)
         }
-        Assert-Equal 1 $componentSizes.Count 'The native body contour is broken or contains an isolated dark component/knot.'
+        Assert-Equal 1 $componentSizes.Count 'The actual body contour is broken or contains an isolated dark component/knot.'
         Assert-True ($componentSizes[0] -ge 80) 'The continuous visible body contour has implausibly little support.'
+
         Assert-True ($eyeChanges.Count -ge 80) 'Both eyes did not visibly close.'
 
         # Literal native-96 lid/lower-eye probes preserve the reviewed eye semantics.
@@ -200,14 +232,14 @@ try
             $lidInk = 0
             for ($x = $eye.StartX; $x -le $eye.EndX; $x++)
             {
-                if ((Get-OpticalInk ($closed.GetPixel($x, $eye.LidY)) 255) -ge 0.30) { $lidInk++ }
+                if ((Get-OpticalInk ($closed.GetPixel($x, $eye.LidY))) -ge 0.30) { $lidInk++ }
             }
             Assert-True ($lidInk -ge 4) "$($eye.Name) lid is not visible."
             foreach ($probe in $eye.LowerProbes)
             {
                 $parts = $probe.Split(',')
-                $openInk = Get-OpticalInk ($open.GetPixel([int]$parts[0], [int]$parts[1])) 255
-                $closedInk = Get-OpticalInk ($closed.GetPixel([int]$parts[0], [int]$parts[1])) 255
+                $openInk = Get-OpticalInk ($open.GetPixel([int]$parts[0], [int]$parts[1]))
+                $closedInk = Get-OpticalInk ($closed.GetPixel([int]$parts[0], [int]$parts[1]))
                 Assert-True ($closedInk -le 0.30 -and ($openInk - $closedInk) -ge 0.12) `
                     "$($eye.Name) lower open-eye oval/underline survived at $probe (open=$openInk, closed=$closedInk)."
             }
@@ -227,7 +259,7 @@ try
         )
         foreach ($definition in $hairProfiles)
         {
-            $metric = Get-Profile $baselineOpen $definition 255
+            $metric = Get-Profile $baselineOpen $definition
             Assert-True ($metric.Peak -ge 0.50 -and $metric.Width -ge 0.60 -and $metric.Width -le 2.10) `
                 "Fixed hair reference $($metric.Name) contradicts frozen profile limits: peak=$($metric.Peak), width=$($metric.Width)."
         }
@@ -249,29 +281,46 @@ try
         $profileEvidence = [Collections.Generic.List[string]]::new()
         $lightBodyWidths = [Collections.Generic.List[double]]::new()
         $lightJointWidths = [Collections.Generic.List[double]]::new()
-        foreach ($background in @(255, 24))
+        foreach ($definition in $bodyProfiles)
         {
-            foreach ($definition in $bodyProfiles)
+            $metric = Get-Profile $open $definition
+            $profileEvidence.Add("$($metric.Name):$([Math]::Round($metric.Width,3))/$([Math]::Round($metric.Peak,3))/$($metric.Support)")
+            $lightBodyWidths.Add($metric.Width)
+            if ($metric.Joint) { $lightJointWidths.Add($metric.Width) }
+            Assert-True ($metric.Peak -ge 0.50) "$($metric.Name) is faint/vanished: peak=$($metric.Peak)."
+            Assert-True ($metric.Width -ge 0.60 -and $metric.Width -le 2.10) "$($metric.Name) has wrong optical width: $($metric.Width)."
+            Assert-Equal 1 $metric.Runs "$($metric.Name) has broken/dotted support."
+            if (-not $metric.Joint)
             {
-                $metric = Get-Profile $open $definition $background
-                $profileEvidence.Add("$($metric.Name):$([Math]::Round($metric.Width,3))/$([Math]::Round($metric.Peak,3))/$($metric.Support)")
-                if ($background -eq 255)
-                {
-                    $lightBodyWidths.Add($metric.Width)
-                    if ($metric.Joint) { $lightJointWidths.Add($metric.Width) }
-                }
-                Assert-True ($metric.Peak -ge 0.50) "$($metric.Name) is faint/vanished on background ${background}: peak=$($metric.Peak)."
-                Assert-True ($metric.Width -ge 0.60 -and $metric.Width -le 2.10) "$($metric.Name) has wrong optical width: $($metric.Width)."
-                Assert-Equal 1 $metric.Runs "$($metric.Name) has broken/dotted support."
-                if (-not $metric.Joint)
-                {
-                    Assert-True ($metric.Support -le 2) "$($metric.Name) has a non-joint 3px knot."
-                }
-                else
-                {
-                    Assert-True ($metric.Support -le 3 -and $metric.Width -le 2.10) "$($metric.Name) joint is materially too heavy."
-                }
+                Assert-True ($metric.Support -le 2) "$($metric.Name) has a non-joint 3px knot."
             }
+            else
+            {
+                Assert-True ($metric.Support -le 3 -and $metric.Width -le 2.10) "$($metric.Name) joint is materially too heavy."
+            }
+
+            $surfaceSamples = @{}
+            foreach ($background in @(255, 24))
+            {
+                $surfaceSamples[$background] = @($definition.Samples | ForEach-Object {
+                    Get-CompositedLuminance ($open.GetPixel([int]$_[0], [int]$_[1])) $background
+                })
+            }
+            $lightMinimum = ($surfaceSamples[255] | Measure-Object -Minimum).Minimum
+            $lightContrast = (($surfaceSamples[255] | Measure-Object -Maximum).Maximum - $lightMinimum) / 255.0
+            $darkMaximum = ($surfaceSamples[24] | Measure-Object -Maximum).Maximum
+            $darkContrast = ($darkMaximum - ($surfaceSamples[24] | Measure-Object -Minimum).Minimum) / 255.0
+            $backgroundResponse = 0.0
+            for ($sampleIndex = 0; $sampleIndex -lt $surfaceSamples[255].Count; $sampleIndex++)
+            {
+                $backgroundResponse += [Math]::Abs($surfaceSamples[255][$sampleIndex] - $surfaceSamples[24][$sampleIndex])
+            }
+            Assert-True ($backgroundResponse -ge 50.0) `
+                "$($metric.Name) surface samples do not respond to the light/dark background."
+            Assert-True ($lightMinimum -le 150.0 -and $lightContrast -ge 0.35) `
+                "$($metric.Name) lacks an actual dark contour transition on a white surface."
+            Assert-True ($darkMaximum -ge 150.0 -and $darkContrast -ge 0.35) `
+                "$($metric.Name) lacks an actual body/silhouette transition on a dark surface."
         }
         $orderedBodyWidths = @($lightBodyWidths | Sort-Object)
         $medianBodyWidth = $orderedBodyWidths[[Math]::Floor($orderedBodyWidths.Count / 2)]

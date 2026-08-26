@@ -279,9 +279,13 @@ function Get-LocalBodyFill(
 
 function Apply-NativeBodyCorrection([System.Drawing.Bitmap]$Bitmap)
 {
-    $path = New-NativeBodyContour
-    $clearMask = New-PathMask $path 3.5
-    $strokeMask = New-PathMask $path 1.35
+    $strokePath = New-NativeBodyContour
+    $valleyClearPath = [System.Drawing.Drawing2D.GraphicsPath]::new()
+    $valleyClearPath.StartFigure()
+    $valleyClearPath.AddLine(62.7, 67.4, 61.5, 70.0)
+    $clearMask = New-PathMask $strokePath 3.5
+    $valleyClearMask = New-PathMask $valleyClearPath 2.5
+    $strokeMask = New-PathMask $strokePath 1.35
     $baseline = $Bitmap.Clone()
     try
     {
@@ -296,7 +300,7 @@ function Apply-NativeBodyCorrection([System.Drawing.Bitmap]$Bitmap)
                     $Bitmap.SetPixel($x, $y, [System.Drawing.Color]::FromArgb(0, 0, 0, 0))
                     continue
                 }
-                if ($clearMask.GetPixel($x, $y).A -eq 0)
+                if ($clearMask.GetPixel($x, $y).A -eq 0 -and $valleyClearMask.GetPixel($x, $y).A -lt 128)
                 {
                     continue
                 }
@@ -316,8 +320,10 @@ function Apply-NativeBodyCorrection([System.Drawing.Bitmap]$Bitmap)
     }
     finally
     {
-        $path.Dispose()
+        $strokePath.Dispose()
+        $valleyClearPath.Dispose()
         $clearMask.Dispose()
+        $valleyClearMask.Dispose()
         $strokeMask.Dispose()
         $baseline.Dispose()
     }
