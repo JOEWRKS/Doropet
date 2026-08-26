@@ -16,8 +16,9 @@
 - Keep `Dororong.Core` free of WPF and Win32 references; `Dororong.App` alone owns OS input, focus, transparency, mouse capture, and rendering.
 - Keep the solution to `Dororong.Core`, `Dororong.App`, and `Dororong.Core.Tests`; add no game engine, MVVM framework, dependency-injection container, or generic plugin system.
 - Keep all initial behavior constants in one `BehaviorTuning` record and all screen coordinates passed into the core in WPF device-independent pixels.
+- Treat `MaxDelta` as the simulation/state/inactivity/cooldown cap only. Pointer closing speed uses the actual positive observation interval, with elapsed-time smoothing equivalent to `alpha=0.35` at 100 ms; a long valid gap is one average-speed observation over that full gap, while unavailable samples reset the speed baseline.
 - Preserve direct-interaction priority: `DRAGGED > CLICK_REACTION > STARTLED > CURIOUS > SLEEP / IDLE / WALK`.
-- Begin mouse capture only after the core enters DRAGGED; the body-down event queues its screen position while global button state resolves click versus drag, and proximity reactions remain suppressed until that direct interaction resolves.
+- Begin mouse capture only after the core enters DRAGGED; the body-down event queues its screen position while global button state resolves click versus drag, and proximity reactions remain suppressed until that direct interaction resolves. While a press remains pending, freeze the interrupted lower-priority state's position and elapsed time; a release resolved in the same tick advances CLICK_REACTION normally, and DRAGGED follows `pointer - grabOffset`.
 - Alpha-zero pixels must pass input to other processes, and ordinary body click or drag must not take keyboard focus from the active work application.
 - Use the primary monitor work area only; multi-monitor refinement, sound, settings UI, auto-start, persistence, and polished art are outside Milestone 1.
 - Implement core behavior test-first: write one failing behavior test, confirm the expected failure, write the smallest production change, then keep the full suite green.
@@ -55,8 +56,12 @@
 - `src/Dororong.App/Controls/DororongPresenter.xaml`: alpha-zero vector surface and visible character shapes.
 - `src/Dororong.App/Controls/DororongPresenter.xaml.cs`: state-to-pose rendering and body/Exit events.
 - `src/Dororong.App/PetLoop.cs`: timer, input snapshot, core update, window movement, capture lifetime, and failure cleanup.
+- `src/Dororong.App/Runtime/PetLoopRuntime.cs`: narrow delegate adapters for the clock, timer, input/window host, presenter, and capture boundary used by production and the STA integration regression.
+- `src/Dororong.App/App.xaml`: application resources only; startup does not auto-create a window through `StartupUri`.
 - `src/Dororong.App/MainWindow.xaml`: transparent, borderless, always-on-top WPF host.
-- `src/Dororong.App/MainWindow.xaml.cs`: startup composition, failure display, and orderly shutdown.
+- `src/Dororong.App/MainWindow.xaml.cs`: window-loop composition, failure display, and orderly shutdown.
+- `src/Dororong.App/App.xaml.cs`: one-shot manual MainWindow construction/show, dispatcher fatal fallback, and exit-code-1 startup cleanup.
+- `tests/Dororong.App.RuntimeComposition.Tests.ps1`: GUI-free STA regression that executes the production startup boundary and the real `PetLoop` wiring.
 - `README.md`: exact build, test, run, publish, interaction, and known-limit instructions.
 - `docs/verification/2026-08-26-m1-windows-acceptance.md`: actual executable observations, created only when the checks are performed.
 - `TASKS.md`: JOENESS milestone state and evidence pointers, updated only at the implementation/acceptance boundary.
@@ -401,7 +406,7 @@ internal static class PetTestInput
 
 `PetBrain` starts in IDLE, selects an IDLE duration uniformly between `IdleMin` and `IdleMax`, and advances state time using `min(input.Delta, MaxDelta)` with negative time treated as zero. A range whose minimum equals its maximum returns that value without consuming randomness. At the end of IDLE, `NextUnit() < IdleToWalkProbability` enters WALK; otherwise it starts a fresh IDLE interval. WALK selects a uniformly distributed heading from one unit random value, moves by `WalkSpeed * deltaSeconds`, and selects a duration between `WalkMin` and `WalkMax`.
 
-After movement, clamp the top-left position through `input.WorkArea.ClampTopLeft`. When clamping changes X or Y, reflect that heading component inward and set facing from the resulting X component. Keep `Phase` in `[0,1)`: IDLE uses a repeating two-second cycle, WALK uses a repeating 0.6-second gait cycle, SLEEP uses a repeating 2.4-second breathing cycle, DRAGGED uses zero, and CURIOUS/STARTLED/CLICK_REACTION use elapsed divided by their finite response duration.
+**Intentional correctness correction — boundary reflection (2026-08-26):** The earlier clamp-after-move wording discarded the distance remaining after a collision and made one long frame disagree with equivalent split frames. Integrate WALK independently on each axis as mirrored motion across the valid top-left interval, consuming all distance and supporting multiple reflections in one update. The final heading component must match the final mirrored segment, including exact-boundary landings. Keep `RectD.ClampTopLeft` for normalization, drag release, and non-WALK containment. Keep `Phase` in `[0,1)`: IDLE uses a repeating two-second cycle, WALK uses a repeating 0.6-second gait cycle, SLEEP uses a repeating 2.4-second breathing cycle, DRAGGED uses zero, and CURIOUS/STARTLED/CLICK_REACTION use elapsed divided by their finite response duration.
 
 - [ ] **Step 5: Verify autonomy GREEN and run the complete core suite**
 
@@ -498,11 +503,15 @@ Expected: assertions fail because `PetBrain` remains IDLE and does not retreat.
 
 - [ ] **Step 3: Implement pointer reaction detection**
 
-`PointerReactionDetector` stores the previous valid distance, a filtered closing speed, a `nearLatched` flag, and independent CURIOUS/STARTLED cooldowns. On each valid sample:
+`PointerReactionDetector` stores the previous valid distance, a filtered closing speed, a `nearLatched` flag, and independent CURIOUS/STARTLED cooldowns.
+
+**Intentional correctness correction — observation time (2026-08-26):** Keep the clamped delta for simulation, state time, inactivity, and cooldowns, but calculate pointer closing speed from the actual positive input interval. Replace the fixed per-sample smoothing step with elapsed-time smoothing `alpha(dt) = 1 - (1 - 0.35)^(dt / 100 ms)`, preserving the original 100 ms response while removing sampling-cadence dependence. A long valid gap is deliberately treated as one average-speed observation over the full elapsed gap rather than compressed to `MaxDelta`; unavailable pointer data resets the speed baseline, and nonpositive input time does not create an observation.
+
+On each valid sample:
 
 1. compute distance from pointer to pet center;
-2. compute raw closing speed as `(previousDistance - currentDistance) / deltaSeconds` when delta is positive;
-3. update filtered speed as `0.35 * raw + 0.65 * previousFiltered`;
+2. compute raw closing speed as `(previousDistance - currentDistance) / actualObservationSeconds` when the input interval is positive;
+3. update filtered speed with the elapsed-time alpha above;
 4. enter the near latch at `distance <= NearEnterDistance` and clear it only at `distance >= NearExitDistance`;
 5. return STARTLED when distance is within `StartleReactionDistance`, filtered closing speed is at least `StartleClosingSpeed`, and its cooldown is zero;
 6. otherwise return CURIOUS only on a new near-latch entry with its cooldown at zero;
@@ -621,6 +630,8 @@ Expected: assertions fail because pending click, CLICK_REACTION, and DRAGGED are
 - [ ] **Step 3: Implement pending click and DRAGGED behavior**
 
 When `BodyPressPosition` has a value, save that event position and `pressPosition - petTopLeft` grab offset, set `IsDirectInteractionPending=true`, reset inactivity, and skip pointer reaction detection. Do this even if the global button is already up at the next 33 ms tick, so a fast click cannot disappear between ticks. While pending, compare the current valid pointer position with the saved press position. Crossing either threshold while the button is down enters DRAGGED immediately. A button-up sample below both thresholds enters CLICK_REACTION for `ClickReactionDuration`; a button-up sample beyond the threshold settles to IDLE without fabricating a click.
+
+**Intentional correctness correction — pending press priority (2026-08-26):** While the button remains down below threshold, freeze the interrupted WALK, STARTLED, or other lower-priority state's position and `_stateElapsed`; simulation-based cooldown and inactivity accounting continue with the clamped delta. If press and release are observed in the same tick, resolve CLICK_REACTION first and consume that tick normally so its phase advances. If the threshold is crossed, DRAGGED immediately applies `pointer - grabOffset` from the frozen press position, preventing a jump caused by lower-priority movement during the hold.
 
 While DRAGGED and the button remains down, set top-left to `pointer - grabOffset` without autonomous movement. On release, clamp top-left, clear the pending/grab fields, and enter IDLE. A confirmed CLICK_REACTION interrupts STARTLED; a pending press prevents a new STARTLED or CURIOUS transition.
 
@@ -937,12 +948,17 @@ git commit -m "feat: add Dororong vector state presentation"
 
 **Files:**
 - Create: `src/Dororong.App/PetLoop.cs`
+- Create: `src/Dororong.App/Runtime/PetLoopRuntime.cs`
+- Create: `tests/Dororong.App.RuntimeComposition.Tests.ps1`
+- Modify: `src/Dororong.App/App.xaml`
 - Modify: `src/Dororong.App/MainWindow.xaml.cs`
 - Modify: `src/Dororong.App/App.xaml.cs`
 
 **Interfaces:**
 - Consumes: `PetBrain`, `DesktopInput`, `DororongPresenter`, `SystemParameters.WorkArea`, and the real WPF window.
 - Produces: a running pet loop with delayed drag capture, clean release, error propagation, and deterministic shutdown.
+
+**Intentional correctness correction — startup and integration seams (2026-08-26):** Remove `StartupUri` so WPF cannot create `MainWindow` outside the fatal boundary. `App.OnStartup` uses a one-shot production sequence to create, assign, and show exactly one MainWindow; construction or show failure makes one ordinary error attempt and reaches `Shutdown(1)` from a finally-equivalent boundary. `DispatcherUnhandledException` enters the same one-shot fatal path. `PetLoop` receives narrow clock, timer, input/window, presenter, and capture delegates through production adapters; the normal WPF constructor builds those adapters, while the STA script drives the same real `PetLoop.Start`, tick, fault, and Dispose wiring without a GUI. The seam is not a second runtime or a helper-only substitute.
 
 - [ ] **Step 1: Wire MainWindow against the missing PetLoop and confirm the compile failure**
 
@@ -971,9 +987,9 @@ internal sealed class PetLoop : IDisposable
 }
 ```
 
-`Start` derives `RectD` from `SystemParameters.WorkArea`, derives `SizeD` from the 144×144 window, and creates `PetBrain(BehaviorTuning.Default, new SeededRandomSource(), initialPosition)` at 32 DIPs from the work area's lower-right edge. It starts one `DispatcherTimer` with a 33 ms interval and one `Stopwatch` for elapsed time.
+`Start` reads `RectD` and `SizeD` through the production host adapter, and creates `PetBrain(BehaviorTuning.Default, new SeededRandomSource(), initialPosition)` at 32 DIPs from the work area's lower-right edge. The normal WPF adapter owns one `DispatcherTimer` with a 33 ms interval and one `Stopwatch`; the injected adapters expose only elapsed time, attach/detach/start/stop, frame input, window position, render, and capture operations.
 
-`NotifyBodyPressed` converts the supplied local DIP position to screen DIPs by adding `Window.Left` and `Window.Top`, then stores that point in one queued nullable field. Each tick reads pointer and global primary-button state, consumes that queued press position exactly once, builds `PetInput`, calls `PetBrain.Update`, assigns `Window.Left/Top`, and calls `Presenter.Render`.
+`NotifyBodyPressed` converts the supplied local DIP position to screen DIPs by adding the host's current window position, then stores that point in one queued nullable field. Each tick reads pointer and global primary-button state, consumes that queued press position exactly once, builds `PetInput`, calls `PetBrain.Update`, applies the resulting window position, and then renders the same snapshot.
 
 - [ ] **Step 3: Enforce capture and failure boundaries**
 
@@ -985,7 +1001,7 @@ Compare the previous and current snapshots each tick:
 - if pointer sampling is unavailable, send `PointerSample.Unavailable` while continuing the timer;
 - wrap each tick so any unexpected exception stops the timer, releases capture, raises `Faulted` once, and does not restart.
 
-`Dispose` is idempotent: stop and detach the timer, stop the stopwatch, release capture if held, and detach presenter event handlers. `MainWindow` handles `Faulted` by disposing the loop, showing one ordinary error message, and calling `Application.Current.Shutdown(1)`.
+`Dispose` is idempotent: stop and detach the timer, stop the clock, and release capture if held. Cleanup attempts every step after one injected failure, preserves the failure, and does not repeat cleanup side effects on a second Dispose. `MainWindow` handles `Faulted` by disposing the loop, showing one ordinary error message, and calling `Application.Current.Shutdown(1)`.
 
 - [ ] **Step 4: Run automated tests and the full Debug build**
 
@@ -994,9 +1010,10 @@ Run:
 ```powershell
 dotnet test tests/Dororong.Core.Tests/Dororong.Core.Tests.csproj
 dotnet build DororongDesktopPet.sln --configuration Debug
+pwsh -NoProfile -STA -File tests/Dororong.App.RuntimeComposition.Tests.ps1 -Configuration Debug
 ```
 
-Expected: all core tests pass and the complete app builds with no warnings.
+Expected: all core tests pass, the complete app builds with no warnings, and the STA regression executes the production startup boundary plus actual `PetLoop` start/tick/input/brain/window/render/capture/fault/dispose wiring.
 
 - [ ] **Step 5: Perform the first integrated interaction smoke check**
 

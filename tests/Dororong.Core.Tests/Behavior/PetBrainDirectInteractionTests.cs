@@ -159,4 +159,89 @@ public sealed class PetBrainDirectInteractionTests
         Assert.False(actual.IsDirectInteractionPending);
         Assert.Null(actual.GrabOffset);
     }
+
+    [Fact]
+    public void Pending_press_freezes_walk_until_drag_preserves_the_original_position()
+    {
+        var brain = CreateWalkingBrain();
+        brain.Update(PetTestInput.At(0.1));
+        var beforePress = brain.Current;
+        var pressPosition = beforePress.Position + new PointD(60, 50);
+
+        var pressed = brain.Update(PetTestInput.At(
+            0.2, pointer: pressPosition, primaryDown: true,
+            bodyPressPosition: pressPosition));
+        var held = brain.Update(PetTestInput.At(
+            0.3, pointer: pressPosition, primaryDown: true));
+        var dragged = brain.Update(PetTestInput.At(
+            0.1, pointer: pressPosition + new PointD(10, 0), primaryDown: true));
+
+        Assert.Equal(PetState.Walk, pressed.State);
+        Assert.Equal(beforePress.Position, pressed.Position);
+        Assert.Equal(beforePress.Phase, pressed.Phase, precision: 10);
+        Assert.Equal(beforePress.Position, held.Position);
+        Assert.Equal(beforePress.Phase, held.Phase, precision: 10);
+        Assert.Equal(PetState.Dragged, dragged.State);
+        Assert.Equal(beforePress.Position + new PointD(10, 0), dragged.Position);
+    }
+
+    [Fact]
+    public void Pending_press_freezes_startled_until_drag_preserves_the_original_position()
+    {
+        var brain = PetTestInput.CreateReactionBrain();
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(460, 150)));
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(260, 150)));
+        var beforePress = brain.Current;
+        var pressPosition = beforePress.Position + new PointD(60, 50);
+
+        var pressed = brain.Update(PetTestInput.At(
+            0.1, pointer: pressPosition, primaryDown: true,
+            bodyPressPosition: pressPosition));
+        var held = brain.Update(PetTestInput.At(
+            0.2, pointer: pressPosition, primaryDown: true));
+        var dragged = brain.Update(PetTestInput.At(
+            0.1, pointer: pressPosition + new PointD(10, 0), primaryDown: true));
+
+        Assert.Equal(PetState.Startled, pressed.State);
+        Assert.Equal(beforePress.Position, pressed.Position);
+        Assert.Equal(beforePress.Phase, pressed.Phase, precision: 10);
+        Assert.Equal(beforePress.Position, held.Position);
+        Assert.Equal(beforePress.Phase, held.Phase, precision: 10);
+        Assert.Equal(PetState.Dragged, dragged.State);
+        Assert.Equal(beforePress.Position + new PointD(10, 0), dragged.Position);
+    }
+
+    [Fact]
+    public void Fast_click_released_in_the_press_tick_advances_click_reaction_time()
+    {
+        var brain = CreateWalkingBrain();
+        brain.Update(PetTestInput.At(0.1));
+        var beforePress = brain.Current;
+        var pressPosition = beforePress.Position + new PointD(60, 50);
+
+        var actual = brain.Update(PetTestInput.At(
+            0.05,
+            pointer: pressPosition,
+            primaryDown: false,
+            bodyPressPosition: pressPosition));
+
+        Assert.Equal(PetState.ClickReaction, actual.State);
+        Assert.Equal(beforePress.Position, actual.Position);
+        Assert.Equal(0.1, actual.Phase, precision: 10);
+    }
+
+    private static PetBrain CreateWalkingBrain() =>
+        new(
+            BehaviorTuning.Default with
+            {
+                MaxDelta = TimeSpan.FromSeconds(1),
+                IdleMin = TimeSpan.FromSeconds(0.1),
+                IdleMax = TimeSpan.FromSeconds(0.1),
+                WalkMin = TimeSpan.FromSeconds(10),
+                WalkMax = TimeSpan.FromSeconds(10),
+                IdleToWalkProbability = 1,
+                SleepDelay = TimeSpan.FromMinutes(10)
+            },
+            new SequenceRandomSource(0, 0),
+            new PointD(100, 100));
 }

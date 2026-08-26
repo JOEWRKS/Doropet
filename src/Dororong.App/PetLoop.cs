@@ -15,25 +15,50 @@ internal sealed class PetLoop : IDisposable
     private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(33);
     private const double InitialMargin = 32;
 
-    private readonly Window _window;
-    private readonly DororongPresenter _presenter;
-    private readonly DesktopInput _input;
+    private readonly PetLoopClock _clock;
+    private readonly PetLoopTimer _timer;
+    private readonly PetLoopHost _host;
+    private readonly Func<PointD, PetBrain> _brainFactory;
+    private readonly EventHandler _tickHandler;
     private readonly PetLoopLifecycle _lifecycle = new();
     private readonly BodyPressQueue _bodyPressQueue = new();
-    private DispatcherTimer? _timer;
-    private Stopwatch? _stopwatch;
-    private HwndSource? _windowSource;
     private PetBrain? _brain;
     private PetSnapshot _snapshot;
     private TimeSpan _lastElapsed;
     private bool _isMouseCaptured;
+    private bool _timerAttached;
+    private bool _timerStarted;
+    private bool _clockStarted;
     private bool _cleanupComplete;
 
     public PetLoop(Window window, DororongPresenter presenter, DesktopInput input)
+        : this(
+            CreateProductionRuntime(window, presenter, input),
+            initialPosition => new PetBrain(
+                BehaviorTuning.Default,
+                new SeededRandomSource(),
+                initialPosition))
     {
-        _window = window ?? throw new ArgumentNullException(nameof(window));
-        _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
-        _input = input ?? throw new ArgumentNullException(nameof(input));
+    }
+
+    private PetLoop(
+        ProductionRuntime runtime,
+        Func<PointD, PetBrain> brainFactory)
+        : this(runtime.Clock, runtime.Timer, runtime.Host, brainFactory)
+    {
+    }
+
+    internal PetLoop(
+        PetLoopClock clock,
+        PetLoopTimer timer,
+        PetLoopHost host,
+        Func<PointD, PetBrain> brainFactory)
+    {
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _timer = timer ?? throw new ArgumentNullException(nameof(timer));
+        _host = host ?? throw new ArgumentNullException(nameof(host));
+        _brainFactory = brainFactory ?? throw new ArgumentNullException(nameof(brainFactory));
+        _tickHandler = OnTick;
     }
 
     public event EventHandler<Exception>? Faulted;
@@ -47,34 +72,27 @@ internal sealed class PetLoop : IDisposable
 
         try
         {
-            var workArea = GetWorkArea();
-            var petSize = GetPetSize();
+            var workArea = _host.GetWorkArea();
+            var petSize = _host.GetPetSize();
             var initialPosition = workArea.ClampTopLeft(
                 new PointD(
                     workArea.Right - petSize.Width - InitialMargin,
                     workArea.Bottom - petSize.Height - InitialMargin),
                 petSize);
 
-            _windowSource = PresentationSource.FromVisual(_window) as HwndSource
-                ?? throw new InvalidOperationException("The WPF window source is unavailable.");
-            _brain = new PetBrain(
-                BehaviorTuning.Default,
-                new SeededRandomSource(),
-                initialPosition);
+            _brain = _brainFactory(initialPosition)
+                ?? throw new InvalidOperationException("The behavior brain factory returned null.");
             _snapshot = _brain.Current;
+            _host.SetWindowPosition(_snapshot.Position);
+            _host.Render(_snapshot);
 
-            _window.Left = _snapshot.Position.X;
-            _window.Top = _snapshot.Position.Y;
-            _presenter.Render(_snapshot);
-
-            _stopwatch = new Stopwatch();
-            _timer = new DispatcherTimer(DispatcherPriority.Normal, _window.Dispatcher)
-            {
-                Interval = TickInterval
-            };
-            _timer.Tick += OnTick;
-            _stopwatch.Start();
+            _timer.Attach(_tickHandler);
+            _timerAttached = true;
+            _clock.Start();
+            _clockStarted = true;
+            _lastElapsed = _clock.Elapsed;
             _timer.Start();
+            _timerStarted = true;
         }
         catch (Exception exception)
         {
@@ -89,27 +107,26 @@ internal sealed class PetLoop : IDisposable
             return;
         }
 
+        var windowPosition = _host.GetWindowPosition();
         _bodyPressQueue.Enqueue(new PointD(
-            _window.Left + localPosition.X,
-            _window.Top + localPosition.Y));
+            windowPosition.X + localPosition.X,
+            windowPosition.Y + localPosition.Y));
     }
 
     public void Dispose()
     {
-        _lifecycle.TryDispose();
-        if (_cleanupComplete)
+        if (!_lifecycle.TryDispose() || _cleanupComplete)
         {
             return;
         }
 
         var cleanupException = StopAndDetach();
+        _cleanupComplete = true;
+        GC.SuppressFinalize(this);
         if (cleanupException is not null)
         {
             throw cleanupException;
         }
-
-        _cleanupComplete = true;
-        GC.SuppressFinalize(this);
     }
 
     private void OnTick(object? sender, EventArgs e)
@@ -121,39 +138,28 @@ internal sealed class PetLoop : IDisposable
 
         try
         {
-            var stopwatch = _stopwatch
-                ?? throw new InvalidOperationException("The update clock has not been started.");
             var brain = _brain
                 ?? throw new InvalidOperationException("The behavior brain has not been created.");
-            var windowSource = _windowSource
-                ?? throw new InvalidOperationException("The WPF window source is unavailable.");
-
-            var elapsed = stopwatch.Elapsed;
+            var elapsed = _clock.Elapsed;
             var delta = elapsed - _lastElapsed;
             _lastElapsed = elapsed;
 
-            var pointer = _input.TryGetPointerInDips(windowSource, out var pointerPosition)
-                ? new PointerSample(true, pointerPosition)
-                : PointerSample.Unavailable;
-            var primaryButtonDown = _input.IsPrimaryButtonDown();
+            var pointer = _host.SamplePointer();
+            var primaryButtonDown = _host.IsPrimaryButtonDown();
             var bodyPress = _bodyPressQueue.Consume();
-
             var previous = _snapshot;
             var current = brain.Update(new PetInput(
                 delta,
-                GetWorkArea(),
-                GetPetSize(),
+                _host.GetWorkArea(),
+                _host.GetPetSize(),
                 pointer,
                 primaryButtonDown,
                 bodyPress,
-                new SizeD(
-                    SystemParameters.MinimumHorizontalDragDistance,
-                    SystemParameters.MinimumVerticalDragDistance)));
+                _host.GetDragThreshold()));
 
             UpdateMouseCapture(previous, current);
-            _window.Left = current.Position.X;
-            _window.Top = current.Position.Y;
-            _presenter.Render(current);
+            _host.SetWindowPosition(current.Position);
+            _host.Render(current);
             _snapshot = current;
         }
         catch (Exception exception)
@@ -166,7 +172,7 @@ internal sealed class PetLoop : IDisposable
     {
         switch (MouseCaptureTransition.Decide(previous.State, current.State))
         {
-            case MouseCaptureChange.Capture when !_presenter.CaptureMouse():
+            case MouseCaptureChange.Capture when !_host.CaptureMouse():
                 throw new InvalidOperationException("Dororong could not capture the mouse for dragging.");
 
             case MouseCaptureChange.Capture:
@@ -193,8 +199,7 @@ internal sealed class PetLoop : IDisposable
         }
 
         var cleanupException = StopAndDetach();
-        _cleanupComplete = cleanupException is null;
-
+        _cleanupComplete = true;
         Faulted?.Invoke(
             this,
             cleanupException is null
@@ -204,28 +209,41 @@ internal sealed class PetLoop : IDisposable
 
     private Exception? StopAndDetach()
     {
-        var timer = _timer;
-        _timer = null;
-        var stopwatch = _stopwatch;
-        _stopwatch = null;
+        var timerStarted = _timerStarted;
+        var timerAttached = _timerAttached;
+        var clockStarted = _clockStarted;
+        _timerStarted = false;
+        _timerAttached = false;
+        _clockStarted = false;
 
         return CleanupSequence.Run(
-            () => timer?.Stop(),
             () =>
             {
-                if (timer is not null)
+                if (timerStarted)
                 {
-                    timer.Tick -= OnTick;
+                    _timer.Stop();
                 }
             },
-            () => stopwatch?.Stop(),
+            () =>
+            {
+                if (timerAttached)
+                {
+                    _timer.Detach(_tickHandler);
+                }
+            },
+            () =>
+            {
+                if (clockStarted)
+                {
+                    _clock.Stop();
+                }
+            },
             ReleaseMouseCapture,
             () =>
             {
                 _lastElapsed = TimeSpan.Zero;
                 _bodyPressQueue.Clear();
                 _brain = null;
-                _windowSource = null;
             });
     }
 
@@ -236,15 +254,67 @@ internal sealed class PetLoop : IDisposable
             return;
         }
 
-        _presenter.ReleaseMouseCapture();
         _isMouseCaptured = false;
+        _host.ReleaseMouseCapture();
     }
 
-    private SizeD GetPetSize() => new(_window.ActualWidth, _window.ActualHeight);
+    private static ProductionRuntime CreateProductionRuntime(
+        Window window,
+        DororongPresenter presenter,
+        DesktopInput input)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        ArgumentNullException.ThrowIfNull(presenter);
+        ArgumentNullException.ThrowIfNull(input);
+
+        var source = PresentationSource.FromVisual(window) as HwndSource
+            ?? throw new InvalidOperationException("The WPF window source is unavailable.");
+        var stopwatch = new Stopwatch();
+        var dispatcherTimer = new DispatcherTimer(DispatcherPriority.Normal, window.Dispatcher)
+        {
+            Interval = TickInterval
+        };
+
+        var clock = new PetLoopClock(
+            () => stopwatch.Elapsed,
+            stopwatch.Start,
+            stopwatch.Stop);
+        var timer = new PetLoopTimer(
+            handler => dispatcherTimer.Tick += handler,
+            handler => dispatcherTimer.Tick -= handler,
+            dispatcherTimer.Start,
+            dispatcherTimer.Stop);
+        var host = new PetLoopHost(
+            GetWorkArea,
+            () => new SizeD(window.ActualWidth, window.ActualHeight),
+            () => new SizeD(
+                SystemParameters.MinimumHorizontalDragDistance,
+                SystemParameters.MinimumVerticalDragDistance),
+            () => input.TryGetPointerInDips(source, out var pointerPosition)
+                ? new PointerSample(true, pointerPosition)
+                : PointerSample.Unavailable,
+            input.IsPrimaryButtonDown,
+            () => new PointD(window.Left, window.Top),
+            position =>
+            {
+                window.Left = position.X;
+                window.Top = position.Y;
+            },
+            presenter.Render,
+            presenter.CaptureMouse,
+            presenter.ReleaseMouseCapture);
+
+        return new ProductionRuntime(clock, timer, host);
+    }
 
     private static RectD GetWorkArea()
     {
         var workArea = SystemParameters.WorkArea;
         return new RectD(workArea.X, workArea.Y, workArea.Width, workArea.Height);
     }
+
+    private sealed record ProductionRuntime(
+        PetLoopClock Clock,
+        PetLoopTimer Timer,
+        PetLoopHost Host);
 }

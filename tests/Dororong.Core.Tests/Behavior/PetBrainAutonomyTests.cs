@@ -33,7 +33,7 @@ public sealed class PetBrainAutonomyTests
     }
 
     [Fact]
-    public void Update_clamps_a_walk_at_the_right_work_area_edge()
+    public void Update_reflects_walk_overshoot_at_the_right_work_area_edge()
     {
         var brain = PetTestInput.CreateBrain(
             new SequenceRandomSource(0.0, 0.0, 0.0),
@@ -42,7 +42,7 @@ public sealed class PetBrainAutonomyTests
 
         var actual = brain.Update(PetTestInput.At(0.5));
 
-        Assert.Equal(680, actual.Position.X, precision: 6);
+        Assert.Equal(664, actual.Position.X, precision: 6);
         Assert.Equal(FacingDirection.Left, actual.Facing);
     }
 
@@ -158,7 +158,7 @@ public sealed class PetBrainAutonomyTests
 
         var actual = brain.Update(PetTestInput.At(0.5));
 
-        Assert.Equal(new PointD(0, 100), actual.Position);
+        Assert.Equal(new PointD(16, 100), actual.Position);
         Assert.Equal(FacingDirection.Right, actual.Facing);
     }
 
@@ -173,8 +173,8 @@ public sealed class PetBrainAutonomyTests
         var clamped = brain.Update(PetTestInput.At(0.5));
         var inward = brain.Update(PetTestInput.At(0.25));
 
-        Assert.Equal(0, clamped.Position.Y, precision: 6);
-        Assert.Equal(10.5, inward.Position.Y, precision: 6);
+        Assert.Equal(16, clamped.Position.Y, precision: 6);
+        Assert.Equal(26.5, inward.Position.Y, precision: 6);
         Assert.Equal(PetState.Walk, inward.State);
     }
 
@@ -189,8 +189,8 @@ public sealed class PetBrainAutonomyTests
         var clamped = brain.Update(PetTestInput.At(0.5));
         var inward = brain.Update(PetTestInput.At(0.25));
 
-        Assert.Equal(500, clamped.Position.Y, precision: 6);
-        Assert.Equal(489.5, inward.Position.Y, precision: 6);
+        Assert.Equal(484, clamped.Position.Y, precision: 6);
+        Assert.Equal(473.5, inward.Position.Y, precision: 6);
         Assert.Equal(PetState.Walk, inward.State);
     }
 
@@ -215,4 +215,79 @@ public sealed class PetBrainAutonomyTests
         Assert.InRange(actual.Phase, 0, 1);
         Assert.True(actual.Phase < 1);
     }
+
+    [Fact]
+    public void Walk_with_multiple_reflections_matches_split_frames_in_position_and_heading()
+    {
+        var wholeFrame = CreateBoundaryBrain(headingUnit: 0, speed: 2000, new PointD(10, 200));
+        var splitFrames = CreateBoundaryBrain(headingUnit: 0, speed: 2000, new PointD(10, 200));
+        wholeFrame.Update(PetTestInput.At(0.1));
+        splitFrames.Update(PetTestInput.At(0.1));
+
+        var whole = wholeFrame.Update(PetTestInput.At(1.0));
+        for (var index = 0; index < 10; index++)
+        {
+            splitFrames.Update(PetTestInput.At(0.1));
+        }
+
+        var split = splitFrames.Current;
+        Assert.Equal(650, whole.Position.X, precision: 6);
+        Assert.Equal(whole.Position.X, split.Position.X, precision: 6);
+        Assert.Equal(whole.Position.Y, split.Position.Y, precision: 6);
+        Assert.Equal(whole.Facing, split.Facing);
+
+        var wholeAfterProbe = wholeFrame.Update(PetTestInput.At(0.01));
+        var splitAfterProbe = splitFrames.Update(PetTestInput.At(0.01));
+
+        Assert.Equal(670, wholeAfterProbe.Position.X, precision: 6);
+        Assert.Equal(wholeAfterProbe.Position.X, splitAfterProbe.Position.X, precision: 6);
+        Assert.Equal(wholeAfterProbe.Position.Y, splitAfterProbe.Position.Y, precision: 6);
+    }
+
+    [Theory]
+    [InlineData(0.0, 10, 200, 350, 200, 340, 200, FacingDirection.Left)]
+    [InlineData(0.5, 670, 200, 330, 200, 340, 200, FacingDirection.Right)]
+    [InlineData(0.25, 200, 10, 200, 10, 200, 20, FacingDirection.Right)]
+    [InlineData(0.75, 200, 490, 200, 490, 200, 480, FacingDirection.Left)]
+    public void Walk_consumes_overshoot_across_representative_edges(
+        double headingUnit,
+        double initialX,
+        double initialY,
+        double expectedX,
+        double expectedY,
+        double expectedProbeX,
+        double expectedProbeY,
+        FacingDirection expectedFacing)
+    {
+        var brain = CreateBoundaryBrain(
+            headingUnit,
+            speed: 1000,
+            new PointD(initialX, initialY));
+        brain.Update(PetTestInput.At(0.1));
+
+        var reflected = brain.Update(PetTestInput.At(1.0));
+        var afterProbe = brain.Update(PetTestInput.At(0.01));
+
+        Assert.Equal(expectedX, reflected.Position.X, precision: 6);
+        Assert.Equal(expectedY, reflected.Position.Y, precision: 6);
+        Assert.Equal(expectedFacing, reflected.Facing);
+        Assert.Equal(expectedProbeX, afterProbe.Position.X, precision: 6);
+        Assert.Equal(expectedProbeY, afterProbe.Position.Y, precision: 6);
+    }
+
+    private static PetBrain CreateBoundaryBrain(double headingUnit, double speed, PointD initialPosition) =>
+        new(
+            BehaviorTuning.Default with
+            {
+                MaxDelta = TimeSpan.FromSeconds(2),
+                IdleMin = TimeSpan.FromSeconds(0.1),
+                IdleMax = TimeSpan.FromSeconds(0.1),
+                WalkMin = TimeSpan.FromSeconds(10),
+                WalkMax = TimeSpan.FromSeconds(10),
+                WalkSpeed = speed,
+                IdleToWalkProbability = 1,
+                SleepDelay = TimeSpan.FromMinutes(10)
+            },
+            new SequenceRandomSource(0, headingUnit),
+            initialPosition);
 }

@@ -65,7 +65,8 @@ public sealed class PetBrain
         var reaction = _pointerReactionDetector.Update(
             input.Pointer,
             petCenter,
-            delta,
+            simulationDelta: delta,
+            observationDelta: input.Delta,
             isDirectInteractionPending: handledDirectInteraction || _pressPosition.HasValue || _state == PetState.Dragged);
         if (reaction.EnteredNearZone || reaction.Reaction == PointerReaction.Startled)
         {
@@ -81,6 +82,12 @@ public sealed class PetBrain
                  _state is not (PetState.Startled or PetState.ClickReaction or PetState.Dragged))
         {
             StartCurious(input.Pointer.Position, petCenter);
+        }
+
+        if (_pressPosition.HasValue && _state != PetState.Dragged)
+        {
+            _inactivity += delta;
+            return Current;
         }
 
         var remaining = delta;
@@ -307,9 +314,55 @@ public sealed class PetBrain
     private void Move(TimeSpan delta, RectD workArea, SizeD petSize)
     {
         var distance = _tuning.WalkSpeed * delta.TotalSeconds;
-        var moved = _position + new PointD(_heading.X * distance, _heading.Y * distance);
-        _position = moved;
-        NormalizePosition(workArea, petSize);
+        var maximumX = Math.Max(workArea.X, workArea.Right - petSize.Width);
+        var maximumY = Math.Max(workArea.Y, workArea.Bottom - petSize.Height);
+        var x = ReflectAxis(_position.X, _heading.X, distance, workArea.X, maximumX);
+        var y = ReflectAxis(_position.Y, _heading.Y, distance, workArea.Y, maximumY);
+
+        _position = new PointD(x.Position, y.Position);
+        _heading = new PointD(x.Heading, y.Heading);
+        _facing = _heading.X < 0 ? FacingDirection.Left : FacingDirection.Right;
+    }
+
+    private static (double Position, double Heading) ReflectAxis(
+        double position,
+        double heading,
+        double distance,
+        double minimum,
+        double maximum)
+    {
+        var span = maximum - minimum;
+        if (span <= 0)
+        {
+            return (minimum, heading);
+        }
+
+        if (heading == 0 || distance == 0)
+        {
+            return (Math.Clamp(position, minimum, maximum), heading);
+        }
+
+        var period = span * 2;
+        var unfolded = (position - minimum) + (heading * distance);
+        var phase = unfolded % period;
+        if (phase < 0)
+        {
+            phase += period;
+        }
+
+        if (phase == 0)
+        {
+            return (minimum, Math.Abs(heading));
+        }
+
+        if (phase == span)
+        {
+            return (maximum, -Math.Abs(heading));
+        }
+
+        return phase < span
+            ? (minimum + phase, heading)
+            : (minimum + period - phase, -heading);
     }
 
     private void Retreat(TimeSpan delta, RectD workArea, SizeD petSize)

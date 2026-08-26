@@ -21,6 +21,61 @@ internal sealed class OneShotOperation
     }
 }
 
+internal sealed class AppStartupSequence
+{
+    private readonly OneShotOperation _startup = new();
+    private readonly OneShotOperation _fatal = new();
+
+    public bool TryRun(
+        Func<object> createMainWindow,
+        Action<object> setMainWindow,
+        Action<object> showMainWindow,
+        Func<Exception?> cleanup,
+        Action<Exception> showError,
+        Action<int> shutdown)
+    {
+        ArgumentNullException.ThrowIfNull(createMainWindow);
+        ArgumentNullException.ThrowIfNull(setMainWindow);
+        ArgumentNullException.ThrowIfNull(showMainWindow);
+        ArgumentNullException.ThrowIfNull(cleanup);
+        ArgumentNullException.ThrowIfNull(showError);
+        ArgumentNullException.ThrowIfNull(shutdown);
+
+        return _startup.TryRun(() =>
+        {
+            try
+            {
+                var mainWindow = createMainWindow();
+                setMainWindow(mainWindow);
+                showMainWindow(mainWindow);
+            }
+            catch (Exception exception)
+            {
+                TryHandleFatal(exception, cleanup, showError, shutdown);
+            }
+        });
+    }
+
+    public bool TryHandleFatal(
+        Exception exception,
+        Func<Exception?> cleanup,
+        Action<Exception> showError,
+        Action<int> shutdown)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        ArgumentNullException.ThrowIfNull(cleanup);
+        ArgumentNullException.ThrowIfNull(showError);
+        ArgumentNullException.ThrowIfNull(shutdown);
+
+        return _fatal.TryRun(() =>
+            FatalBoundary.Run(
+                exception,
+                cleanup,
+                showError,
+                () => shutdown(1)));
+    }
+}
+
 internal enum PetLoopPhase
 {
     Created,

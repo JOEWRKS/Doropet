@@ -18,10 +18,15 @@ internal sealed class PointerReactionDetector
         _tuning = tuning;
     }
 
-    public PointerReactionDecision Update(PointerSample pointer, PointD petCenter, TimeSpan delta, bool isDirectInteractionPending)
+    public PointerReactionDecision Update(
+        PointerSample pointer,
+        PointD petCenter,
+        TimeSpan simulationDelta,
+        TimeSpan observationDelta,
+        bool isDirectInteractionPending)
     {
-        _curiousCooldown = DecrementCooldown(_curiousCooldown, delta);
-        _startledCooldown = DecrementCooldown(_startledCooldown, delta);
+        _curiousCooldown = DecrementCooldown(_curiousCooldown, simulationDelta);
+        _startledCooldown = DecrementCooldown(_startledCooldown, simulationDelta);
 
         if (!pointer.IsAvailable)
         {
@@ -39,9 +44,9 @@ internal sealed class PointerReactionDetector
         var distance = Distance(pointer.Position, petCenter);
         var rawClosingSpeed = 0d;
         var isMovingAway = false;
-        if (_previousDistance is { } previousDistance && delta > TimeSpan.Zero)
+        if (_previousDistance is { } previousDistance && observationDelta > TimeSpan.Zero)
         {
-            rawClosingSpeed = (previousDistance - distance) / delta.TotalSeconds;
+            rawClosingSpeed = (previousDistance - distance) / observationDelta.TotalSeconds;
             isMovingAway = rawClosingSpeed < 0;
             if (rawClosingSpeed > 0 && _previousPointerPosition is { } previousPointerPosition)
             {
@@ -49,7 +54,10 @@ internal sealed class PointerReactionDetector
             }
         }
 
-        _filteredClosingSpeed = 0.35 * rawClosingSpeed + 0.65 * _filteredClosingSpeed;
+        var smoothingAlpha = SmoothingAlpha(observationDelta);
+        _filteredClosingSpeed =
+            smoothingAlpha * rawClosingSpeed +
+            (1 - smoothingAlpha) * _filteredClosingSpeed;
         _previousDistance = distance;
         _previousPointerPosition = pointer.Position;
 
@@ -79,6 +87,20 @@ internal sealed class PointerReactionDetector
 
     private static TimeSpan DecrementCooldown(TimeSpan cooldown, TimeSpan delta) =>
         cooldown > delta ? cooldown - delta : TimeSpan.Zero;
+
+    private static double SmoothingAlpha(TimeSpan elapsed)
+    {
+        if (elapsed <= TimeSpan.Zero)
+        {
+            return 0;
+        }
+
+        const double referenceAlpha = 0.35;
+        const double referenceSeconds = 0.1;
+        return 1 - Math.Pow(
+            1 - referenceAlpha,
+            elapsed.TotalSeconds / referenceSeconds);
+    }
 
     private void ResetSpeedBaseline()
     {

@@ -287,4 +287,49 @@ public sealed class PetBrainPointerReactionTests
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             new PetBrain(tuning, new SequenceRandomSource(0), new PointD(100, 100)));
     }
+
+    [Fact]
+    public void A_half_second_two_hundred_dip_approach_does_not_become_startled()
+    {
+        var brain = CreateCadenceBrain(startleClosingSpeed: 650);
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(460, 150)));
+
+        var actual = brain.Update(PetTestInput.At(0.5, pointer: new PointD(260, 150)));
+
+        Assert.NotEqual(PetState.Startled, actual.State);
+    }
+
+    [Fact]
+    public void Equivalent_pointer_trajectory_has_the_same_classification_at_different_sample_cadences()
+    {
+        var coarse = CreateCadenceBrain(startleClosingSpeed: 800);
+        var fine = CreateCadenceBrain(startleClosingSpeed: 800);
+        coarse.Update(PetTestInput.At(0.1, pointer: new PointD(410, 150)));
+        fine.Update(PetTestInput.At(0.1, pointer: new PointD(410, 150)));
+
+        coarse.Update(PetTestInput.At(0.1, pointer: new PointD(310, 150)));
+        var coarseResult = coarse.Update(PetTestInput.At(0.1, pointer: new PointD(210, 150)));
+
+        fine.Update(PetTestInput.At(0.05, pointer: new PointD(360, 150)));
+        fine.Update(PetTestInput.At(0.05, pointer: new PointD(310, 150)));
+        fine.Update(PetTestInput.At(0.05, pointer: new PointD(260, 150)));
+        var fineResult = fine.Update(PetTestInput.At(0.05, pointer: new PointD(210, 150)));
+
+        Assert.Equal(PetState.Curious, coarseResult.State);
+        Assert.Equal(coarseResult.State, fineResult.State);
+    }
+
+    private static PetBrain CreateCadenceBrain(double startleClosingSpeed) =>
+        new(
+            BehaviorTuning.Default with
+            {
+                MaxDelta = TimeSpan.FromMilliseconds(100),
+                IdleMin = TimeSpan.FromMinutes(11),
+                IdleMax = TimeSpan.FromMinutes(11),
+                SleepDelay = TimeSpan.FromMinutes(11),
+                StartledDuration = TimeSpan.FromSeconds(2),
+                StartleClosingSpeed = startleClosingSpeed
+            },
+            new SequenceRandomSource(0),
+            new PointD(100, 100));
 }
