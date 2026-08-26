@@ -1044,11 +1044,12 @@ Run in this order and read every exit code:
 dotnet restore DororongDesktopPet.sln
 dotnet test DororongDesktopPet.sln --configuration Release --no-restore
 dotnet build DororongDesktopPet.sln --configuration Release --no-restore
+pwsh -NoProfile -STA -File tests/Dororong.App.RuntimeComposition.Tests.ps1 -Configuration Release
 pwsh -NoProfile -File tests/Dororong.App.DraggedAngle.Tests.ps1 -Configuration Release
 dotnet publish src/Dororong.App/Dororong.App.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts/publish/win-x64
 ```
 
-Expected final evidence is zero failed tests, zero build errors, a passing DRAGGED presenter-coordinate check against the just-built Release assemblies, a successful runtime-specific publish, and `artifacts/publish/win-x64/Dororong.App.exe` present.
+Expected final evidence is zero failed tests, zero build errors, a passing lifecycle/cleanup/input/capture runtime-composition check and DRAGGED presenter-coordinate check against the just-built Release assemblies, a successful runtime-specific publish, and `artifacts/publish/win-x64/Dororong.App.exe` present.
 
 - [ ] **Step 3: Launch the exact published executable safely**
 
@@ -1092,6 +1093,8 @@ Run:
 ```powershell
 dotnet test DororongDesktopPet.sln --configuration Release --no-restore
 dotnet build DororongDesktopPet.sln --configuration Release --no-restore
+pwsh -NoProfile -STA -File tests/Dororong.App.RuntimeComposition.Tests.ps1 -Configuration Release
+pwsh -NoProfile -File tests/Dororong.App.DraggedAngle.Tests.ps1 -Configuration Release
 git diff --check
 git status --short
 ```

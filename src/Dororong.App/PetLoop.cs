@@ -4,6 +4,7 @@ using System.Windows.Interop;
 using System.Windows.Threading;
 using Dororong.App.Controls;
 using Dororong.App.Interop;
+using Dororong.App.Runtime;
 using Dororong.Core.Behavior;
 using Dororong.Core.Geometry;
 
@@ -17,16 +18,16 @@ internal sealed class PetLoop : IDisposable
     private readonly Window _window;
     private readonly DororongPresenter _presenter;
     private readonly DesktopInput _input;
+    private readonly PetLoopLifecycle _lifecycle = new();
+    private readonly BodyPressQueue _bodyPressQueue = new();
     private DispatcherTimer? _timer;
     private Stopwatch? _stopwatch;
     private HwndSource? _windowSource;
     private PetBrain? _brain;
     private PetSnapshot _snapshot;
     private TimeSpan _lastElapsed;
-    private PointD? _queuedBodyPress;
     private bool _isMouseCaptured;
-    private bool _faulted;
-    private bool _disposed;
+    private bool _cleanupComplete;
 
     public PetLoop(Window window, DororongPresenter presenter, DesktopInput input)
     {
@@ -39,8 +40,7 @@ internal sealed class PetLoop : IDisposable
 
     public void Start()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        if (_timer is not null)
+        if (!_lifecycle.TryStart())
         {
             return;
         }
@@ -84,31 +84,37 @@ internal sealed class PetLoop : IDisposable
 
     public void NotifyBodyPressed(PointD localPosition)
     {
-        if (_disposed || _faulted)
+        if (_lifecycle.Phase != PetLoopPhase.Running)
         {
             return;
         }
 
-        _queuedBodyPress = new PointD(
+        _bodyPressQueue.Enqueue(new PointD(
             _window.Left + localPosition.X,
-            _window.Top + localPosition.Y);
+            _window.Top + localPosition.Y));
     }
 
     public void Dispose()
     {
-        if (_disposed)
+        _lifecycle.TryDispose();
+        if (_cleanupComplete)
         {
             return;
         }
 
-        _disposed = true;
-        StopAndDetach();
+        var cleanupException = StopAndDetach();
+        if (cleanupException is not null)
+        {
+            throw cleanupException;
+        }
+
+        _cleanupComplete = true;
         GC.SuppressFinalize(this);
     }
 
     private void OnTick(object? sender, EventArgs e)
     {
-        if (_disposed || _faulted)
+        if (_lifecycle.Phase != PetLoopPhase.Running)
         {
             return;
         }
@@ -130,8 +136,7 @@ internal sealed class PetLoop : IDisposable
                 ? new PointerSample(true, pointerPosition)
                 : PointerSample.Unavailable;
             var primaryButtonDown = _input.IsPrimaryButtonDown();
-            var bodyPress = _queuedBodyPress;
-            _queuedBodyPress = null;
+            var bodyPress = _bodyPressQueue.Consume();
 
             var previous = _snapshot;
             var current = brain.Update(new PetInput(
@@ -159,62 +164,69 @@ internal sealed class PetLoop : IDisposable
 
     private void UpdateMouseCapture(PetSnapshot previous, PetSnapshot current)
     {
-        if (previous.State != PetState.Dragged && current.State == PetState.Dragged)
+        switch (MouseCaptureTransition.Decide(previous.State, current.State))
         {
-            if (!_presenter.CaptureMouse())
-            {
+            case MouseCaptureChange.Capture when !_presenter.CaptureMouse():
                 throw new InvalidOperationException("Dororong could not capture the mouse for dragging.");
-            }
 
-            _isMouseCaptured = true;
-        }
-        else if (previous.State == PetState.Dragged && current.State != PetState.Dragged)
-        {
-            ReleaseMouseCapture();
+            case MouseCaptureChange.Capture:
+                _isMouseCaptured = true;
+                break;
+
+            case MouseCaptureChange.Release:
+                ReleaseMouseCapture();
+                break;
+
+            case MouseCaptureChange.None:
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(current), current.State, "Unknown capture transition.");
         }
     }
 
     private void HandleFault(Exception exception)
     {
-        if (_faulted)
+        if (!_lifecycle.TryFault())
         {
             return;
         }
 
-        _faulted = true;
-        Exception? cleanupException = null;
-        try
-        {
-            StopAndDetach();
-        }
-        catch (Exception error)
-        {
-            cleanupException = error;
-        }
+        var cleanupException = StopAndDetach();
+        _cleanupComplete = cleanupException is null;
 
         Faulted?.Invoke(
             this,
             cleanupException is null
                 ? exception
-                : new AggregateException(exception, cleanupException));
+                : new AggregateException(exception, cleanupException).Flatten());
     }
 
-    private void StopAndDetach()
+    private Exception? StopAndDetach()
     {
-        if (_timer is not null)
-        {
-            _timer.Stop();
-            _timer.Tick -= OnTick;
-            _timer = null;
-        }
-
-        _stopwatch?.Stop();
+        var timer = _timer;
+        _timer = null;
+        var stopwatch = _stopwatch;
         _stopwatch = null;
-        _lastElapsed = TimeSpan.Zero;
-        _queuedBodyPress = null;
-        _brain = null;
-        _windowSource = null;
-        ReleaseMouseCapture();
+
+        return CleanupSequence.Run(
+            () => timer?.Stop(),
+            () =>
+            {
+                if (timer is not null)
+                {
+                    timer.Tick -= OnTick;
+                }
+            },
+            () => stopwatch?.Stop(),
+            ReleaseMouseCapture,
+            () =>
+            {
+                _lastElapsed = TimeSpan.Zero;
+                _bodyPressQueue.Clear();
+                _brain = null;
+                _windowSource = null;
+            });
     }
 
     private void ReleaseMouseCapture()
