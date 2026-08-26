@@ -14,6 +14,10 @@ Add-Type -Path $appAssemblyPath
 
 $presenter = [Dororong.App.Controls.DororongPresenter]::new()
 $rotation = $presenter.FindName('BodyRotateTransform')
+if ($null -eq $rotation)
+{
+    throw 'BodyRotateTransform was not found in the presenter namescope.'
+}
 
 $cases = @(
     @{ Name = 'center'; GrabX = 72.0; Expected = 0.0 },
@@ -36,9 +40,15 @@ foreach ($case in $cases)
 
     $presenter.Render($snapshot)
 
-    if ([Math]::Abs($rotation.Angle - $case.Expected) -gt 0.000001)
+    $actualAngle = [double]$rotation.Angle
+    if ([double]::IsNaN($actualAngle) -or [double]::IsInfinity($actualAngle))
     {
-        throw "$($case.Name): angle was $($rotation.Angle), expected $($case.Expected)."
+        throw "$($case.Name): angle was not finite ($actualAngle)."
+    }
+
+    if ([Math]::Abs($actualAngle - $case.Expected) -gt 0.000001)
+    {
+        throw "$($case.Name): angle was $actualAngle, expected $($case.Expected)."
     }
 }
 
