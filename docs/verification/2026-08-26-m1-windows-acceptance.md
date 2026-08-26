@@ -2,136 +2,124 @@
 
 ## Overall result
 
-**UNVERIFIED.** The fresh Release automation passed, the exact published process launched and remained alive for 178.7 seconds, and exact-identity cleanup left no task-started process. However, the required rendered and interactive observations could not be performed because `@oai/sky` could neither capture a Windows 10 window nor obtain coordinate-input geometry. No visual or interaction item below is inferred from source or automated tests. Task 8 therefore has only a documentation-and-automated-publish partial handoff; GUI acceptance is blocked and neither Task 8 nor Milestone 1 is complete.
+**UNVERIFIED.** The corrected source passed fresh Release automation, including 78 core tests and a production-seam STA regression that executes the actual `PetLoop`. The exact new published process also launched, retained the same PID/path/command/start identity for three seconds, and was removed with no exact-path survivor. This run deliberately did not perform rendered or coordinate-input acceptance, so no GUI item is inferred from source, tests, build, publish, or process lifetime. All twelve actual-Windows checks remain UNVERIFIED; Task 8 and Milestone 1 remain incomplete.
 
 ## Evidence identity and scope
 
-- Artifact source commit: `2ead4c3630bea8e13a5d39a5855813841f112271`
+- Artifact source commit: `055f2dd989c72c1c9f82425a923376744c799c9f`
 - Worktree: `D:\JOEWRKS\.worktrees\DororongDesktopPet-m1`
 - Published executable: `D:\JOEWRKS\.worktrees\DororongDesktopPet-m1\artifacts\publish\win-x64\Dororong.App.exe`
-- SHA-256: `10AA0A8F8D1A2BE798AF0091901BD63A04FFF2C4A73E2E1730B0E89E552EC030`
+- SHA-256: `B3FEAB79AC87D7E3C5956C947159D519594B58582F851F0CADF4B84D81690602`
 - Target: Microsoft Windows 10 Pro, version `10.0.19045`, build `19045`, x64
 - Desktop runtime: `Microsoft.WindowsDesktop.App 8.0.19` at `C:\Program Files\dotnet\shared\Microsoft.WindowsDesktop.App`
-- Acceptance authority: [approved design, section 10](../specs/2026-08-26-dororong-m1-design.md#10-verification-strategy) and [committed implementation plan, Task 8](../plans/2026-08-26-dororong-m1-implementation.md#task-8-publish-verify-the-actual-windows-experience-and-hand-off)
+- Acceptance authority: [approved design, section 10](../specs/2026-08-26-dororong-m1-design.md#10-verification-strategy) and [implementation plan, Task 8](../plans/2026-08-26-dororong-m1-implementation.md#task-8-publish-verify-the-actual-windows-experience-and-hand-off)
 - Claim surfaces: the complete 144×144 transparent topmost pet window and a known control in a different process underneath
 - Required states: IDLE, WALK, CURIOUS, STARTLED, CLICK_REACTION, DRAGGED, SLEEP, and one changing reaction frame
 
-Before launch, no process with the exact published executable path was running. `Start-Process -PassThru` launched:
+The exact-path pre-launch baseline was zero. `Start-Process -PassThru` launched one process:
 
-- PID: `57452`
+- PID: `39656`
 - Resolved path: `D:\JOEWRKS\.worktrees\DororongDesktopPet-m1\artifacts\publish\win-x64\Dororong.App.exe`
 - Command line: `"D:\JOEWRKS\.worktrees\DororongDesktopPet-m1\artifacts\publish\win-x64\Dororong.App.exe" `
-- Start time: `2026-08-26T19:39:40.541976+09:00`
+- Start time: `2026-08-26T20:35:51.7303810+09:00`
 
-At `2026-08-26T19:42:39.2282794+09:00`, the same PID, resolved path, command line, and start time were still present, for 178.7 seconds of process lifetime. Because the Exit UI was unreachable, cleanup used `Stop-Process` only after all four identity fields were re-read and matched. Readback found PID `57452` absent and no process using the exact artifact path.
+After three seconds, the same PID, resolved path, command line, and start time were present. No GUI claim was made from that liveness check. Cleanup re-read and matched all four identity fields before stopping PID `39656`; readback found that PID absent and zero process using the exact artifact path.
 
 ## Fresh Release automation
 
-Commands were run from the repository root in this order, with each reported exit code read separately:
+Commands ran from the repository root in the documented order. Every exit code was read separately.
 
 | Command | Exit | Observed result |
 |---|---:|---|
 | `dotnet restore DororongDesktopPet.sln` | 0 | All projects were up to date. |
-| `dotnet test DororongDesktopPet.sln --configuration Release --no-restore` | 0 | 68 passed, 0 failed, 0 skipped. |
+| `dotnet test DororongDesktopPet.sln --configuration Release --no-restore` | 0 | 78 passed, 0 failed, 0 skipped. |
 | `dotnet build DororongDesktopPet.sln --configuration Release --no-restore` | 0 | 0 warnings and 0 errors. |
-| `pwsh -NoProfile -STA -File tests/Dororong.App.RuntimeComposition.Tests.ps1 -Configuration Release` | 0 | `RUNTIME COMPOSITION PASS`; one-shot lifecycle, cleanup, fatal boundary, input consumption, and capture transition checks passed. |
+| `pwsh -NoProfile -STA -File tests/Dororong.App.RuntimeComposition.Tests.ps1 -Configuration Release` | 0 | The production startup boundary created/set/showed once; fatal cleanup/message/`Shutdown(1)` stayed one-shot; the actual `PetLoop` passed timer/tick, queued input, brain/window/render ordering, capture, fault, restart rejection, and idempotent continuing-cleanup checks. |
 | `pwsh -NoProfile -File tests/Dororong.App.DraggedAngle.Tests.ps1 -Configuration Release` | 0 | `DRAGGED ANGLE PASS`; center, symmetric presenter coordinates, and clamps passed. |
-| `dotnet publish src/Dororong.App/Dororong.App.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts/publish/win-x64` | 0 | Runtime-specific framework-dependent publish completed and the exact executable above was present. |
+| `dotnet publish src/Dororong.App/Dororong.App.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts/publish/win-x64` | 0 | Runtime-specific framework-dependent publish completed and produced the SHA-256-bound executable above. |
 
-## README source-run command verification
+The added core regressions cover exact mirrored boundary overshoot and split-frame equivalence, actual-time pointer observation with cadence-aware smoothing, a non-startling 500 ms/200 DIP approach, and pending WALK/STARTLED press-hold-drag continuity. These are automated implementation evidence only.
 
-The README command `dotnet run --project src/Dororong.App/Dororong.App.csproj --configuration Release` was executed once from the repository root after the initial handoff review. It is run documentation evidence only and does not count toward any actual-Windows GUI acceptance item.
+## GUI observation boundary
 
-- Exact output executable: `D:\JOEWRKS\.worktrees\DororongDesktopPet-m1\src\Dororong.App\bin\Release\net8.0-windows\Dororong.App.exe`
-- Pre-run exact-path baseline: no matching process
-- Pre-run `C:\Program Files\dotnet\dotnet.exe` baseline: no matching process
-- `dotnet` host: PID `59544`, parent PID `52548`, command line `"C:\Program Files\dotnet\dotnet.exe" run --project src/Dororong.App/Dororong.App.csproj --configuration Release`, start `2026-08-26T19:56:13.489539+09:00`
-- Exact Dororong child: PID `59980`, parent PID `59544`, command line `"D:\JOEWRKS\.worktrees\DororongDesktopPet-m1\src\Dororong.App\bin\Release\net8.0-windows\Dororong.App.exe"`, start `2026-08-26T19:56:16.88015+09:00`
-- First Ctrl+C did not end the recorded child or host. It was not retried. PID `59980` was stopped only after its exact PID, output path, command line, start time, and parent PID were re-read and all matched the task-owned lineage.
-- Readback: PIDs `59980`, `59544`, and `52548` were absent; the exact output path had no survivors. The controlled `dotnet run` session then exited `1`, reflecting the bounded child termination rather than a startup failure.
+No GUI acceptance mechanism was run against the new artifact. The last attempted required Windows UI path remains the earlier documented environment boundary: `@oai/sky` could not capture returned Windows 10 windows (`SetIsBorderRequired ... 0x80004002`), coordinate input failed because geometry was unavailable, and the no-activate Dororong tool window was not targetable. Repeating that same failed mechanism would not provide new evidence. Selecting a materially different Windows GUI mechanism or target remains a user decision.
 
-## Windows observation boundary
-
-The required `computer-use` path was initialized through `node_repl` and `@oai/sky`. A fresh Notepad window was returned by `list_apps`, and screenshot-free accessibility inspection identified its focused edit control as `1 편집 텍스트 편집 ID: 15`.
-
-Native screenshot capture failed first for that Notepad window with `SetIsBorderRequired failed: 해당 인터페이스를 지원하지 않습니다. (0x80004002)`. After refreshing the returned app/window selection, the single allowed retry failed identically. A returned File Explorer window failed identically, but this was only a different target window using the same `@oai/sky` capture mechanism, not a materially different GUI fallback. Screenshot-free accessibility remained available, but the first coordinate input failed before injection with `coordinate input geometry is unavailable`. The no-activate Dororong tool window was not returned by either `list_apps` or `list_windows`. Therefore no stale coordinates, unsupported UI mechanism, terminal UI, or inferred rendering evidence was used; selecting a genuinely different GUI mechanism remains a user decision.
-
-Follow-up readback used only exact returned window identities. The task-created Notepad window `{ id: 5901484, app: "process:C:\\Windows\\System32\\notepad.exe" }` was already absent, and `list_apps` returned Notepad as not running with no windows. The pre-existing user-owned Explorer window `{ id: 4657402, app: "process:C:\\Windows\\explorer.exe", title: "DororongDesktopPet" }` remained present and was deliberately left untouched. The pre-task foreground window was never recorded, so original foreground-focus restoration is **UNKNOWN/UNRESOLVED** and is not claimed.
+Because the new executable was not rendered, interacted with, or compared in representative playback, automation and launch liveness cannot upgrade any visual or interaction item.
 
 ## Twelve-check matrix
 
 ### 1. Borderless transparent pet above an ordinary application
 
 - Expected observable: a full rendered frame shows a borderless character with alpha-transparent margins remaining visually above an ordinary application.
-- Observed: the exact published process launched and survived for 178.7 seconds, but `@oai/sky` returned no targetable Dororong window and the same capture mechanism failed against both Notepad and Explorer target windows. No rendered pet frame was observed.
+- Observed: the exact new process launched, but no rendered frame was inspected.
 - Result: **UNVERIFIED**.
 
 ### 2. Autonomous IDLE and WALK
 
-- Expected observable: representative playback without user input visibly includes both stationary breathing/blinking and walking translation/bob.
-- Observed: no rendered playback or frames could be captured; process lifetime does not identify behavior state.
+- Expected observable: representative playback without user input visibly includes stationary breathing/blinking and walking translation/bob.
+- Observed: no rendered playback or frames were inspected; process lifetime and core tests do not identify the displayed state.
 - Result: **UNVERIFIED**.
 
 ### 3. Primary-work-area containment
 
 - Expected observable: the entire 144×144 window stays within all primary work-area edges, including the taskbar boundary, while moving and after interaction.
-- Observed: no frame exposed the pet-window edges relative to the work-area or taskbar edges.
+- Observed: mirror and clamp logic passed automated regressions, but no frame exposed pet-window edges relative to the work area or taskbar.
 - Result: **UNVERIFIED**.
 
 ### 4. Slow CURIOUS versus fast STARTLED
 
 - Expected observable: a slow new approach produces the tilted/gaze CURIOUS pose, while a fast closing approach produces a distinct squash and retreat.
-- Observed: coordinate input geometry was unavailable before an approach path could be injected, and no reaction frames were captured.
+- Observed: actual-time/cadence core classification passed, but no approach path was injected and no reaction frame was inspected.
 - Result: **UNVERIFIED**.
 
 ### 5. Click reaction without drag
 
 - Expected observable: one visible-body press and release below the system drag threshold produces the bounce of CLICK_REACTION and never shows the hanging DRAGGED pose.
-- Observed: the first coordinate action failed before injection; no body click or resulting frames were observed.
+- Observed: the actual `PetLoop` automation delivered one queued fast click to the brain, but no visible-body click or resulting frame was observed.
 - Result: **UNVERIFIED**.
 
 ### 6. Drag threshold, offset, clamp, and capture release
 
 - Expected observable: movement beyond the Windows threshold enters DRAGGED, preserves the initial grab offset, clamps the complete window on release, and leaves subsequent pointer input uncaptured.
-- Observed: `@oai/sky` could not obtain coordinate geometry, so no drag was injected and no release behavior was observed. Automated angle/capture checks are recorded above only as supporting non-GUI evidence.
+- Observed: actual-loop automation verified one capture on DRAGGED entry, grab-offset position application, and release on exit/fault/dispose; no real pointer drag or rendered window was observed.
 - Result: **UNVERIFIED**.
 
 ### 7. SLEEP after about 90 seconds
 
 - Expected observable: after about 90 seconds without meaningful input and completion of the current autonomous action, the rendered pet lowers its body, closes its eyes, and breathes slowly.
-- Observed: the exact process remained alive for 178.7 seconds without successful pet input, but no rendered state was observable; lifetime alone does not prove SLEEP.
+- Observed: the new process was observed for only three seconds and no rendered state was inspected.
 - Result: **UNVERIFIED**.
 
 ### 8. Four separate SLEEP wake routes
 
 - Expected observable: independent SLEEP baselines wake through slow approach to CURIOUS, fast approach to STARTLED, click without drag to CLICK_REACTION, and drag to DRAGGED.
-- Observed: SLEEP could not be visually established, and coordinate input failed before any of the four routes could be injected.
+- Observed: no rendered SLEEP baseline or real input route was exercised against the new executable.
 - Result: **UNVERIFIED**.
 
 ### 9. Alpha-zero cross-process input pass-through and visible-body blocking
 
 - Expected observable: for IDLE, WALK, SLEEP, and one changing reaction frame, at least four alpha-zero corner/margin points each activate a known control in a different process underneath, while a visible-body pixel reaches Dororong and does not activate that control.
-- Observed: a separate Notepad process and its edit control were identified, but no pet frame or coordinate geometry was available. No alpha-zero or visible-body point could be selected or clicked.
+- Observed: no underlying control, frame-specific alpha-zero coordinate, or visible-body coordinate was exercised against the new executable.
 - Result: **UNVERIFIED**.
 
 ### 10. Foreground keyboard focus preservation
 
 - Expected observable: after an ordinary body click and after a drag, typing continues in the previously focused work application.
-- Observed: Notepad's edit control was focused before interaction, but neither body click nor drag could be injected, so the required before/after focus comparison was not performed.
+- Observed: no body click, drag, or before/after foreground comparison was performed against the new executable.
 - Result: **UNVERIFIED**.
 
 ### 11. Right-click Exit ends the exact PID
 
-- Expected observable: right-clicking the visible body opens the Exit menu, choosing Exit ends recorded PID `57452`, and no task-started pet process remains.
-- Observed: the context menu could not be reached because Dororong was not a returned target window and coordinate geometry was unavailable. Exact-identity forced cleanup ended PID `57452` and readback found no exact-path survivor, but that does not verify the Exit command.
+- Expected observable: right-clicking the visible body opens the Exit menu, choosing Exit ends recorded PID `39656`, and no task-started pet process remains.
+- Observed: the Exit menu was not exercised. PID `39656` was stopped only after exact PID/path/command/start revalidation, and cleanup readback found no survivor; forced exact-identity cleanup does not verify the Exit command.
 - Result: **UNVERIFIED**.
 
 ### 12. No repeated CURIOUS or visible state flapping
 
 - Expected observable: a cursor held continuously nearby triggers at most one CURIOUS response until it exits/re-enters and does not visibly flap among reaction states.
-- Observed: no nearby cursor condition could be injected and no representative motion was captured.
+- Observed: automated latch/cooldown tests passed, but no nearby cursor condition or representative rendered motion was observed.
 - Result: **UNVERIFIED**.
 
 ## Release boundary
 
-No application behavior failure was observed, so no source or test fix was justified. All twelve actual-Windows items remain unverified, which prevents Task 8 completion, M1 completion, or a release-ready claim. The `DONE_WITH_CONCERNS` first line in the task-local report describes only this partial handoff and does not upgrade either status. A future run needs a user-selected Windows target or materially different allowed GUI mechanism that can capture rendered frames and inject coordinate input into the exact published artifact; that run must repeat all twelve checks, including four independent SLEEP wake baselines.
+The five Important code findings are covered by automated RED→GREEN regressions and the new artifact is source/hash/launch-bound. That does not establish any GUI acceptance item. All twelve items remain UNVERIFIED, Task 8 and Milestone 1 remain incomplete, and the same user-decision blocker remains: choose a materially different allowed Windows GUI mechanism or target that can capture the exact rendered artifact and inject coordinate input, then repeat all twelve checks, including four independent SLEEP wake baselines.

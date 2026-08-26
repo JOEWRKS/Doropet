@@ -282,7 +282,7 @@ public void Update_moves_by_speed_times_elapsed_time_while_walking()
 }
 
 [Fact]
-public void Update_clamps_a_walk_at_the_right_work_area_edge()
+public void Update_reflects_walk_overshoot_at_the_right_work_area_edge()
 {
     var brain = PetTestInput.CreateBrain(
         new SequenceRandomSource(0.0, 0.0, 0.0),
@@ -291,7 +291,7 @@ public void Update_clamps_a_walk_at_the_right_work_area_edge()
 
     var actual = brain.Update(PetTestInput.At(0.5));
 
-    Assert.Equal(680, actual.Position.X, precision: 6);
+    Assert.Equal(664, actual.Position.X, precision: 6);
     Assert.Equal(FacingDirection.Left, actual.Facing);
 }
 
