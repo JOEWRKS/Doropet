@@ -59,11 +59,11 @@ public sealed class PetBrain
             petCenter,
             delta,
             isDirectInteractionPending: input.BodyPressPosition.HasValue);
-        if (reaction == PointerReaction.Startled && _state != PetState.Startled)
+        if (reaction.Reaction == PointerReaction.Startled && _state != PetState.Startled)
         {
-            StartStartled(input.Pointer.Position, petCenter);
+            StartStartled(input.Pointer.Position, petCenter, reaction.ApproachDirection);
         }
-        else if (reaction == PointerReaction.Curious && _state != PetState.Startled)
+        else if (reaction.Reaction == PointerReaction.Curious && _state != PetState.Startled)
         {
             StartCurious(input.Pointer.Position, petCenter);
         }
@@ -149,12 +149,12 @@ public sealed class PetBrain
         _stateDuration = _tuning.CuriousDuration;
     }
 
-    private void StartStartled(PointD pointerPosition, PointD petCenter)
+    private void StartStartled(PointD pointerPosition, PointD petCenter, PointD? approachDirection)
     {
         var direction = petCenter - pointerPosition;
         var length = Math.Sqrt(direction.X * direction.X + direction.Y * direction.Y);
         _startledRetreatDirection = length == 0
-            ? new PointD(0, 0)
+            ? approachDirection ?? new PointD(0, 0)
             : new PointD(direction.X / length, direction.Y / length);
         _facing = _startledRetreatDirection.X < 0 ? FacingDirection.Left : FacingDirection.Right;
         _state = PetState.Startled;

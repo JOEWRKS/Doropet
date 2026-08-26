@@ -95,6 +95,21 @@ public sealed class PetBrainPointerReactionTests
     }
 
     [Fact]
+    public void A_valid_sample_after_a_pending_body_press_does_not_use_stale_speed()
+    {
+        var brain = PetTestInput.CreateReactionBrain();
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(460, 150)));
+        brain.Update(PetTestInput.At(
+            0.1,
+            pointer: new PointD(260, 150),
+            bodyPressPosition: new PointD(160, 150)));
+
+        var actual = brain.Update(PetTestInput.At(0.1, pointer: new PointD(260, 150)));
+
+        Assert.NotEqual(PetState.Startled, actual.State);
+    }
+
+    [Fact]
     public void A_stationary_cursor_near_the_pet_stays_idle_after_curious_cooldown_expires()
     {
         var brain = PetTestInput.CreateReactionBrain();
@@ -211,6 +226,21 @@ public sealed class PetBrainPointerReactionTests
 
         Assert.Equal(100 - retreatComponent, actual.Position.X, 8);
         Assert.Equal(100 + retreatComponent, actual.Position.Y, 8);
+    }
+
+    [Fact]
+    public void Fast_approach_from_the_right_to_the_pet_center_retreats_left_the_full_distance()
+    {
+        var brain = PetTestInput.CreateReactionBrainAt(new PointD(300, 200));
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(660, 250)));
+
+        var startled = brain.Update(PetTestInput.At(0.1, pointer: new PointD(360, 250)));
+        var completed = brain.Update(PetTestInput.At(0.65, pointer: new PointD(360, 250)));
+
+        Assert.Equal(PetState.Startled, startled.State);
+        Assert.True(startled.Position.X < 300);
+        Assert.Equal(228, completed.Position.X, 8);
+        Assert.Equal(200, completed.Position.Y, 8);
     }
 
     [Fact]
