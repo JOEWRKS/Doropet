@@ -54,4 +54,134 @@ public sealed class PetBrainPointerReactionTests
 
         Assert.Equal(PetState.Idle, brain.Current.State);
     }
+
+    [Fact]
+    public void Curious_cannot_interrupt_an_active_startled_reaction()
+    {
+        var brain = PetTestInput.CreateReactionBrain();
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(460, 150)));
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(260, 150)));
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(460, 150)));
+
+        var actual = brain.Update(PetTestInput.At(0.1, pointer: new PointD(280, 150)));
+
+        Assert.Equal(PetState.Startled, actual.State);
+    }
+
+    [Fact]
+    public void Pending_body_press_suppresses_a_simultaneous_fast_approach()
+    {
+        var brain = PetTestInput.CreateReactionBrain();
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(460, 150)));
+
+        var actual = brain.Update(PetTestInput.At(
+            0.1,
+            pointer: new PointD(260, 150),
+            bodyPressPosition: new PointD(160, 150)));
+
+        Assert.Equal(PetState.Idle, actual.State);
+    }
+
+    [Fact]
+    public void A_valid_sample_after_an_unavailable_sample_does_not_use_stale_speed()
+    {
+        var brain = PetTestInput.CreateReactionBrain();
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(460, 150)));
+        brain.Update(PetTestInput.At(0.1));
+
+        var actual = brain.Update(PetTestInput.At(0.1, pointer: new PointD(260, 150)));
+
+        Assert.NotEqual(PetState.Startled, actual.State);
+    }
+
+    [Fact]
+    public void A_stationary_cursor_near_the_pet_stays_idle_after_curious_cooldown_expires()
+    {
+        var brain = PetTestInput.CreateReactionBrain();
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(460, 150)));
+        brain.Update(PetTestInput.At(1.0, pointer: new PointD(300, 150)));
+
+        for (var index = 0; index < 50; index++)
+        {
+            brain.Update(PetTestInput.At(0.1, pointer: new PointD(300, 150)));
+        }
+
+        Assert.Equal(PetState.Idle, brain.Current.State);
+    }
+
+    [Fact]
+    public void Leaving_the_near_zone_and_reentering_after_cooldown_enters_curious_again()
+    {
+        var brain = PetTestInput.CreateReactionBrain();
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(460, 150)));
+        brain.Update(PetTestInput.At(1.0, pointer: new PointD(300, 150)));
+
+        for (var index = 0; index < 50; index++)
+        {
+            brain.Update(PetTestInput.At(0.1, pointer: new PointD(460, 150)));
+        }
+
+        var actual = brain.Update(PetTestInput.At(1.0, pointer: new PointD(300, 150)));
+
+        Assert.Equal(PetState.Curious, actual.State);
+    }
+
+    [Fact]
+    public void Startled_retreats_the_configured_distance_away_from_the_pointer()
+    {
+        var brain = PetTestInput.CreateReactionBrain();
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(460, 450)));
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(260, 50)));
+
+        var actual = brain.Update(PetTestInput.At(0.65, pointer: new PointD(260, 50)));
+        var retreatComponent = 72 / Math.Sqrt(2);
+
+        Assert.Equal(100 - retreatComponent, actual.Position.X, 8);
+        Assert.Equal(100 + retreatComponent, actual.Position.Y, 8);
+    }
+
+    [Fact]
+    public void Startled_retreat_is_clamped_to_the_work_area()
+    {
+        var brain = PetTestInput.CreateReactionBrainAt(new PointD(0, 100));
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(360, 150)));
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(160, 150)));
+
+        var actual = brain.Update(PetTestInput.At(0.65, pointer: new PointD(160, 150)));
+
+        Assert.Equal(0, actual.Position.X);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-0.1)]
+    public void Constructor_rejects_nonpositive_curious_duration(double seconds)
+    {
+        var tuning = BehaviorTuning.Default with { CuriousDuration = TimeSpan.FromSeconds(seconds) };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new PetBrain(tuning, new SequenceRandomSource(0), new PointD(100, 100)));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-0.1)]
+    public void Constructor_rejects_nonpositive_startled_duration(double seconds)
+    {
+        var tuning = BehaviorTuning.Default with { StartledDuration = TimeSpan.FromSeconds(seconds) };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new PetBrain(tuning, new SequenceRandomSource(0), new PointD(100, 100)));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-0.1)]
+    public void Constructor_rejects_nonpositive_click_reaction_duration(double seconds)
+    {
+        var tuning = BehaviorTuning.Default with { ClickReactionDuration = TimeSpan.FromSeconds(seconds) };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new PetBrain(tuning, new SequenceRandomSource(0), new PointD(100, 100)));
+    }
 }

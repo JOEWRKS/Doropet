@@ -21,6 +21,9 @@ public sealed class PetBrain
         ArgumentNullException.ThrowIfNull(random);
         ValidateAutonomousDurationRange(tuning.IdleMin, tuning.IdleMax, nameof(tuning.IdleMin));
         ValidateAutonomousDurationRange(tuning.WalkMin, tuning.WalkMax, nameof(tuning.WalkMin));
+        ValidatePositiveDuration(tuning.CuriousDuration, nameof(tuning.CuriousDuration));
+        ValidatePositiveDuration(tuning.StartledDuration, nameof(tuning.StartledDuration));
+        ValidatePositiveDuration(tuning.ClickReactionDuration, nameof(tuning.ClickReactionDuration));
 
         _tuning = tuning;
         _random = random;
@@ -51,12 +54,16 @@ public sealed class PetBrain
         NormalizePosition(input.WorkArea, input.PetSize);
 
         var petCenter = _position + new PointD(input.PetSize.Width / 2, input.PetSize.Height / 2);
-        var reaction = _pointerReactionDetector.Update(input.Pointer, petCenter, delta, isDirectInteractionPending: false);
-        if (reaction == PointerReaction.Startled)
+        var reaction = _pointerReactionDetector.Update(
+            input.Pointer,
+            petCenter,
+            delta,
+            isDirectInteractionPending: input.BodyPressPosition.HasValue);
+        if (reaction == PointerReaction.Startled && _state != PetState.Startled)
         {
             StartStartled(input.Pointer.Position, petCenter);
         }
-        else if (reaction == PointerReaction.Curious)
+        else if (reaction == PointerReaction.Curious && _state != PetState.Startled)
         {
             StartCurious(input.Pointer.Position, petCenter);
         }
@@ -219,6 +226,14 @@ public sealed class PetBrain
         if (minimum <= TimeSpan.Zero || maximum < minimum)
         {
             throw new ArgumentOutOfRangeException(parameterName, "Autonomous state durations must be positive and ordered.");
+        }
+    }
+
+    private static void ValidatePositiveDuration(TimeSpan duration, string parameterName)
+    {
+        if (duration <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, "Finite reaction durations must be positive.");
         }
     }
 

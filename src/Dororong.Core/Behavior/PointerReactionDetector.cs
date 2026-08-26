@@ -21,7 +21,13 @@ internal sealed class PointerReactionDetector
         _curiousCooldown = DecrementCooldown(_curiousCooldown, delta);
         _startledCooldown = DecrementCooldown(_startledCooldown, delta);
 
-        if (!pointer.IsAvailable || isDirectInteractionPending)
+        if (!pointer.IsAvailable)
+        {
+            ResetSpeedBaseline();
+            return PointerReaction.None;
+        }
+
+        if (isDirectInteractionPending)
         {
             return PointerReaction.None;
         }
@@ -73,6 +79,12 @@ internal sealed class PointerReactionDetector
 
     private static TimeSpan DecrementCooldown(TimeSpan cooldown, TimeSpan delta) =>
         cooldown > delta ? cooldown - delta : TimeSpan.Zero;
+
+    private void ResetSpeedBaseline()
+    {
+        _previousDistance = null;
+        _filteredClosingSpeed = 0;
+    }
 
     private static double Distance(PointD first, PointD second)
     {

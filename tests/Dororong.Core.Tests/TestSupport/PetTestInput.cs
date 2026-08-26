@@ -35,13 +35,16 @@ internal static class PetTestInput
         CreateBrain(new SequenceRandomSource(Enumerable.Repeat(0.0, 32).ToArray()), initialPosition);
 
     public static PetBrain CreateReactionBrain() =>
+        CreateReactionBrainAt(new PointD(100, 100));
+
+    public static PetBrain CreateReactionBrainAt(PointD initialPosition) =>
         new(BehaviorTuning.Default with
         {
             MaxDelta = TimeSpan.FromSeconds(1),
             IdleMin = TimeSpan.FromMinutes(11),
             IdleMax = TimeSpan.FromMinutes(11),
             SleepDelay = TimeSpan.FromMinutes(11)
-        }, new SequenceRandomSource(Enumerable.Repeat(0.0, 32).ToArray()), new PointD(100, 100));
+        }, new SequenceRandomSource(Enumerable.Repeat(0.0, 32).ToArray()), initialPosition);
 
     public static PetBrain CreateSleepBrain() =>
         new(BehaviorTuning.Default with
