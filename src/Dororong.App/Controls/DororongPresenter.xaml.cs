@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using Dororong.Core.Behavior;
 using Dororong.Core.Geometry;
 
@@ -13,9 +14,8 @@ public sealed class BodyPressEventArgs(PointD localPosition) : EventArgs
 
 public partial class DororongPresenter : UserControl
 {
-    private const double OpenEyeHeight = 16;
-    private const double LeftPupilX = 37;
-    private const double RightPupilX = 69;
+    private static readonly BitmapImage CanonicalFrame = LoadFrame("dororong-canonical.png");
+    private static readonly BitmapImage ClosedEyesFrame = LoadFrame("dororong-closed-eyes.png");
 
     public DororongPresenter()
     {
@@ -40,7 +40,7 @@ public partial class DororongPresenter : UserControl
                 BodyScaleTransform.ScaleY = 1 + (0.025 * cycle);
                 if (p is >= 0.66 and <= 0.72)
                 {
-                    SetEyeScaleY(0.12);
+                    DororongImage.Source = ClosedEyesFrame;
                 }
 
                 break;
@@ -52,9 +52,6 @@ public partial class DororongPresenter : UserControl
 
             case PetState.Curious:
                 BodyRotateTransform.Angle = snapshot.Facing == FacingDirection.Right ? 7 : -7;
-                var pupilOffset = snapshot.Facing == FacingDirection.Right ? 2 : -2;
-                Canvas.SetLeft(LeftPupil, LeftPupilX + pupilOffset);
-                Canvas.SetLeft(RightPupil, RightPupilX + pupilOffset);
                 break;
 
             case PetState.Startled:
@@ -83,7 +80,7 @@ public partial class DororongPresenter : UserControl
                 BodyScaleTransform.ScaleX = 1 + (0.025 * cycle);
                 BodyScaleTransform.ScaleY = 0.82;
                 BodyTranslateTransform.Y = 8;
-                SetSleepingEyes(snapshot.IsDirectInteractionPending);
+                DororongImage.Source = ClosedEyesFrame;
                 break;
 
             default:
@@ -98,31 +95,20 @@ public partial class DororongPresenter : UserControl
         BodyRotateTransform.Angle = 0;
         BodyTranslateTransform.X = 0;
         BodyTranslateTransform.Y = 0;
-
-        LeftEye.Height = OpenEyeHeight;
-        RightEye.Height = OpenEyeHeight;
-        LeftEyeScaleTransform.ScaleX = 1;
-        RightEyeScaleTransform.ScaleX = 1;
-        SetEyeScaleY(1);
-
-        Canvas.SetLeft(LeftPupil, LeftPupilX);
-        Canvas.SetLeft(RightPupil, RightPupilX);
-        LeftPupil.Visibility = Visibility.Visible;
-        RightPupil.Visibility = Visibility.Visible;
+        DororongImage.Source = CanonicalFrame;
     }
 
-    private void SetEyeScaleY(double scaleY)
+    private static BitmapImage LoadFrame(string fileName)
     {
-        LeftEyeScaleTransform.ScaleY = scaleY;
-        RightEyeScaleTransform.ScaleY = scaleY;
-    }
-
-    private void SetSleepingEyes(bool isOpening)
-    {
-        LeftEye.Height = isOpening ? OpenEyeHeight / 2 : 1;
-        RightEye.Height = isOpening ? OpenEyeHeight / 2 : 1;
-        LeftPupil.Visibility = isOpening ? Visibility.Visible : Visibility.Collapsed;
-        RightPupil.Visibility = isOpening ? Visibility.Visible : Visibility.Collapsed;
+        var frame = new BitmapImage();
+        frame.BeginInit();
+        frame.UriSource = new Uri(
+            $"pack://application:,,,/Dororong.App;component/Assets/{fileName}",
+            UriKind.Absolute);
+        frame.CacheOption = BitmapCacheOption.OnLoad;
+        frame.EndInit();
+        frame.Freeze();
+        return frame;
     }
 
     private void OnBodyPrimaryPressed(object sender, MouseButtonEventArgs e)

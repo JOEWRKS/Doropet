@@ -28,77 +28,13 @@
                 </TransformGroup>
             </Canvas.RenderTransform>
 
-            <Path Fill="#75604D"
-                  Data="M 22,34 C 6,26 7,10 27,22 Z" />
-            <Path Fill="#75604D"
-                  Data="M 86,34 C 102,26 101,10 81,22 Z" />
-            <Path Fill="#B58A68"
-                  Data="M 22,30 C 13,25 14,18 25,24 Z" />
-            <Path Fill="#B58A68"
-                  Data="M 86,30 C 95,25 94,18 83,24 Z" />
-
-            <Path Fill="#75604D"
-                  Data="M 19,63 C 7,67 4,77 14,79 C 22,80 26,72 28,65 Z" />
-            <Path Fill="#75604D"
-                  Data="M 89,63 C 101,67 104,77 94,79 C 86,80 82,72 80,65 Z" />
-            <Ellipse Width="92"
-                     Height="76"
-                     Canvas.Left="8"
-                     Canvas.Top="16"
-                     Fill="#8B735B" />
-            <Ellipse Width="72"
-                     Height="54"
-                     Canvas.Left="18"
-                     Canvas.Top="32"
-                     Fill="#A98B70" />
-
-            <Ellipse x:Name="LeftEye"
-                     Width="20"
-                     Height="16"
-                     Canvas.Left="28"
-                     Canvas.Top="40"
-                     Fill="#FFF9EE"
-                     RenderTransformOrigin="0.5,0.5">
-                <Ellipse.RenderTransform>
-                    <ScaleTransform x:Name="LeftEyeScaleTransform" />
-                </Ellipse.RenderTransform>
-            </Ellipse>
-            <Ellipse x:Name="RightEye"
-                     Width="20"
-                     Height="16"
-                     Canvas.Left="60"
-                     Canvas.Top="40"
-                     Fill="#FFF9EE"
-                     RenderTransformOrigin="0.5,0.5">
-                <Ellipse.RenderTransform>
-                    <ScaleTransform x:Name="RightEyeScaleTransform" />
-                </Ellipse.RenderTransform>
-            </Ellipse>
-            <Ellipse x:Name="LeftPupil"
-                     Width="7"
-                     Height="9"
-                     Canvas.Left="37"
-                     Canvas.Top="44"
-                     Fill="#302820" />
-            <Ellipse x:Name="RightPupil"
-                     Width="7"
-                     Height="9"
-                     Canvas.Left="69"
-                     Canvas.Top="44"
-                     Fill="#302820" />
-            <Ellipse Width="5"
-                     Height="4"
-                     Canvas.Left="51.5"
-                     Canvas.Top="57"
-                     Fill="#4A352D" />
-            <Path x:Name="Mouth"
-                  Fill="#4A352D"
-                  Data="M 48,65 C 51,69 57,69 60,65 C 58,73 50,73 48,65 Z" />
-
-            <Path Fill="#75604D"
-                  Data="M 26,82 C 19,87 20,94 36,94 C 42,94 44,90 43,86 Z" />
-            <Path Fill="#75604D"
-                  Data="M 82,82 C 89,87 88,94 72,94 C 66,94 64,90 65,86 Z" />
+            <Image x:Name="DororongImage"
+                   Width="108"
+                   Height="96"
+                   IsHitTestVisible="False"
+                   RenderOptions.BitmapScalingMode="HighQuality"
+                   Source="/Dororong.App;component/Assets/dororong-canonical.png"
+                   Stretch="Uniform" />
         </Canvas>
     </Canvas>
 </UserControl>

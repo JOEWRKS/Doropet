@@ -4,6 +4,12 @@
     <ProjectReference Include="..\Dororong.Core\Dororong.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="Assets\dororong-canonical.png" />
+    <Resource Include="Assets\dororong-closed-eyes.png" />
+    <None Include="Assets\dororong-canonical-source.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>

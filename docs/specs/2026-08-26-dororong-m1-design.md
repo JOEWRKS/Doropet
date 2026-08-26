@@ -22,7 +22,7 @@ Milestone 1 includes:
 - slow-approach, fast-approach, click, drag, inactivity, and wake interactions;
 - transparent pixels that do not block input to applications underneath;
 - a right-click character menu with an explicit Exit action;
-- replaceable presentation assets, beginning with lightweight WPF vector artwork;
+- the exact user-supplied canonical Dororong raster art, with deterministic transparent and closed-eye production frames;
 - a framework-dependent `win-x64` Release publish output for the .NET 8 Desktop Runtime;
 - concise run, verification, limitation, and continuation documentation.
 
@@ -36,7 +36,7 @@ The solution has three projects and no third-party runtime framework:
 - `src/Dororong.App`: the WPF window, global cursor sampling, click/drag input, animation presentation, process lifetime, and minimal Win32 interop.
 - `tests/Dororong.Core.Tests`: deterministic unit tests for the behavior core.
 
-The UI layer owns operating-system mechanics; the core owns product behavior. The initial vector artwork maps a core presentation result to WPF visuals. Replacing it with sprite frames must not require changes to state-transition logic.
+The UI layer owns operating-system mechanics; the core owns product behavior. The canonical raster presenter maps a core presentation result to WPF visuals without requiring changes to state-transition logic.
 
 No MVVM framework, dependency-injection container, game engine, generic plugin system, or speculative animation framework is introduced.
 
@@ -121,17 +121,19 @@ Milestone 1 uses only the primary monitor work area and respects the taskbar bou
 
 The core exposes state, facing, and normalized phase; it does not know about images, storyboards, or WPF controls. `Dororong.App` maps these values to a replaceable character presenter.
 
-The initial WPF vector presenter makes states visibly distinct through pose and motion:
+The presenter uses the exact user-supplied canonical Dororong source. Dororong has no tail; the white shapes behind the rose and bow are ribbons. The persisted source is the visual authority and must not be regenerated, redrawn, beautified, recolored, widened, or otherwise reinterpreted. The transparent production frame removes only near-white background connected to the source image boundary, retains source RGB and coordinates for every character pixel, adds no geometry, shadow, decoration, or filled transparent rectangle, and supplies the same canonical frame to every state except sleep and blink. A deterministic sleep/blink frame may change only bounded eye regions to closed-eye marks; every pixel outside those regions must match the canonical production frame.
+
+Existing presenter transforms make states visibly distinct through pose and motion:
 
 - IDLE: breathing and blinking;
 - WALK: facing and body bob;
-- CURIOUS: gaze and head tilt;
+- CURIOUS: head tilt;
 - STARTLED: squash/stretch and retreat;
-- CLICK_REACTION: widened eyes and a short bounce;
+- CLICK_REACTION: a short bounce;
 - DRAGGED: hanging stretch toward the grab point;
 - SLEEP: lowered body, closed eyes, and slow breathing.
 
-Changing to real Dororong artwork replaces presenter assets and state-to-frame mapping. It does not alter the behavior core or input classification.
+Canonical-art asset identity, boundary-connected transparency, retained pixels, bounded eye changes, and presenter state-to-frame mapping are automated contracts. Those checks do not prove cross-process click-through, focus preservation, or the rendered Windows appearance; those remain actual-Windows observations.
 
 ## 9. Failure and cleanup behavior
 
