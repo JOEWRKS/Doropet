@@ -2,7 +2,7 @@
 
 ## Overall result
 
-**UNVERIFIED.** The fresh Release automation passed, the exact published process launched and remained alive for 178.7 seconds, and exact-identity cleanup left no task-started process. However, the required rendered and interactive observations could not be performed because `@oai/sky` could neither capture a Windows 10 window nor obtain coordinate-input geometry. No visual or interaction item below is inferred from source or automated tests.
+**UNVERIFIED.** The fresh Release automation passed, the exact published process launched and remained alive for 178.7 seconds, and exact-identity cleanup left no task-started process. However, the required rendered and interactive observations could not be performed because `@oai/sky` could neither capture a Windows 10 window nor obtain coordinate-input geometry. No visual or interaction item below is inferred from source or automated tests. Task 8 therefore has only a documentation-and-automated-publish partial handoff; GUI acceptance is blocked and neither Task 8 nor Milestone 1 is complete.
 
 ## Evidence identity and scope
 
@@ -12,7 +12,7 @@
 - SHA-256: `10AA0A8F8D1A2BE798AF0091901BD63A04FFF2C4A73E2E1730B0E89E552EC030`
 - Target: Microsoft Windows 10 Pro, version `10.0.19045`, build `19045`, x64
 - Desktop runtime: `Microsoft.WindowsDesktop.App 8.0.19` at `C:\Program Files\dotnet\shared\Microsoft.WindowsDesktop.App`
-- Acceptance authority: [approved design, section 10](../specs/2026-08-26-dororong-m1-design.md#10-verification-strategy) and [Task 8 brief, Step 4](../../.superpowers/sdd/2026-08-26-dororong-m1-implementation/task-8-brief.md)
+- Acceptance authority: [approved design, section 10](../specs/2026-08-26-dororong-m1-design.md#10-verification-strategy) and [committed implementation plan, Task 8](../plans/2026-08-26-dororong-m1-implementation.md#task-8-publish-verify-the-actual-windows-experience-and-hand-off)
 - Claim surfaces: the complete 144×144 transparent topmost pet window and a known control in a different process underneath
 - Required states: IDLE, WALK, CURIOUS, STARTLED, CLICK_REACTION, DRAGGED, SLEEP, and one changing reaction frame
 
@@ -38,18 +38,32 @@ Commands were run from the repository root in this order, with each reported exi
 | `pwsh -NoProfile -File tests/Dororong.App.DraggedAngle.Tests.ps1 -Configuration Release` | 0 | `DRAGGED ANGLE PASS`; center, symmetric presenter coordinates, and clamps passed. |
 | `dotnet publish src/Dororong.App/Dororong.App.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts/publish/win-x64` | 0 | Runtime-specific framework-dependent publish completed and the exact executable above was present. |
 
+## README source-run command verification
+
+The README command `dotnet run --project src/Dororong.App/Dororong.App.csproj --configuration Release` was executed once from the repository root after the initial handoff review. It is run documentation evidence only and does not count toward any actual-Windows GUI acceptance item.
+
+- Exact output executable: `D:\JOEWRKS\.worktrees\DororongDesktopPet-m1\src\Dororong.App\bin\Release\net8.0-windows\Dororong.App.exe`
+- Pre-run exact-path baseline: no matching process
+- Pre-run `C:\Program Files\dotnet\dotnet.exe` baseline: no matching process
+- `dotnet` host: PID `59544`, parent PID `52548`, command line `"C:\Program Files\dotnet\dotnet.exe" run --project src/Dororong.App/Dororong.App.csproj --configuration Release`, start `2026-08-26T19:56:13.489539+09:00`
+- Exact Dororong child: PID `59980`, parent PID `59544`, command line `"D:\JOEWRKS\.worktrees\DororongDesktopPet-m1\src\Dororong.App\bin\Release\net8.0-windows\Dororong.App.exe"`, start `2026-08-26T19:56:16.88015+09:00`
+- First Ctrl+C did not end the recorded child or host. It was not retried. PID `59980` was stopped only after its exact PID, output path, command line, start time, and parent PID were re-read and all matched the task-owned lineage.
+- Readback: PIDs `59980`, `59544`, and `52548` were absent; the exact output path had no survivors. The controlled `dotnet run` session then exited `1`, reflecting the bounded child termination rather than a startup failure.
+
 ## Windows observation boundary
 
 The required `computer-use` path was initialized through `node_repl` and `@oai/sky`. A fresh Notepad window was returned by `list_apps`, and screenshot-free accessibility inspection identified its focused edit control as `1 편집 텍스트 편집 ID: 15`.
 
-Native screenshot capture failed first for that Notepad window with `SetIsBorderRequired failed: 해당 인터페이스를 지원하지 않습니다. (0x80004002)`. After refreshing the returned app/window selection, the single allowed retry failed identically. The materially different fallback against a returned File Explorer window also failed identically. Screenshot-free accessibility remained available, but the first coordinate input failed before injection with `coordinate input geometry is unavailable`. The no-activate Dororong tool window was not returned by either `list_apps` or `list_windows`. Therefore no stale coordinates, unsupported UI mechanism, terminal UI, or inferred rendering evidence was used.
+Native screenshot capture failed first for that Notepad window with `SetIsBorderRequired failed: 해당 인터페이스를 지원하지 않습니다. (0x80004002)`. After refreshing the returned app/window selection, the single allowed retry failed identically. A returned File Explorer window failed identically, but this was only a different target window using the same `@oai/sky` capture mechanism, not a materially different GUI fallback. Screenshot-free accessibility remained available, but the first coordinate input failed before injection with `coordinate input geometry is unavailable`. The no-activate Dororong tool window was not returned by either `list_apps` or `list_windows`. Therefore no stale coordinates, unsupported UI mechanism, terminal UI, or inferred rendering evidence was used; selecting a genuinely different GUI mechanism remains a user decision.
+
+Follow-up readback used only exact returned window identities. The task-created Notepad window `{ id: 5901484, app: "process:C:\\Windows\\System32\\notepad.exe" }` was already absent, and `list_apps` returned Notepad as not running with no windows. The pre-existing user-owned Explorer window `{ id: 4657402, app: "process:C:\\Windows\\explorer.exe", title: "DororongDesktopPet" }` remained present and was deliberately left untouched. The pre-task foreground window was never recorded, so original foreground-focus restoration is **UNKNOWN/UNRESOLVED** and is not claimed.
 
 ## Twelve-check matrix
 
 ### 1. Borderless transparent pet above an ordinary application
 
 - Expected observable: a full rendered frame shows a borderless character with alpha-transparent margins remaining visually above an ordinary application.
-- Observed: the exact published process launched and survived for 178.7 seconds, but `@oai/sky` returned no targetable Dororong window and failed to capture both primary and fallback ordinary application windows. No rendered pet frame was observed.
+- Observed: the exact published process launched and survived for 178.7 seconds, but `@oai/sky` returned no targetable Dororong window and the same capture mechanism failed against both Notepad and Explorer target windows. No rendered pet frame was observed.
 - Result: **UNVERIFIED**.
 
 ### 2. Autonomous IDLE and WALK
@@ -120,4 +134,4 @@ Native screenshot capture failed first for that Notepad window with `SetIsBorder
 
 ## Release boundary
 
-No application behavior failure was observed, so no source or test fix was justified. All twelve actual-Windows items remain unverified, which prevents an M1-complete or release-ready claim. A future run needs a Windows target on which the required UI tool can capture rendered frames and inject coordinate input into the exact published artifact; that run must repeat all twelve checks, including four independent SLEEP wake baselines.
+No application behavior failure was observed, so no source or test fix was justified. All twelve actual-Windows items remain unverified, which prevents Task 8 completion, M1 completion, or a release-ready claim. The `DONE_WITH_CONCERNS` first line in the task-local report describes only this partial handoff and does not upgrade either status. A future run needs a user-selected Windows target or materially different allowed GUI mechanism that can capture rendered frames and inject coordinate input into the exact published artifact; that run must repeat all twelve checks, including four independent SLEEP wake baselines.

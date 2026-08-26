@@ -39,4 +39,4 @@ Milestone 1 uses the primary monitor's work area only; polished multi-monitor be
 
 There are no settings screen, sound, auto-start, saved preferences or progression, accounts, cloud persistence, or polished multi-monitor behavior in this milestone.
 
-See the [approved design](docs/specs/2026-08-26-dororong-m1-design.md), [implementation plan](docs/plans/2026-08-26-dororong-m1-implementation.md), and Windows acceptance record under `docs/verification` for the exact verified release boundary.
+See the [approved design](docs/specs/2026-08-26-dororong-m1-design.md), [implementation plan](docs/plans/2026-08-26-dororong-m1-implementation.md), and [Windows acceptance record](docs/verification/2026-08-26-m1-windows-acceptance.md) for the exact release boundary. The current actual-Windows twelve-check result is **UNVERIFIED**, so Milestone 1 is not complete.
