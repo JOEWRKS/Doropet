@@ -54,8 +54,6 @@ public sealed class PetBrain
             return Current;
         }
 
-        _inactivity += delta;
-
         if (_state != PetState.Dragged)
         {
             NormalizePosition(input.WorkArea, input.PetSize);
@@ -88,8 +86,16 @@ public sealed class PetBrain
         var remaining = delta;
         while (remaining > TimeSpan.Zero)
         {
+            if (TryStartSleep())
+            {
+                continue;
+            }
+
             var untilStateBoundary = _stateDuration - _stateElapsed;
-            var consumed = remaining < untilStateBoundary ? remaining : untilStateBoundary;
+            var untilSleepBoundary = CanEnterSleep()
+                ? _tuning.SleepDelay - _inactivity
+                : TimeSpan.MaxValue;
+            var consumed = Min(remaining, untilStateBoundary, untilSleepBoundary);
 
             if (_state == PetState.Walk)
             {
@@ -101,17 +107,19 @@ public sealed class PetBrain
             }
 
             _stateElapsed += consumed;
+            _inactivity += consumed;
             remaining -= consumed;
+
+            if (TryStartSleep())
+            {
+                continue;
+            }
 
             if (_stateElapsed >= _stateDuration)
             {
                 AdvanceAutonomousState();
+                TryStartSleep();
             }
-        }
-
-        if (_state == PetState.Idle && _inactivity >= _tuning.SleepDelay)
-        {
-            StartSleep();
         }
 
         return Current;
@@ -206,7 +214,7 @@ public sealed class PetBrain
         }
 
         ClearDirectInteraction();
-        if (crossedDragThreshold)
+        if (!input.Pointer.IsAvailable || crossedDragThreshold)
         {
             StartIdle();
         }
@@ -238,6 +246,20 @@ public sealed class PetBrain
         _stateElapsed = TimeSpan.Zero;
         _stateDuration = TimeSpan.MaxValue;
     }
+
+    private bool TryStartSleep()
+    {
+        if (!CanEnterSleep() || _inactivity < _tuning.SleepDelay)
+        {
+            return false;
+        }
+
+        StartSleep();
+        return true;
+    }
+
+    private bool CanEnterSleep() =>
+        _state == PetState.Idle && !_pressPosition.HasValue;
 
     private void ResetInactivity()
     {
@@ -355,6 +377,12 @@ public sealed class PetBrain
         {
             throw new ArgumentOutOfRangeException(parameterName, "Finite reaction durations must be positive.");
         }
+    }
+
+    private static TimeSpan Min(TimeSpan first, TimeSpan second, TimeSpan third)
+    {
+        var minimum = first < second ? first : second;
+        return minimum < third ? minimum : third;
     }
 
     private double GetPhase() => _state switch

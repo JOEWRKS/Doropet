@@ -32,6 +32,7 @@ internal sealed class PointerReactionDetector
         if (isDirectInteractionPending)
         {
             ResetSpeedBaseline();
+            UpdateNearLatch(Distance(pointer.Position, petCenter));
             return PointerReactionDecision.None;
         }
 
@@ -52,16 +53,7 @@ internal sealed class PointerReactionDetector
         _previousDistance = distance;
         _previousPointerPosition = pointer.Position;
 
-        var enteredNearZone = false;
-        if (!_nearLatched && distance <= _tuning.NearEnterDistance)
-        {
-            _nearLatched = true;
-            enteredNearZone = true;
-        }
-        else if (_nearLatched && distance >= _tuning.NearExitDistance)
-        {
-            _nearLatched = false;
-        }
+        var enteredNearZone = UpdateNearLatch(distance);
 
         if (isMovingAway)
         {
@@ -94,6 +86,22 @@ internal sealed class PointerReactionDetector
         _previousPointerPosition = null;
         _lastApproachDirection = null;
         _filteredClosingSpeed = 0;
+    }
+
+    private bool UpdateNearLatch(double distance)
+    {
+        if (!_nearLatched && distance <= _tuning.NearEnterDistance)
+        {
+            _nearLatched = true;
+            return true;
+        }
+
+        if (_nearLatched && distance >= _tuning.NearExitDistance)
+        {
+            _nearLatched = false;
+        }
+
+        return false;
     }
 
     private static PointD? Normalize(PointD vector)

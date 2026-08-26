@@ -7,6 +7,54 @@ namespace Dororong.Core.Tests.Behavior;
 public sealed class PetBrainSleepTests
 {
     [Fact]
+    public void Sleep_timing_matches_whole_and_split_frames_when_the_threshold_precedes_the_idle_boundary()
+    {
+        var wholeFrame = CreateSleepTimingBrain(
+            idleDuration: TimeSpan.FromSeconds(0.75),
+            sleepDelay: TimeSpan.FromSeconds(0.5));
+        var splitFrames = CreateSleepTimingBrain(
+            idleDuration: TimeSpan.FromSeconds(0.75),
+            sleepDelay: TimeSpan.FromSeconds(0.5));
+
+        var whole = wholeFrame.Update(PetTestInput.At(1.0));
+        splitFrames.Update(PetTestInput.At(0.5));
+        var split = splitFrames.Update(PetTestInput.At(0.5));
+
+        Assert.Equal(PetState.Sleep, whole.State);
+        Assert.Equal(whole, split);
+    }
+
+    [Fact]
+    public void Sleep_wins_when_the_inactivity_and_idle_boundaries_are_equal()
+    {
+        var brain = CreateSleepTimingBrain(
+            idleDuration: TimeSpan.FromSeconds(0.5),
+            sleepDelay: TimeSpan.FromSeconds(0.5));
+
+        var actual = brain.Update(PetTestInput.At(0.5));
+
+        Assert.Equal(PetState.Sleep, actual.State);
+    }
+
+    [Fact]
+    public void Pending_direct_interaction_defers_sleep_until_the_interaction_resolves()
+    {
+        var brain = CreateSleepTimingBrain(
+            idleDuration: TimeSpan.FromSeconds(2),
+            sleepDelay: TimeSpan.FromSeconds(0.2));
+        brain.Update(PetTestInput.At(
+            0.1, pointer: new PointD(160, 150), primaryDown: true,
+            bodyPressPosition: new PointD(160, 150)));
+
+        brain.Update(PetTestInput.At(0.1, pointer: new PointD(160, 150), primaryDown: true));
+        var actual = brain.Update(PetTestInput.At(
+            0.1, pointer: new PointD(160, 150), primaryDown: true));
+
+        Assert.Equal(PetState.Idle, actual.State);
+        Assert.True(actual.IsDirectInteractionPending);
+    }
+
+    [Fact]
     public void Inactivity_enters_sleep_only_after_the_sleep_delay()
     {
         var brain = PetTestInput.CreateSleepBrain();
@@ -73,6 +121,26 @@ public sealed class PetBrainSleepTests
 
         Assert.Equal(PetState.Dragged, actual.State);
         Assert.Equal(new PointD(60, 50), actual.GrabOffset);
+    }
+
+    [Fact]
+    public void Drag_release_does_not_create_a_new_near_entry_on_the_next_stationary_tick()
+    {
+        var brain = PetTestInput.CreateSleepingBrain();
+        Assert.Equal(PetState.Sleep, brain.Current.State);
+        brain.Update(PetTestInput.At(
+            0.1, pointer: new PointD(160, 150), primaryDown: true,
+            bodyPressPosition: new PointD(160, 150)));
+        brain.Update(PetTestInput.At(
+            0.1, pointer: new PointD(164, 150), primaryDown: true));
+        var released = brain.Update(PetTestInput.At(
+            0.1, pointer: new PointD(164, 150), primaryDown: false));
+
+        var stationary = brain.Update(PetTestInput.At(
+            0.1, pointer: new PointD(164, 150), primaryDown: false));
+
+        Assert.Equal(PetState.Idle, released.State);
+        Assert.Equal(PetState.Idle, stationary.State);
     }
 
     [Theory]
@@ -169,6 +237,21 @@ public sealed class PetBrainSleepTests
             brain.Update(PetTestInput.At(0.1, pointer: pointer));
         }
     }
+
+    private static PetBrain CreateSleepTimingBrain(TimeSpan idleDuration, TimeSpan sleepDelay) =>
+        new(
+            BehaviorTuning.Default with
+            {
+                MaxDelta = TimeSpan.FromSeconds(1),
+                IdleMin = idleDuration,
+                IdleMax = idleDuration,
+                WalkMin = TimeSpan.FromSeconds(2),
+                WalkMax = TimeSpan.FromSeconds(2),
+                IdleToWalkProbability = 1,
+                SleepDelay = sleepDelay
+            },
+            new SequenceRandomSource(0, 0),
+            new PointD(100, 100));
 
     public enum WakeRoute
     {
