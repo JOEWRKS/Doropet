@@ -141,7 +141,7 @@ Expected: only the five listed paths are committed; manual-attempt files remain 
 
 **Interfaces:**
 - Consumes: Task 1 mask/hash, source-only fixture, and approved mask review.
-- Produces: `Import-DororongBodyMask([string]) -> Bitmap`; `New-DororongBoundaryDistanceField(Bitmap frame, Bitmap mask) -> double[,]`; `Invoke-DororongInwardOutline(Bitmap frame, Bitmap mask, hashtable[] fillSamples, Point[] outlineSamples, double width) -> Bitmap`; generator parameters `-BodyMaskPath` and optional `-EvidenceDirectory`; exact open/closed 225px evidence frames and committed 96px runtime assets.
+- Produces: `Import-DororongBodyMask([string]) -> Bitmap`; `New-DororongBoundaryDistanceField(Bitmap frame, Bitmap mask, Point[] legalOcclusionSeeds) -> double[,]`; `Invoke-DororongInwardOutline(Bitmap frame, Bitmap mask, hashtable[] fillSamples, Point[] outlineSamples, Point[] legalOcclusionSeeds, double width) -> Bitmap`; generator parameters `-BodyMaskPath` and optional `-EvidenceDirectory`; exact open/closed 225px evidence frames and committed 96px runtime assets.
 
 - [ ] **Step 1: Replace the subtractive assertions with a failing reconstruction contract**
 
@@ -176,7 +176,7 @@ Expected: build exits `0`; exact-art exits `1` because the old generator still c
 
 - [ ] **Step 3: Add the focused body-outline module**
 
-Create `tools/Dororong.BodyOutline.psm1`. `Import-DororongBodyMask` validates dimensions, ARGB format, alpha `255`, binary channels, and at least one writable pixel. `New-DororongBoundaryDistanceField` treats a writable opaque frame pixel with an eight-neighbor alpha-zero pixel as a source-authoritative exposed boundary seed; for every writable pixel it stores the Euclidean distance to the nearest seed and uses ordinal `Y,X` tie-breaking. It throws when no boundary seed exists.
+Create `tools/Dororong.BodyOutline.psm1`. `Import-DororongBodyMask` validates dimensions, ARGB format, alpha `255`, binary channels, and at least one writable pixel. `New-DororongBoundaryDistanceField` treats a writable opaque frame pixel with an eight-neighbor alpha-zero pixel as a source-authoritative exposed boundary seed and also accepts a production-owned literal list containing only the two reviewed legal endpoints where the contour disappears under hair or rear ribbon. Every legal endpoint must be writable, opaque, on a mask boundary, and independently covered by the test fixture; otherwise the function throws. For every writable pixel the function stores the Euclidean distance to the nearest exposed or legal-occlusion seed and uses ordinal `Y,X` tie-breaking. It throws when no boundary seed exists.
 
 `Invoke-DororongInwardOutline` clones the input, validates every fill/outline sample is opaque and inside its allowed source region, restores only mask pixels within the fixed erase depth of an exposed boundary from the nearest eligible fill sample, and composites the single outline color using:
 
@@ -194,7 +194,7 @@ The outline color is the component-wise median of production-owned clean hair sa
 
 Replace `-BaselineOutputDirectory` with mandatory `-BodyMaskPath` and optional `-EvidenceDirectory` parameters. Import the module relative to `$PSScriptRoot`. Delete the complete native-96 run array and subtractive function.
 
-Immediately after boundary-background transparency, clone the uncorrected 225px baseline, load the mask, and call `Invoke-DororongInwardOutline` once on the open production frame. Keep production-owned fill regions/samples and outline-color samples as literal source coordinates distinct from the test fixture. Determine one global width by matching the preselected production hair target; print the diagnostic value, replace it with one literal `$sourceBodyOutlineWidth` in the same commit, and do not expose a per-segment override.
+Immediately after boundary-background transparency, clone the uncorrected 225px baseline, load the mask, and call `Invoke-DororongInwardOutline` once on the open production frame. Keep production-owned fill regions/samples, outline-color samples, and the two legal occlusion seeds as literal source coordinates distinct from the test fixture. Determine one global width by matching the preselected production hair target; print the diagnostic value, replace it with one literal `$sourceBodyOutlineWidth` in the same commit, and do not expose a per-segment override.
 
 Derive the closed-eye frame from the reconstructed open frame so body pixels are identical. When `-EvidenceDirectory` is present, save uncommitted evidence files with exact names:
 
