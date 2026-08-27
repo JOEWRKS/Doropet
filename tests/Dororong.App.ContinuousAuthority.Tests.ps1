@@ -221,14 +221,48 @@ function Test-DororongNeutralContourPixel([Drawing.Color]$Color)
     return $Color.A -gt 0 -and ($maximum-$minimum) -le 8
 }
 
-function Get-DororongApprovedSourceContour(
+function Get-DororongFinalSourceContour(
     [Drawing.Bitmap]$Source,
-    [Drawing.Bitmap]$Mask)
+    [Drawing.Bitmap]$Mask,
+    [object]$LegalEndpoints)
 {
     Assert-Equal $Source.Width $Mask.Width `
         'Source/mask width differs during independent contour derivation.'
     Assert-Equal $Source.Height $Mask.Height `
         'Source/mask height differs during independent contour derivation.'
+
+    $exteriorNearWhite=New-Object 'bool[,]' $Source.Width,$Source.Height
+    $queue=[Collections.Generic.Queue[object]]::new()
+    for($x=0;$x -lt $Source.Width;$x++)
+    {
+        $queue.Enqueue(@($x,0))
+        $queue.Enqueue(@($x,($Source.Height-1)))
+    }
+    for($y=1;$y -lt ($Source.Height-1);$y++)
+    {
+        $queue.Enqueue(@(0,$y))
+        $queue.Enqueue(@(($Source.Width-1),$y))
+    }
+    while($queue.Count -gt 0)
+    {
+        $point=$queue.Dequeue()
+        $x=[int]$point[0]; $y=[int]$point[1]
+        if($exteriorNearWhite[$x,$y])
+        { continue }
+        $color=$Source.GetPixel($x,$y)
+        $minimum=[Math]::Min($color.R,[Math]::Min($color.G,$color.B))
+        if($minimum -lt 225)
+        { continue }
+        $exteriorNearWhite[$x,$y]=$true
+        foreach($offset in @(@(-1,0),@(1,0),@(0,-1),@(0,1)))
+        {
+            $neighborX=$x+$offset[0]; $neighborY=$y+$offset[1]
+            if($neighborX -ge 0 -and $neighborY -ge 0 -and `
+                $neighborX -lt $Source.Width -and $neighborY -lt $Source.Height -and `
+                -not $exteriorNearWhite[$neighborX,$neighborY])
+            { $queue.Enqueue(@($neighborX,$neighborY)) }
+        }
+    }
 
     $segments=[Collections.Generic.List[object]]::new()
     $directions=@(
@@ -247,7 +281,6 @@ function Get-DororongApprovedSourceContour(
             if($maskValue -ne 255)
             { continue }
 
-            $insideColor=$Source.GetPixel($x,$y)
             foreach($direction in $directions)
             {
                 $neighborX=$x+$direction.DX
@@ -256,15 +289,7 @@ function Get-DororongApprovedSourceContour(
                     $neighborX -ge $Mask.Width -or $neighborY -ge $Mask.Height)
                 { continue }
 
-                $neighborMaskValue=$Mask.GetPixel($neighborX,$neighborY).R
-                if($neighborMaskValue -eq 255)
-                { continue }
-                Assert-Equal 0 $neighborMaskValue `
-                    "Reviewed mask contains an intermediate neighbor at ($neighborX,$neighborY)."
-
-                $outsideColor=$Source.GetPixel($neighborX,$neighborY)
-                if(-not(Test-DororongNeutralContourPixel $insideColor) -or `
-                    -not(Test-DororongNeutralContourPixel $outsideColor))
+                if(-not $exteriorNearWhite[$neighborX,$neighborY])
                 { continue }
 
                 switch($direction.Side)
@@ -285,19 +310,16 @@ function Get-DororongApprovedSourceContour(
                 $segments.Add([pscustomobject]@{
                     X1=[double]$x1; Y1=[double]$y1
                     X2=[double]$x2; Y2=[double]$y2
-                    Kind='Exposed'
+                    Kind='E'
                 })
             }
         }
     }
 
-    $legalEndpoints=@(
-        [pscustomobject]@{ Name='FrontOcclusion'; X=112.0; Y=151.0 }
-        [pscustomobject]@{ Name='RearOcclusion'; X=157.0; Y=116.0 })
-    foreach($endpoint in $legalEndpoints)
+    foreach($endpoint in @($LegalEndpoints))
     {
-        Assert-Equal 0 $Mask.GetPixel([int]$endpoint.X,[int]$endpoint.Y).R `
-            "Legal endpoint '$($endpoint.Name)' moved into the writable mask."
+        Assert-Equal 255 $Mask.GetPixel([int]$endpoint.X,[int]$endpoint.Y).R `
+            "Legal endpoint '$($endpoint.Name)' moved outside the final body mask."
         Assert-Equal 255 $Source.GetPixel([int]$endpoint.X,[int]$endpoint.Y).A `
             "Legal endpoint '$($endpoint.Name)' is no longer source-opaque."
 
@@ -328,10 +350,135 @@ function Get-DororongApprovedSourceContour(
         $segments.Add([pscustomobject]@{
             X1=[double]$nearest.X; Y1=[double]$nearest.Y
             X2=[double]$endpoint.X; Y2=[double]$endpoint.Y
-            Kind='LegalContinuation'
+            Kind='C'
         })
     }
     return @($segments)
+}
+
+function Get-DororongIndependentContourHash([object]$Segments)
+{
+    $records=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $entries=[Collections.Generic.List[object]]::new()
+    foreach($segment in @($Segments))
+    {
+        $x1=[int][Math]::Round(2.0*$segment.X1)
+        $y1=[int][Math]::Round(2.0*$segment.Y1)
+        $x2=[int][Math]::Round(2.0*$segment.X2)
+        $y2=[int][Math]::Round(2.0*$segment.Y2)
+        if($y2 -lt $y1 -or ($y2 -eq $y1 -and $x2 -lt $x1))
+        {
+            $temporaryX=$x1; $temporaryY=$y1
+            $x1=$x2; $y1=$y2; $x2=$temporaryX; $y2=$temporaryY
+        }
+        $record="$($segment.Kind)|$y1|$x1|$y2|$x2"
+        if($records.Add($record))
+        {
+            $entries.Add([pscustomobject]@{
+                Kind=[string]$segment.Kind; StartY2=$y1; StartX2=$x1
+                EndY2=$y2; EndX2=$x2; Record=$record })
+        }
+    }
+    $text=@($entries|Sort-Object Kind,StartY2,StartX2,EndY2,EndX2|`
+        ForEach-Object Record)|Join-String -Separator "`n"
+    $sha=[Security.Cryptography.SHA256]::Create()
+    try
+    { return [Convert]::ToHexString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($text))) }
+    finally
+    { $sha.Dispose() }
+}
+
+function Get-DororongStrictSegmentIntersections(
+    [hashtable]$Normal,
+    [object]$Segments)
+{
+    $px=$Normal.X1Eighth/8.0; $py=$Normal.Y1Eighth/8.0
+    $rx=($Normal.X2Eighth-$Normal.X1Eighth)/8.0
+    $ry=($Normal.Y2Eighth-$Normal.Y1Eighth)/8.0
+    $epsilon=0.000000001
+    $intersections=@()
+    foreach($segment in @($Segments))
+    {
+        $qx=[double]$segment.X1; $qy=[double]$segment.Y1
+        $sx=[double]$segment.X2-$qx; $sy=[double]$segment.Y2-$qy
+        $crossRS=($rx*$sy)-($ry*$sx)
+        if([Math]::Abs($crossRS) -le $epsilon)
+        { continue }
+        $qpx=$qx-$px; $qpy=$qy-$py
+        $t=(($qpx*$sy)-($qpy*$sx))/$crossRS
+        $u=(($qpx*$ry)-($qpy*$rx))/$crossRS
+        if($t -lt -$epsilon -or $t -gt (1.0+$epsilon) -or `
+            $u -lt -$epsilon -or $u -gt (1.0+$epsilon))
+        { continue }
+        $intersections += [pscustomobject]@{
+            X=$px+($t*$rx); Y=$py+($t*$ry); T=$t; U=$u; Segment=$segment
+            IsStrict=$t -gt $epsilon -and $t -lt (1.0-$epsilon) -and `
+                $u -gt $epsilon -and $u -lt (1.0-$epsilon)
+        }
+    }
+    return @($intersections)
+}
+
+function Get-DororongMaskSide(
+    [Drawing.Bitmap]$Mask,
+    [double]$X,
+    [double]$Y)
+{
+    $pixelX=[int][Math]::Floor($X+0.5)
+    $pixelY=[int][Math]::Floor($Y+0.5)
+    Assert-True ($pixelX -ge 0 -and $pixelX -lt $Mask.Width -and `
+        $pixelY -ge 0 -and $pixelY -lt $Mask.Height) `
+        "Ownership sample ($X,$Y) is outside the final mask."
+    return $Mask.GetPixel($pixelX,$pixelY).R
+}
+
+function Assert-DororongFinalContourNormal(
+    [hashtable]$Entry,
+    [Drawing.Bitmap]$Mask,
+    [object]$FinalContour)
+{
+    $label="Body normal '$($Entry.Name)'"
+    $namedContour=@(Get-DororongNamedContourSegments $FinalContour $Entry.Name)
+    $namedHits=@(Get-DororongStrictSegmentIntersections $Entry.SourceNormal $namedContour)
+    $strictNamedHits=@($namedHits|Where-Object IsStrict)
+    Assert-Equal 1 $strictNamedHits.Count `
+        "$label SourceNormal must cross exactly one named E/C segment strictly inside it."
+
+    $allHits=@(Get-DororongStrictSegmentIntersections $Entry.SourceNormal $FinalContour)
+    Assert-Equal 1 $allHits.Count `
+        "$label SourceNormal crosses a neighboring or second canonical segment."
+    Assert-True $allHits[0].IsStrict `
+        "$label SourceNormal crosses a contour vertex or junction."
+
+    $normal=$Entry.SourceNormal
+    $normalX=($normal.X2Eighth-$normal.X1Eighth)/8.0
+    $normalY=($normal.Y2Eighth-$normal.Y1Eighth)/8.0
+    $segment=$strictNamedHits[0].Segment
+    $tangentX=[double]$segment.X2-[double]$segment.X1
+    $tangentY=[double]$segment.Y2-[double]$segment.Y1
+    $absoluteUnitDot=[Math]::Abs(($normalX*$tangentX)+($normalY*$tangentY))/`
+        ([Math]::Sqrt(($normalX*$normalX)+($normalY*$normalY))*`
+         [Math]::Sqrt(($tangentX*$tangentX)+($tangentY*$tangentY)))
+    Assert-True ($absoluteUnitDot -le 0.0871557427476582) `
+        "$label SourceNormal is more than 5 degrees from perpendicular; absolute unit dot=$absoluteUnitDot."
+
+    Assert-Equal 255 (Get-DororongMaskSide $Mask `
+        ($normal.X1Eighth/8.0) ($normal.Y1Eighth/8.0)) `
+        "$label SourceNormal first 1/8-pixel sample is not on the body side."
+    Assert-Equal 0 (Get-DororongMaskSide $Mask `
+        ($normal.X2Eighth/8.0) ($normal.Y2Eighth/8.0)) `
+        "$label SourceNormal final 1/8-pixel sample is not on the non-body side."
+    return $strictNamedHits[0]
+}
+
+function Get-Median([double[]]$Values)
+{
+    Assert-True ($Values.Count -gt 0) 'Cannot calculate an empty median.'
+    $sorted=@($Values|Sort-Object)
+    $middle=[int][Math]::Floor($sorted.Count/2.0)
+    if(($sorted.Count%2) -eq 1)
+    { return [double]$sorted[$middle] }
+    return ([double]$sorted[$middle-1]+[double]$sorted[$middle])/2.0
 }
 
 function Get-DororongNamedContourSegments(
@@ -452,6 +599,7 @@ function Invoke-AuthorityMutationFailure(
     Assert-True ($null -ne $caught) "$Label mutation was accepted."
     Assert-True $caught.Contains($ExpectedError) `
         "$Label mutation failed without named error '$ExpectedError'. Observed '$caught'."
+    Write-Output "CONTINUOUS MUTATION PASS label=$Label failure=$ExpectedError"
 }
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
@@ -464,8 +612,8 @@ $toolPath = Join-Path $repositoryRoot 'tools/New-ContinuousOutlineAuthority.ps1'
 
 Assert-Equal 'F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504' `
     (Get-FileHash -Algorithm SHA256 -LiteralPath $sourcePath).Hash 'Canonical source changed.'
-Assert-Equal 'E256F3DC28929A49624C6308F77C994F061240CB7D2C9E80780AAD4A300C0779' `
-    (Get-FileHash -Algorithm SHA256 -LiteralPath $maskPath).Hash 'Reviewed body-region mask changed.'
+Assert-Equal 'D08B3A941C662F1CBC55C486C13FD4C6CD8901DA9CD5CF8512509698219FE46F' `
+    (Get-FileHash -Algorithm SHA256 -LiteralPath $maskPath).Hash 'Final body-region mask changed.'
 Assert-Equal '611A1367E92C37659CF63A549656BCE01EEDEF5DE3CA348C6FADFB98A5D88DC3' `
     (Get-FileHash -Algorithm SHA256 -LiteralPath $nativePath).Hash 'Committed native-open authority changed.'
 Assert-True (Test-Path -LiteralPath $authorityPath) 'Continuous authority fixture is missing.'
@@ -524,6 +672,30 @@ Assert-Equal 1 `
     'A shared stair-step contour vertex was counted as more than one crossing.'
 
 $authority = Import-PowerShellDataFile -LiteralPath $authorityPath
+$authorityText=[IO.File]::ReadAllText($authorityPath)
+$hairStart=$authorityText.IndexOf('    HairAnchors = @(',[StringComparison]::Ordinal)
+$hairEnd=$authorityText.IndexOf('    BodyNormals = @(',[StringComparison]::Ordinal)
+Assert-True ($hairStart -ge 0 -and $hairEnd -gt $hairStart) `
+    'Hair anchor byte range is missing.'
+$sha=[Security.Cryptography.SHA256]::Create()
+try
+{
+    $hairBytesHash=[Convert]::ToHexString($sha.ComputeHash(
+        [Text.Encoding]::UTF8.GetBytes($authorityText.Substring(
+            $hairStart,$hairEnd-$hairStart))))
+}
+finally
+{ $sha.Dispose() }
+Assert-Equal '4942259408D151BABE64BB131334CD9E2F7111876B95C5C488667254315D7FD6' `
+    $hairBytesHash 'Hair anchor bytes changed.'
+$expectedLegalEndpoints='118,151|161,116'
+Assert-True $authority.ContainsKey('LegalEndpoints') `
+    'Continuous authority still uses historical endpoint markers instead of literal LegalEndpoints.'
+Assert-Equal $expectedLegalEndpoints `
+    (@($authority.LegalEndpoints|ForEach-Object{"$($_.X),$($_.Y)"})-join '|') `
+    'Continuous authority legal endpoints changed.'
+Assert-True (@($authority.ProtectedPoints|Where-Object Name -like 'LegalEndpoint-*').Count -eq 0) `
+    'Continuous authority still protects a historical endpoint marker.'
 $source = [Drawing.Bitmap]::new($sourcePath)
 $native = [Drawing.Bitmap]::new($nativePath)
 $mask = [Drawing.Bitmap]::new($maskPath)
@@ -536,18 +708,13 @@ try
     Assert-Equal 225 $mask.Width 'Reviewed mask width changed.'
     Assert-Equal 225 $mask.Height 'Reviewed mask height changed.'
 
-    $approvedSourceContour=@(Get-DororongApprovedSourceContour $source $mask)
+    $approvedSourceContour=@(Get-DororongFinalSourceContour `
+        $source $mask $authority.LegalEndpoints)
     Assert-True ($approvedSourceContour.Count -gt 0) `
-        'Independent approved source contour derivation produced no segments.'
-
-    $neighboringContourMutation=@{
-        X1Eighth=624; Y1Eighth=1464; X2Eighth=648; Y2Eighth=1464 }
-    $neighboringContourHits=@(Get-DororongUniqueSegmentIntersections `
-        $neighboringContourMutation `
-        (Get-DororongNamedContourSegments `
-            $approvedSourceContour 'FirstUnderside'))
-    Assert-Equal 0 $neighboringContourHits.Count `
-        "Body normal 'FirstUnderside' neighboring-contour mutation was accepted."
+        'Independent final source contour derivation produced no segments.'
+    Assert-Equal 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65' `
+        (Get-DororongIndependentContourHash $approvedSourceContour) `
+        'Independent final source contour hash changed.'
 
     $hairAnchors=@($authority.HairAnchors)
     $bodyNormals=@($authority.BodyNormals)
@@ -568,6 +735,8 @@ try
     Assert-Equal ($expectedBodyNames -join ',') ($actualBodyNames -join ',') `
         'The fifteen named body normals changed.'
 
+    $sourceHairCoverages=@()
+    $nativeHairCoverages=@()
     foreach ($entry in $hairAnchors)
     {
         $label="Hair anchor '$($entry.Name)'"
@@ -604,11 +773,22 @@ try
                 "$label $($surface.Name) first endpoint is not near-zero darkness."
             Assert-True ($profile[-1].Darkness -lt 0.10) `
                 "$label $($surface.Name) second endpoint is not near-zero darkness."
-            Assert-True ((Measure-DororongContinuousCoverage `
-                $surface.Bitmap $surface.Normal $surface.Fill $surface.Ink) -gt 0.0) `
+            $coverage=Measure-DororongContinuousCoverage `
+                $surface.Bitmap $surface.Normal $surface.Fill $surface.Ink
+            Assert-True ($coverage -gt 0.0) `
                 "$label $($surface.Name) continuous integral is not positive."
+            if($surface.Name -eq 'source')
+            { $sourceHairCoverages += $coverage }
+            else
+            { $nativeHairCoverages += $coverage }
         }
     }
+    $sourceHairMedian=Get-Median $sourceHairCoverages
+    $nativeHairMedian=Get-Median $nativeHairCoverages
+    Assert-Near 2.208986702011595 $sourceHairMedian 0.000000000001 `
+        'Source hair median changed.'
+    Assert-Near 2.009803921568627 $nativeHairMedian 0.000000000001 `
+        'Native hair median changed.'
 
     $bodyInk=[Drawing.Color]::FromArgb(255,0,0,0)
     foreach ($entry in $bodyNormals)
@@ -641,14 +821,7 @@ try
             $source $entry.SourceNormal $sourceFill $bodyInk) -gt 0.0) `
             "$label source continuous integral is not positive."
 
-        $namedContour=@(Get-DororongNamedContourSegments `
-            $approvedSourceContour $entry.Name)
-        $contourIntersections=@(Get-DororongUniqueSegmentIntersections `
-            $entry.SourceNormal $namedContour)
-        Assert-True ($contourIntersections.Count -gt 0) `
-            "$label SourceNormal does not intersect the approved contour."
-        Assert-Equal 1 $contourIntersections.Count `
-            "$label SourceNormal intersects the approved contour more than once."
+        $null=Assert-DororongFinalContourNormal $entry $mask $approvedSourceContour
 
         Assert-True (Test-NormalIntersectsAlpha $native $entry.NativeNormal) `
             "$label native location normal does not intersect committed body alpha."
@@ -685,29 +858,58 @@ foreach ($file in $productionFiles)
 Assert-True (Test-Path -LiteralPath $toolPath) 'Continuous authority overlay tool is missing.'
 $fixtureText=[IO.File]::ReadAllText($authorityPath)
 $firstAnchor=@($authority.HairAnchors)[0]
-$normal=$firstAnchor.SourceNormal
-$normalLiteral="            SourceNormal = @{ X1Eighth = $($normal.X1Eighth); Y1Eighth = $($normal.Y1Eighth); X2Eighth = $($normal.X2Eighth); Y2Eighth = $($normal.Y2Eighth) }"
-$movedLiteral="            SourceNormal = @{ X1Eighth = $($normal.X1Eighth+1); Y1Eighth = $($normal.Y1Eighth); X2Eighth = $($normal.X2Eighth); Y2Eighth = $($normal.Y2Eighth) }"
-$duplicateLiteral="            SourceNormal = @{ X1Eighth = $($normal.X1Eighth); Y1Eighth = $($normal.Y1Eighth); X2Eighth = $($normal.X1Eighth); Y2Eighth = $($normal.Y1Eighth) }"
-$fillLiteral="            SourceFill = @($($firstAnchor.SourceFill[0]), $($firstAnchor.SourceFill[1]))"
-$inkLiteral="            SourceInk = @($($firstAnchor.SourceInk[0]), $($firstAnchor.SourceInk[1]))"
-$swappedFillLiteral="            SourceFill = @($($firstAnchor.SourceInk[0]), $($firstAnchor.SourceInk[1]))"
-$swappedInkLiteral="            SourceInk = @($($firstAnchor.SourceFill[0]), $($firstAnchor.SourceFill[1]))"
+$frontOuter=@($authority.BodyNormals|Where-Object Name -eq 'FrontOuter')[0]
+$frontOuterNormal=$frontOuter.SourceNormal
+$frontOuterLiteral="            SourceNormal = @{ X1Eighth = $($frontOuterNormal.X1Eighth); Y1Eighth = $($frontOuterNormal.Y1Eighth); X2Eighth = $($frontOuterNormal.X2Eighth); Y2Eighth = $($frontOuterNormal.Y2Eighth) }"
+$vertexLiteral='            SourceNormal = @{ X1Eighth = 368; Y1Eighth = 1320; X2Eighth = 300; Y2Eighth = 1316 }'
+$rotatedLiteral='            SourceNormal = @{ X1Eighth = 368; Y1Eighth = 1328; X2Eighth = 256; Y2Eighth = 1312 }'
+$reversedLiteral="            SourceNormal = @{ X1Eighth = $($frontOuterNormal.X2Eighth); Y1Eighth = $($frontOuterNormal.Y2Eighth); X2Eighth = $($frontOuterNormal.X1Eighth); Y2Eighth = $($frontOuterNormal.Y1Eighth) }"
+$secondValley=@($authority.BodyNormals|Where-Object Name -eq 'SecondValley')[0]
+$secondValleyNormal=$secondValley.SourceNormal
+$secondValleyLiteral="            SourceNormal = @{ X1Eighth = $($secondValleyNormal.X1Eighth); Y1Eighth = $($secondValleyNormal.Y1Eighth); X2Eighth = $($secondValleyNormal.X2Eighth); Y2Eighth = $($secondValleyNormal.Y2Eighth) }"
+$neighborLiteral='            SourceNormal = @{ X1Eighth = 1152; Y1Eighth = 1384; X2Eighth = 1056; Y2Eighth = 1384 }'
+$protectedClose="        @{ Name = 'NoTailRear-Lower'; X = 180; Y = 163 }`n    )"
+$historicalProtectedClose="        @{ Name = 'NoTailRear-Lower'; X = 180; Y = 163 }`n        @{ Name = 'LegalEndpoint-FrontOcclusion'; X = 112; Y = 151 }`n    )"
+$hairNormal=$firstAnchor.SourceNormal
+$hairNormalLiteral="            SourceNormal = @{ X1Eighth = $($hairNormal.X1Eighth); Y1Eighth = $($hairNormal.Y1Eighth); X2Eighth = $($hairNormal.X2Eighth); Y2Eighth = $($hairNormal.Y2Eighth) }"
+$hairChangedLiteral="            SourceNormal = @{ X1Eighth = $($hairNormal.X1Eighth+1); Y1Eighth = $($hairNormal.Y1Eighth); X2Eighth = $($hairNormal.X2Eighth); Y2Eighth = $($hairNormal.Y2Eighth) }"
 $temporaryRoot=Join-Path ([IO.Path]::GetTempPath()) ("dororong-continuous-authority-"+[Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
 try
 {
-    $movedText=Replace-FirstLiteral $fixtureText $normalLiteral $movedLiteral 'Moved endpoint'
-    Invoke-AuthorityMutationFailure $movedText 'Continuous authority hash changed.' 'moved-endpoint' `
+    $vertexText=Replace-FirstLiteral $fixtureText $frontOuterLiteral $vertexLiteral 'Vertex endpoint'
+    Invoke-AuthorityMutationFailure $vertexText `
+        "Body normal 'FrontOuter' must cross exactly one named E/C segment strictly inside it." `
+        'endpoint-at-vertex' `
         $toolPath $sourcePath $maskPath $nativePath $temporaryRoot
 
-    $swappedText=Replace-FirstLiteral $fixtureText $fillLiteral $swappedFillLiteral 'Swapped fill'
-    $swappedText=Replace-FirstLiteral $swappedText $inkLiteral $swappedInkLiteral 'Swapped ink'
-    Invoke-AuthorityMutationFailure $swappedText 'fill luminance must exceed ink luminance.' 'swapped-fill-ink' `
+    $rotatedText=Replace-FirstLiteral $fixtureText $frontOuterLiteral $rotatedLiteral 'Rotated normal'
+    Invoke-AuthorityMutationFailure $rotatedText `
+        "Body normal 'FrontOuter' is more than 5 degrees from perpendicular" `
+        'rotated-beyond-five-degrees' `
         $toolPath $sourcePath $maskPath $nativePath $temporaryRoot
 
-    $duplicateText=Replace-FirstLiteral $fixtureText $normalLiteral $duplicateLiteral 'Duplicate endpoint'
-    Invoke-AuthorityMutationFailure $duplicateText 'has duplicate endpoints.' 'duplicate-endpoint' `
+    $reversedText=Replace-FirstLiteral $fixtureText $frontOuterLiteral $reversedLiteral 'Reversed normal'
+    Invoke-AuthorityMutationFailure $reversedText `
+        "Body normal 'FrontOuter' is reversed" 'reversed-normal' `
+        $toolPath $sourcePath $maskPath $nativePath $temporaryRoot
+
+    $neighborText=Replace-FirstLiteral $fixtureText $secondValleyLiteral $neighborLiteral 'Neighbor crossing'
+    Invoke-AuthorityMutationFailure $neighborText `
+        "Body normal 'SecondValley' crosses a neighboring or second canonical segment." `
+        'extended-across-neighbor' `
+        $toolPath $sourcePath $maskPath $nativePath $temporaryRoot
+
+    $historicalText=Replace-FirstLiteral $fixtureText $protectedClose `
+        $historicalProtectedClose 'Historical protected endpoint'
+    Invoke-AuthorityMutationFailure $historicalText `
+        'Historical protected endpoint reintroduced.' 'historical-protected-endpoint' `
+        $toolPath $sourcePath $maskPath $nativePath $temporaryRoot
+
+    $hairChangedText=Replace-FirstLiteral $fixtureText $hairNormalLiteral `
+        $hairChangedLiteral 'Hair anchor byte'
+    Invoke-AuthorityMutationFailure $hairChangedText `
+        'Hair anchor bytes changed.' 'hair-anchor-byte' `
         $toolPath $sourcePath $maskPath $nativePath $temporaryRoot
 }
 finally
@@ -716,7 +918,10 @@ finally
     { [IO.Directory]::Delete($temporaryRoot,$true) }
 }
 
-$expectedAuthorityHash='87D0311B043368E0E21C2FD3E17EE7AC79FE8D217BEF5F231C4B3D1CD341490B'
+$expectedAuthorityHash='DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
 $authorityHash=(Get-FileHash -Algorithm SHA256 -LiteralPath $authorityPath).Hash
 Assert-Equal $expectedAuthorityHash $authorityHash 'Continuous authority fixture changed.'
+Write-Output "HAIR MEDIANS source=$sourceHairMedian native=$nativeHairMedian bytes=$hairBytesHash"
+Write-Output "BODY NORMALS names=$(@($authority.BodyNormals.Name)-join ',')"
+Write-Output "FINAL GEOMETRY maskHash=$((Get-FileHash -Algorithm SHA256 -LiteralPath $maskPath).Hash) contourHash=A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65"
 Write-Output "CONTINUOUS AUTHORITY PASS hash=$authorityHash hair=6 body=15"

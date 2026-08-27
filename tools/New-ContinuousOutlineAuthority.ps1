@@ -22,9 +22,13 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
 $expectedSourceHash = 'F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504'
-$expectedMaskHash = 'E256F3DC28929A49624C6308F77C994F061240CB7D2C9E80780AAD4A300C0779'
+$expectedMaskHash = 'D08B3A941C662F1CBC55C486C13FD4C6CD8901DA9CD5CF8512509698219FE46F'
 $expectedNativeHash = '611A1367E92C37659CF63A549656BCE01EEDEF5DE3CA348C6FADFB98A5D88DC3'
-$expectedAuthorityHash = '87D0311B043368E0E21C2FD3E17EE7AC79FE8D217BEF5F231C4B3D1CD341490B'
+$expectedAuthorityHash = 'DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
+$expectedHairBytesHash = '4942259408D151BABE64BB131334CD9E2F7111876B95C5C488667254315D7FD6'
+$expectedContourHash = 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65'
+
+Import-Module -Force (Join-Path $PSScriptRoot 'Dororong.SubpixelOutline.psm1')
 
 function Assert-True([bool]$Condition, [string]$Message)
 {
@@ -38,6 +42,188 @@ function Assert-Hash([string]$Path, [string]$Expected, [string]$Label)
     $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash
     if ($actual -ne $Expected)
     { throw "$Label hash changed. Expected '$Expected', observed '$actual'." }
+}
+
+function Get-Sha256Text([string]$Text)
+{
+    $sha=[Security.Cryptography.SHA256]::Create()
+    try
+    { return [Convert]::ToHexString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Text))) }
+    finally
+    { $sha.Dispose() }
+}
+
+function Assert-HairAnchorBytes([string]$AuthorityPath)
+{
+    $text=[IO.File]::ReadAllText($AuthorityPath)
+    $start=$text.IndexOf('    HairAnchors = @(',[StringComparison]::Ordinal)
+    $end=$text.IndexOf('    BodyNormals = @(',[StringComparison]::Ordinal)
+    Assert-True ($start -ge 0 -and $end -gt $start) `
+        'Hair anchor byte range is missing.'
+    $hash=Get-Sha256Text $text.Substring($start,$end-$start)
+    Assert-True ($hash -eq $expectedHairBytesHash) `
+        "Hair anchor bytes changed. Expected '$expectedHairBytesHash', observed '$hash'."
+}
+
+function New-CleanedSource([System.Drawing.Bitmap]$Source)
+{
+    $exterior=New-Object 'bool[,]' $Source.Width,$Source.Height
+    $queue=[Collections.Generic.Queue[object]]::new()
+    for($x=0;$x -lt $Source.Width;$x++)
+    {
+        $queue.Enqueue(@($x,0))
+        $queue.Enqueue(@($x,($Source.Height-1)))
+    }
+    for($y=1;$y -lt ($Source.Height-1);$y++)
+    {
+        $queue.Enqueue(@(0,$y))
+        $queue.Enqueue(@(($Source.Width-1),$y))
+    }
+    while($queue.Count -gt 0)
+    {
+        $point=$queue.Dequeue()
+        $x=[int]$point[0]; $y=[int]$point[1]
+        if($exterior[$x,$y])
+        { continue }
+        $color=$Source.GetPixel($x,$y)
+        if([Math]::Min($color.R,[Math]::Min($color.G,$color.B)) -lt 225)
+        { continue }
+        $exterior[$x,$y]=$true
+        foreach($offset in @(@(-1,0),@(1,0),@(0,-1),@(0,1)))
+        {
+            $neighborX=$x+$offset[0]; $neighborY=$y+$offset[1]
+            if($neighborX -ge 0 -and $neighborY -ge 0 -and `
+                $neighborX -lt $Source.Width -and $neighborY -lt $Source.Height -and `
+                -not $exterior[$neighborX,$neighborY])
+            { $queue.Enqueue(@($neighborX,$neighborY)) }
+        }
+    }
+
+    $cleaned=[System.Drawing.Bitmap]::new(
+        $Source.Width,$Source.Height,
+        [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    try
+    {
+        for($y=0;$y -lt $Source.Height;$y++)
+        {
+            for($x=0;$x -lt $Source.Width;$x++)
+            {
+                if($exterior[$x,$y])
+                { $cleaned.SetPixel($x,$y,[System.Drawing.Color]::Transparent) }
+                else
+                { $cleaned.SetPixel($x,$y,$Source.GetPixel($x,$y)) }
+            }
+        }
+        return $cleaned
+    }
+    catch
+    {
+        $cleaned.Dispose()
+        throw
+    }
+}
+
+function Get-NamedContourSegments([object]$Contour,[string]$Name)
+{
+    $windows=@{
+        FrontOuter=@{MinX=36.5;MaxX=39.5;MinY=160.5;MaxY=171.5}
+        FrontFoot=@{MinX=48.5;MaxX=62.5;MinY=189.5;MaxY=193.5}
+        FrontInner=@{MinX=62.5;MaxX=65.5;MinY=176.5;MaxY=186.5}
+        FirstValley=@{MinX=66.5;MaxX=73.5;MinY=176.5;MaxY=181.5}
+        FirstUnderside=@{MinX=73.5;MaxX=79.0;MinY=178.5;MaxY=184.5}
+        CenterOuter=@{MinX=79.5;MaxX=83.5;MinY=181.5;MaxY=191.5}
+        CenterFoot=@{MinX=96.5;MaxX=110.5;MinY=203.5;MaxY=206.5}
+        CenterInner=@{MinX=112.5;MaxX=116.5;MinY=183.5;MaxY=191.5}
+        SecondValley=@{MinX=138.5;MaxX=145.5;MinY=171.5;MaxY=178.5}
+        SecondUnderside=@{MinX=123.5;MaxX=129.5;MinY=176.5;MaxY=181.5}
+        RearOuter=@{MinX=164.5;MaxX=168.5;MinY=174.5;MaxY=185.5}
+        RearFoot=@{MinX=149.5;MaxX=161.5;MinY=196.5;MaxY=200.5}
+        RearInner=@{MinX=137.5;MaxX=141.5;MinY=176.5;MaxY=184.5}
+        UpperRearRim=@{MinX=174.5;MaxX=178.5;MinY=122.5;MaxY=135.5}
+        LowerRearRim=@{MinX=174.5;MaxX=178.5;MinY=148.5;MaxY=160.5}
+    }
+    Assert-True $windows.ContainsKey($Name) `
+        "Body normal '$Name' has no named contour window."
+    $window=$windows[$Name]
+    return @($Contour.Segments|Where-Object {
+        $midX=($_.X1+$_.X2)/2.0; $midY=($_.Y1+$_.Y2)/2.0
+        $midX -ge $window.MinX -and $midX -le $window.MaxX -and `
+        $midY -ge $window.MinY -and $midY -le $window.MaxY })
+}
+
+function Get-StrictIntersections([hashtable]$Normal,[object]$Segments)
+{
+    $px=$Normal.X1Eighth/8.0; $py=$Normal.Y1Eighth/8.0
+    $rx=($Normal.X2Eighth-$Normal.X1Eighth)/8.0
+    $ry=($Normal.Y2Eighth-$Normal.Y1Eighth)/8.0
+    $epsilon=0.000000001
+    $hits=@()
+    foreach($segment in @($Segments))
+    {
+        $qx=[double]$segment.X1; $qy=[double]$segment.Y1
+        $sx=[double]$segment.X2-$qx; $sy=[double]$segment.Y2-$qy
+        $cross=($rx*$sy)-($ry*$sx)
+        if([Math]::Abs($cross) -le $epsilon)
+        { continue }
+        $qpx=$qx-$px; $qpy=$qy-$py
+        $t=(($qpx*$sy)-($qpy*$sx))/$cross
+        $u=(($qpx*$ry)-($qpy*$rx))/$cross
+        if($t -lt -$epsilon -or $t -gt (1.0+$epsilon) -or `
+            $u -lt -$epsilon -or $u -gt (1.0+$epsilon))
+        { continue }
+        $hits += [pscustomobject]@{
+            X=$px+($t*$rx); Y=$py+($t*$ry); T=$t; U=$u; Segment=$segment
+            IsStrict=$t -gt $epsilon -and $t -lt (1.0-$epsilon) -and `
+                $u -gt $epsilon -and $u -lt (1.0-$epsilon) }
+    }
+    return @($hits)
+}
+
+function Get-MaskSide([System.Drawing.Bitmap]$Mask,[double]$X,[double]$Y)
+{
+    $pixelX=[int][Math]::Floor($X+0.5)
+    $pixelY=[int][Math]::Floor($Y+0.5)
+    Assert-True ($pixelX -ge 0 -and $pixelY -ge 0 -and `
+        $pixelX -lt $Mask.Width -and $pixelY -lt $Mask.Height) `
+        "Ownership sample ($X,$Y) is outside the final mask."
+    return $Mask.GetPixel($pixelX,$pixelY).R
+}
+
+function Assert-FinalContourNormal(
+    [hashtable]$Entry,
+    [System.Drawing.Bitmap]$Mask,
+    [object]$Contour)
+{
+    $label="Body normal '$($Entry.Name)'"
+    $namedHits=@(Get-StrictIntersections $Entry.SourceNormal `
+        (Get-NamedContourSegments $Contour $Entry.Name))
+    $strictNamed=@($namedHits|Where-Object IsStrict)
+    Assert-True ($strictNamed.Count -eq 1) `
+        "$label must cross exactly one named E/C segment strictly inside it."
+    $allHits=@(Get-StrictIntersections $Entry.SourceNormal $Contour.Segments)
+    Assert-True ($allHits.Count -eq 1) `
+        "$label crosses a neighboring or second canonical segment."
+    Assert-True $allHits[0].IsStrict `
+        "$label crosses a contour vertex or junction."
+
+    $normalX=($Entry.SourceNormal.X2Eighth-$Entry.SourceNormal.X1Eighth)/8.0
+    $normalY=($Entry.SourceNormal.Y2Eighth-$Entry.SourceNormal.Y1Eighth)/8.0
+    $segment=$strictNamed[0].Segment
+    $tangentX=[double]$segment.X2-[double]$segment.X1
+    $tangentY=[double]$segment.Y2-[double]$segment.Y1
+    $dot=[Math]::Abs(($normalX*$tangentX)+($normalY*$tangentY))/`
+        ([Math]::Sqrt(($normalX*$normalX)+($normalY*$normalY))*`
+         [Math]::Sqrt(($tangentX*$tangentX)+($tangentY*$tangentY)))
+    Assert-True ($dot -le 0.0871557427476582) `
+        "$label is more than 5 degrees from perpendicular; absolute unit dot=$dot."
+
+    Assert-True ((Get-MaskSide $Mask `
+        ($Entry.SourceNormal.X1Eighth/8.0) ($Entry.SourceNormal.Y1Eighth/8.0)) -eq 255) `
+        "$label is reversed: first endpoint is not on the body side."
+    Assert-True ((Get-MaskSide $Mask `
+        ($Entry.SourceNormal.X2Eighth/8.0) ($Entry.SourceNormal.Y2Eighth/8.0)) -eq 0) `
+        "$label final endpoint is not on the non-body side."
+    return $strictNamed[0]
 }
 
 function Get-Rec709Luminance([System.Drawing.Color]$Color)
@@ -175,6 +361,73 @@ function Draw-ReferencePoint(
     $Graphics.FillEllipse($Brush,$x-$Radius,$y-$Radius,$diameter,$diameter)
 }
 
+function Draw-GeometryAnnotations(
+    [System.Drawing.Graphics]$Graphics,
+    [object]$Contour,
+    [hashtable]$Crossings,
+    [object]$LegalEndpoints,
+    [object]$ProtectedPoints,
+    [double]$Scale,
+    [bool]$DrawCrossings)
+{
+    $continuationPen=[System.Drawing.Pen]::new(
+        [System.Drawing.Color]::FromArgb(255,170,0,210),[single](1.4*$Scale))
+    $tangentPen=[System.Drawing.Pen]::new(
+        [System.Drawing.Color]::FromArgb(255,255,145,0),[single](1.2*$Scale))
+    $crossingBrush=[System.Drawing.SolidBrush]::new(
+        [System.Drawing.Color]::FromArgb(255,255,235,0))
+    $protectedBrush=[System.Drawing.SolidBrush]::new(
+        [System.Drawing.Color]::FromArgb(255,0,190,210))
+    try
+    {
+        foreach($segment in @($Contour.ContinuationSegments))
+        {
+            $Graphics.DrawLine($continuationPen,
+                [single]($segment.X1*$Scale),[single]($segment.Y1*$Scale),
+                [single]($segment.X2*$Scale),[single]($segment.Y2*$Scale))
+        }
+        foreach($endpoint in @($LegalEndpoints))
+        {
+            $x=[single]($endpoint.X*$Scale); $y=[single]($endpoint.Y*$Scale)
+            $radius=[single](1.8*$Scale)
+            $Graphics.FillRectangle($crossingBrush,$x-$radius,$y-$radius,2*$radius,2*$radius)
+        }
+        foreach($point in @($ProtectedPoints))
+        {
+            $x=[single]($point.X*$Scale); $y=[single]($point.Y*$Scale)
+            $radius=[single](1.2*$Scale)
+            $Graphics.FillEllipse($protectedBrush,$x-$radius,$y-$radius,2*$radius,2*$radius)
+        }
+        if($DrawCrossings)
+        {
+            foreach($name in $Crossings.Keys)
+            {
+                $hit=$Crossings[$name]
+                $x=[single]($hit.X*$Scale); $y=[single]($hit.Y*$Scale)
+                $segment=$hit.Segment
+                $tangentX=[double]$segment.X2-[double]$segment.X1
+                $tangentY=[double]$segment.Y2-[double]$segment.Y1
+                $length=[Math]::Sqrt(($tangentX*$tangentX)+($tangentY*$tangentY))
+                $tangentX=2.5*$Scale*$tangentX/$length
+                $tangentY=2.5*$Scale*$tangentY/$length
+                $Graphics.DrawLine($tangentPen,
+                    [single]($x-$tangentX),[single]($y-$tangentY),
+                    [single]($x+$tangentX),[single]($y+$tangentY))
+                $radius=[single](1.4*$Scale)
+                $Graphics.FillEllipse($crossingBrush,
+                    $x-$radius,$y-$radius,2*$radius,2*$radius)
+            }
+        }
+    }
+    finally
+    {
+        $protectedBrush.Dispose()
+        $crossingBrush.Dispose()
+        $tangentPen.Dispose()
+        $continuationPen.Dispose()
+    }
+}
+
 function Add-AuthorityDrawing(
     [System.Drawing.Bitmap]$Overlay,
     [object[]]$HairAnchors,
@@ -182,7 +435,11 @@ function Add-AuthorityDrawing(
     [string]$NormalPrefix,
     [string]$FillPrefix,
     [string]$InkPrefix,
-    [bool]$NativeScale)
+    [bool]$NativeScale,
+    [object]$Contour,
+    [hashtable]$Crossings,
+    [object]$LegalEndpoints,
+    [object]$ProtectedPoints)
 {
     $graphics=[System.Drawing.Graphics]::FromImage($Overlay)
     $hairPen=$null; $bodyPen=$null; $font=$null
@@ -201,6 +458,9 @@ function Add-AuthorityDrawing(
         $bodyBrush=[System.Drawing.SolidBrush]::new($bodyColor)
         try
         {
+            $geometryScale=if($NativeScale){96.0/225.0}else{1.0}
+            Draw-GeometryAnnotations $graphics $Contour $Crossings `
+                $LegalEndpoints $ProtectedPoints $geometryScale $true
             $hairPen=[System.Drawing.Pen]::new($hairColor,[single]$lineWidth)
             $bodyPen=[System.Drawing.Pen]::new($bodyColor,[single]$lineWidth)
             $font=[System.Drawing.Font]::new(
@@ -275,15 +535,17 @@ $fullAuthorityPath=[System.IO.Path]::GetFullPath($AuthorityPath)
 $fullEvidenceDirectory=[System.IO.Path]::GetFullPath($EvidenceDirectory)
 
 Assert-Hash $fullSourcePath $expectedSourceHash 'Canonical source'
-Assert-Hash $fullMaskPath $expectedMaskHash 'Reviewed body-region mask'
+Assert-Hash $fullMaskPath $expectedMaskHash 'Final body-region mask'
 Assert-Hash $fullNativePath $expectedNativeHash 'Committed native-open authority'
 Assert-True (Test-Path -LiteralPath $fullAuthorityPath -PathType Leaf) `
     'Continuous authority fixture is missing.'
+Assert-HairAnchorBytes $fullAuthorityPath
 
 $authority=Import-PowerShellDataFile -LiteralPath $fullAuthorityPath
 $source=[System.Drawing.Bitmap]::new($fullSourcePath)
 $native=[System.Drawing.Bitmap]::new($fullNativePath)
 $mask=[System.Drawing.Bitmap]::new($fullMaskPath)
+$cleaned=$null
 try
 {
     Assert-True ($source.Width-eq225-and$source.Height-eq225) `
@@ -291,7 +553,22 @@ try
     Assert-True ($native.Width-eq96-and$native.Height-eq96) `
         'Committed native-open dimensions changed.'
     Assert-True ($mask.Width-eq225-and$mask.Height-eq225) `
-        'Reviewed body-region mask dimensions changed.'
+        'Final body-region mask dimensions changed.'
+
+    Assert-True $authority.ContainsKey('LegalEndpoints') `
+        'Literal LegalEndpoints are missing.'
+    Assert-True ((@($authority.LegalEndpoints|ForEach-Object{"$($_.X),$($_.Y)"})-join '|') `
+        -eq '118,151|161,116') 'Literal LegalEndpoints changed.'
+    Assert-True (@($authority.ProtectedPoints|Where-Object Name -like 'LegalEndpoint-*').Count -eq 0) `
+        'Historical protected endpoint reintroduced.'
+
+    $cleaned=New-CleanedSource $source
+    $legalEndpointPoints=[System.Drawing.PointF[]]@($authority.LegalEndpoints|ForEach-Object {
+        [System.Drawing.PointF]::new([single]$_.X,[single]$_.Y) })
+    $contour=New-DororongVisibleContour $cleaned $mask $legalEndpointPoints
+    $contourHash=Get-DororongCanonicalContourHash $contour
+    Assert-True ($contourHash -eq $expectedContourHash) `
+        "Final contour hash changed. Expected '$expectedContourHash', observed '$contourHash'."
 
     $hairAnchors=@($authority.HairAnchors)
     $bodyNormals=@($authority.BodyNormals)
@@ -319,6 +596,10 @@ try
         Assert-ReferencePoint $entry 'SourceFill' $source $label
         Assert-ReferencePoint $entry 'NativeFill' $native $label
     }
+
+    $crossings=@{}
+    foreach($entry in $bodyNormals)
+    { $crossings[$entry.Name]=Assert-FinalContourNormal $entry $mask $contour }
 
     foreach($point in @($authority.ProtectedPoints))
     {
@@ -351,9 +632,11 @@ try
     try
     {
         Add-AuthorityDrawing $sourceOverlay $hairAnchors $bodyNormals `
-            'SourceNormal' 'SourceFill' 'SourceInk' $false
+            'SourceNormal' 'SourceFill' 'SourceInk' $false $contour $crossings `
+            $authority.LegalEndpoints $authority.ProtectedPoints
         Add-AuthorityDrawing $nativeOverlay $hairAnchors $bodyNormals `
-            'NativeNormal' 'NativeFill' 'NativeInk' $true
+            'NativeNormal' 'NativeFill' 'NativeInk' $true $contour $crossings `
+            $authority.LegalEndpoints $authority.ProtectedPoints
         [System.IO.Directory]::CreateDirectory($fullEvidenceDirectory)|Out-Null
         $sourceOverlay.Save($outputPaths[0],[System.Drawing.Imaging.ImageFormat]::Png)
         Save-NearestNeighbor $sourceOverlay $outputPaths[1] 4
@@ -387,6 +670,7 @@ try
 }
 finally
 {
+    if($null-ne$cleaned){$cleaned.Dispose()}
     $mask.Dispose()
     $native.Dispose()
     $source.Dispose()

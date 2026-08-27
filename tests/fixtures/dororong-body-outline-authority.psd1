@@ -115,8 +115,8 @@
             Name = 'FrontOuter'
             SourceSamples = @(@(34, 166), @(37, 166), @(40, 166), @(43, 166), @(46, 166))
             NativeSamples = @(@(15, 71), @(16, 71), @(17, 71), @(18, 71), @(20, 71))
-            SourceNormal = @{ X1Eighth = 272; Y1Eighth = 1328; X2Eighth = 368; Y2Eighth = 1328 }
-            NativeNormal = @{ X1Eighth = 120; Y1Eighth = 568; X2Eighth = 160; Y2Eighth = 568 }
+            SourceNormal = @{ X1Eighth = 368; Y1Eighth = 1320; X2Eighth = 256; Y2Eighth = 1320 }
+            NativeNormal = @{ X1Eighth = 157; Y1Eighth = 563; X2Eighth = 109; Y2Eighth = 563 }
             SourceFill = @(46, 166)
             NativeFill = @(20, 71)
             Fill = @(46, 166)
@@ -125,8 +125,8 @@
             Name = 'FrontFoot'
             SourceSamples = @(@(55, 184), @(55, 187), @(55, 190), @(55, 193), @(55, 196))
             NativeSamples = @(@(23, 79), @(23, 80), @(23, 81), @(23, 82), @(23, 84))
-            SourceNormal = @{ X1Eighth = 440; Y1Eighth = 1472; X2Eighth = 440; Y2Eighth = 1568 }
-            NativeNormal = @{ X1Eighth = 184; Y1Eighth = 632; X2Eighth = 184; Y2Eighth = 672 }
+            SourceNormal = @{ X1Eighth = 440; Y1Eighth = 1472; X2Eighth = 440; Y2Eighth = 1584 }
+            NativeNormal = @{ X1Eighth = 188; Y1Eighth = 628; X2Eighth = 188; Y2Eighth = 676 }
             SourceFill = @(55, 184)
             NativeFill = @(23, 79)
             Fill = @(55, 184)
@@ -136,7 +136,7 @@
             SourceSamples = @(@(58, 182), @(61, 182), @(64, 182), @(67, 182), @(70, 182))
             NativeSamples = @(@(25, 78), @(26, 78), @(27, 78), @(29, 78), @(30, 78))
             SourceNormal = @{ X1Eighth = 464; Y1Eighth = 1456; X2Eighth = 560; Y2Eighth = 1456 }
-            NativeNormal = @{ X1Eighth = 200; Y1Eighth = 624; X2Eighth = 240; Y2Eighth = 624 }
+            NativeNormal = @{ X1Eighth = 198; Y1Eighth = 621; X2Eighth = 239; Y2Eighth = 621 }
             SourceFill = @(58, 182)
             NativeFill = @(25, 78)
             Fill = @(58, 182)
@@ -145,8 +145,8 @@
             Name = 'FirstValley'
             SourceSamples = @(@(58, 171), @(61, 173), @(64, 175), @(67, 177), @(70, 179))
             NativeSamples = @(@(25, 73), @(26, 74), @(27, 75), @(29, 76), @(30, 76))
-            SourceNormal = @{ X1Eighth = 560; Y1Eighth = 1344; X2Eighth = 560; Y2Eighth = 1472 }
-            NativeNormal = @{ X1Eighth = 232; Y1Eighth = 560; X2Eighth = 232; Y2Eighth = 640 }
+            SourceNormal = @{ X1Eighth = 544; Y1Eighth = 1368; X2Eighth = 544; Y2Eighth = 1480 }
+            NativeNormal = @{ X1Eighth = 232; Y1Eighth = 584; X2Eighth = 232; Y2Eighth = 631 }
             SourceFill = @(70, 172)
             NativeFill = @(25, 73)
             Fill = @(70, 172)
@@ -155,8 +155,8 @@
             Name = 'FirstUnderside'
             SourceSamples = @(@(65, 174), @(68, 176), @(71, 178), @(74, 180), @(77, 182))
             NativeSamples = @(@(28, 74), @(29, 75), @(30, 76), @(32, 77), @(33, 78))
-            SourceNormal = @{ X1Eighth = 600; Y1Eighth = 1360; X2Eighth = 600; Y2Eighth = 1504 }
-            NativeNormal = @{ X1Eighth = 248; Y1Eighth = 568; X2Eighth = 248; Y2Eighth = 648 }
+            SourceNormal = @{ X1Eighth = 608; Y1Eighth = 1384; X2Eighth = 608; Y2Eighth = 1504 }
+            NativeNormal = @{ X1Eighth = 259; Y1Eighth = 591; X2Eighth = 259; Y2Eighth = 642 }
             SourceFill = @(72, 170)
             NativeFill = @(28, 74)
             Fill = @(72, 170)
@@ -165,8 +165,8 @@
             Name = 'CenterOuter'
             SourceSamples = @(@(76, 186), @(79, 186), @(82, 186), @(85, 186), @(88, 186))
             NativeSamples = @(@(32, 79), @(34, 79), @(35, 79), @(36, 79), @(38, 79))
-            SourceNormal = @{ X1Eighth = 608; Y1Eighth = 1488; X2Eighth = 704; Y2Eighth = 1488 }
-            NativeNormal = @{ X1Eighth = 256; Y1Eighth = 632; X2Eighth = 304; Y2Eighth = 632 }
+            SourceNormal = @{ X1Eighth = 704; Y1Eighth = 1496; X2Eighth = 584; Y2Eighth = 1496 }
+            NativeNormal = @{ X1Eighth = 300; Y1Eighth = 638; X2Eighth = 249; Y2Eighth = 638 }
             SourceFill = @(88, 186)
             NativeFill = @(38, 79)
             Fill = @(88, 186)
@@ -175,8 +175,8 @@
             Name = 'CenterFoot'
             SourceSamples = @(@(103, 196), @(103, 199), @(103, 202), @(103, 205), @(103, 208))
             NativeSamples = @(@(44, 84), @(44, 85), @(44, 86), @(44, 87), @(44, 89))
-            SourceNormal = @{ X1Eighth = 824; Y1Eighth = 1568; X2Eighth = 824; Y2Eighth = 1664 }
-            NativeNormal = @{ X1Eighth = 352; Y1Eighth = 672; X2Eighth = 352; Y2Eighth = 712 }
+            SourceNormal = @{ X1Eighth = 824; Y1Eighth = 1592; X2Eighth = 824; Y2Eighth = 1696 }
+            NativeNormal = @{ X1Eighth = 352; Y1Eighth = 679; X2Eighth = 352; Y2Eighth = 724 }
             SourceFill = @(103, 199)
             NativeFill = @(44, 84)
             Fill = @(103, 199)
@@ -186,7 +186,7 @@
             SourceSamples = @(@(108, 188), @(111, 188), @(114, 188), @(117, 188), @(120, 188))
             NativeSamples = @(@(46, 80), @(47, 80), @(49, 80), @(50, 80), @(51, 80))
             SourceNormal = @{ X1Eighth = 864; Y1Eighth = 1504; X2Eighth = 960; Y2Eighth = 1504 }
-            NativeNormal = @{ X1Eighth = 368; Y1Eighth = 640; X2Eighth = 408; Y2Eighth = 640 }
+            NativeNormal = @{ X1Eighth = 369; Y1Eighth = 642; X2Eighth = 413; Y2Eighth = 642 }
             SourceFill = @(108, 188)
             NativeFill = @(46, 80)
             Fill = @(108, 188)
@@ -195,8 +195,8 @@
             Name = 'SecondValley'
             SourceSamples = @(@(132, 168), @(135, 170), @(138, 172), @(141, 174), @(144, 176))
             NativeSamples = @(@(56, 72), @(58, 73), @(59, 73), @(60, 74), @(61, 75))
-            SourceNormal = @{ X1Eighth = 1104; Y1Eighth = 1376; X2Eighth = 1152; Y2Eighth = 1408 }
-            NativeNormal = @{ X1Eighth = 464; Y1Eighth = 592; X2Eighth = 504; Y2Eighth = 592 }
+            SourceNormal = @{ X1Eighth = 1152; Y1Eighth = 1384; X2Eighth = 1092; Y2Eighth = 1384 }
+            NativeNormal = @{ X1Eighth = 492; Y1Eighth = 591; X2Eighth = 466; Y2Eighth = 591 }
             SourceFill = @(132, 168)
             NativeFill = @(56, 72)
             Fill = @(132, 168)
@@ -209,8 +209,8 @@
             NativeSamples = @(
                 @(54, 71), @(54, 72), @(54, 73), @(54, 74), @(54, 75), @(54, 76), @(54, 77), @(54, 78)
             )
-            SourceNormal = @{ X1Eighth = 1008; Y1Eighth = 1352; X2Eighth = 1008; Y2Eighth = 1448 }
-            NativeNormal = @{ X1Eighth = 432; Y1Eighth = 568; X2Eighth = 432; Y2Eighth = 624 }
+            SourceNormal = @{ X1Eighth = 1008; Y1Eighth = 1368; X2Eighth = 1008; Y2Eighth = 1488 }
+            NativeNormal = @{ X1Eighth = 430; Y1Eighth = 584; X2Eighth = 430; Y2Eighth = 635 }
             SourceFill = @(121, 172)
             NativeFill = @(54, 73)
             Fill = @(121, 172)
@@ -219,8 +219,8 @@
             Name = 'RearOuter'
             SourceSamples = @(@(160, 180), @(163, 180), @(166, 180), @(169, 180), @(172, 180))
             NativeSamples = @(@(68, 77), @(70, 77), @(71, 77), @(72, 77), @(73, 77))
-            SourceNormal = @{ X1Eighth = 1280; Y1Eighth = 1440; X2Eighth = 1376; Y2Eighth = 1440 }
-            NativeNormal = @{ X1Eighth = 544; Y1Eighth = 616; X2Eighth = 584; Y2Eighth = 616 }
+            SourceNormal = @{ X1Eighth = 1272; Y1Eighth = 1440; X2Eighth = 1392; Y2Eighth = 1440 }
+            NativeNormal = @{ X1Eighth = 543; Y1Eighth = 614; X2Eighth = 594; Y2Eighth = 614 }
             SourceFill = @(160, 180)
             NativeFill = @(68, 77)
             Fill = @(160, 180)
@@ -229,8 +229,8 @@
             Name = 'RearFoot'
             SourceSamples = @(@(155, 188), @(155, 191), @(155, 194), @(155, 197), @(155, 200))
             NativeSamples = @(@(66, 80), @(66, 81), @(66, 83), @(66, 84), @(66, 85))
-            SourceNormal = @{ X1Eighth = 1240; Y1Eighth = 1504; X2Eighth = 1240; Y2Eighth = 1600 }
-            NativeNormal = @{ X1Eighth = 528; Y1Eighth = 640; X2Eighth = 528; Y2Eighth = 680 }
+            SourceNormal = @{ X1Eighth = 1240; Y1Eighth = 1520; X2Eighth = 1240; Y2Eighth = 1632 }
+            NativeNormal = @{ X1Eighth = 529; Y1Eighth = 649; X2Eighth = 529; Y2Eighth = 696 }
             SourceFill = @(155, 191)
             NativeFill = @(66, 80)
             Fill = @(155, 191)
@@ -239,8 +239,8 @@
             Name = 'RearInner'
             SourceSamples = @(@(132, 180), @(135, 180), @(138, 180), @(141, 180), @(144, 180))
             NativeSamples = @(@(56, 77), @(58, 77), @(59, 77), @(60, 77), @(61, 77))
-            SourceNormal = @{ X1Eighth = 1056; Y1Eighth = 1440; X2Eighth = 1152; Y2Eighth = 1440 }
-            NativeNormal = @{ X1Eighth = 448; Y1Eighth = 616; X2Eighth = 488; Y2Eighth = 616 }
+            SourceNormal = @{ X1Eighth = 1152; Y1Eighth = 1432; X2Eighth = 1048; Y2Eighth = 1432 }
+            NativeNormal = @{ X1Eighth = 492; Y1Eighth = 611; X2Eighth = 447; Y2Eighth = 611 }
             SourceFill = @(144, 180)
             NativeFill = @(61, 77)
             Fill = @(144, 180)
@@ -249,8 +249,8 @@
             Name = 'UpperRearRim'
             SourceSamples = @(@(168, 128), @(171, 128), @(174, 128), @(177, 128), @(180, 128))
             NativeSamples = @(@(72, 55), @(73, 55), @(74, 55), @(76, 55), @(77, 55))
-            SourceNormal = @{ X1Eighth = 1344; Y1Eighth = 1024; X2Eighth = 1440; Y2Eighth = 1024 }
-            NativeNormal = @{ X1Eighth = 576; Y1Eighth = 440; X2Eighth = 616; Y2Eighth = 440 }
+            SourceNormal = @{ X1Eighth = 1344; Y1Eighth = 1040; X2Eighth = 1472; Y2Eighth = 1040 }
+            NativeNormal = @{ X1Eighth = 573; Y1Eighth = 444; X2Eighth = 628; Y2Eighth = 444 }
             SourceFill = @(168, 128)
             NativeFill = @(72, 55)
             Fill = @(168, 128)
@@ -259,8 +259,8 @@
             Name = 'LowerRearRim'
             SourceSamples = @(@(168, 154), @(171, 154), @(174, 154), @(177, 154), @(180, 154))
             NativeSamples = @(@(72, 66), @(73, 66), @(74, 66), @(76, 66), @(77, 66))
-            SourceNormal = @{ X1Eighth = 1344; Y1Eighth = 1232; X2Eighth = 1440; Y2Eighth = 1232 }
-            NativeNormal = @{ X1Eighth = 576; Y1Eighth = 528; X2Eighth = 616; Y2Eighth = 528 }
+            SourceNormal = @{ X1Eighth = 1344; Y1Eighth = 1208; X2Eighth = 1472; Y2Eighth = 1208 }
+            NativeNormal = @{ X1Eighth = 573; Y1Eighth = 515; X2Eighth = 628; Y2Eighth = 515 }
             SourceFill = @(168, 154)
             NativeFill = @(72, 66)
             Fill = @(168, 154)
@@ -286,8 +286,11 @@
         @{ Name = 'Ribbons-Lower'; X = 151; Y = 128 }
         @{ Name = 'NoTailRear-Upper'; X = 181; Y = 127 }
         @{ Name = 'NoTailRear-Lower'; X = 180; Y = 163 }
-        @{ Name = 'LegalEndpoint-FrontOcclusion'; X = 112; Y = 151 }
-        @{ Name = 'LegalEndpoint-RearOcclusion'; X = 157; Y = 116 }
+    )
+
+    LegalEndpoints = @(
+        @{ Name = 'FrontOcclusion'; X = 118; Y = 151 }
+        @{ Name = 'RearOcclusion'; X = 161; Y = 116 }
     )
 
     FillSamples = @(
