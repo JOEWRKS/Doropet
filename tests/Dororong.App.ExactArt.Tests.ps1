@@ -198,7 +198,7 @@ try
                     "Forbidden #FADCE0 remains at ($x,$y)."
             }
         }
-        Assert-True ($openCorrection.Count -gt 0) 'No subtractive native body correction was applied.'
+        Assert-Equal 58 $openCorrection.Count 'The reviewed subtractive native body correction count changed.'
         Assert-Equal $openCorrection.Count $closedCorrection.Count 'Open/closed body correction mask sizes differ.'
         foreach ($coordinate in $openCorrection)
         {
@@ -209,6 +209,70 @@ try
             Assert-Equal $openCorrectedPixel.R $closedCorrectedPixel.R "Body correction red differs by eye state at $coordinate."
             Assert-Equal $openCorrectedPixel.G $closedCorrectedPixel.G "Body correction green differs by eye state at $coordinate."
             Assert-Equal $openCorrectedPixel.B $closedCorrectedPixel.B "Body correction blue differs by eye state at $coordinate."
+        }
+
+        $orderedCorrectionCoordinates = [string[]]@($openCorrection)
+        [Array]::Sort($orderedCorrectionCoordinates, [StringComparer]::Ordinal)
+        $correctionCoordinateBytes = [Text.Encoding]::UTF8.GetBytes($orderedCorrectionCoordinates -join "`n")
+        $correctionCoordinateHash = [Convert]::ToHexString(
+            [Security.Cryptography.SHA256]::HashData($correctionCoordinateBytes))
+        Assert-Equal 'B52663439383D7B9E52D0664F0248E8A084EC21D041F1B7D565D2D4FA2EF11EB' `
+            $correctionCoordinateHash 'The reviewed subtractive native body correction mask changed.'
+
+        # Literal probes sample every reviewed corrected segment without deriving expectations from the generator.
+        $reviewedCorrectionSegments = @(
+            @{ Name='front-outer'; Coordinate='19,75' },
+            @{ Name='front-inner'; Coordinate='25,77' },
+            @{ Name='front-foot'; Coordinate='23,80' },
+            @{ Name='first-valley'; Coordinate='28,74' },
+            @{ Name='first-underside'; Coordinate='31,75' },
+            @{ Name='center-outer'; Coordinate='36,79' },
+            @{ Name='center-foot'; Coordinate='43,85' },
+            @{ Name='center-inner'; Coordinate='46,84' },
+            @{ Name='second-valley'; Coordinate='52,75' },
+            @{ Name='second-underside'; Coordinate='60,75' },
+            @{ Name='rear-outer'; Coordinate='62,79' },
+            @{ Name='rear-foot'; Coordinate='66,82' },
+            @{ Name='rear-inner'; Coordinate='69,79' },
+            @{ Name='lower-rear-rim'; Coordinate='69,72' }
+        )
+        foreach ($segment in $reviewedCorrectionSegments)
+        {
+            Assert-True $openCorrection.Contains($segment.Coordinate) `
+                "Reviewed open correction omitted $($segment.Name) probe $($segment.Coordinate)."
+            Assert-True $closedCorrection.Contains($segment.Coordinate) `
+                "Reviewed closed correction omitted $($segment.Name) probe $($segment.Coordinate)."
+        }
+
+        # Literal source-derived outer supports and legal occlusion endpoints must remain baseline-identical.
+        $frozenOuterSupports = @(
+            @{ Name='front-outer'; X=17; Y=72 },
+            @{ Name='front-inner'; X=26; Y=77 },
+            @{ Name='front-foot'; X=22; Y=80 },
+            @{ Name='first-valley'; X=28; Y=75 },
+            @{ Name='first-underside'; X=32; Y=76 },
+            @{ Name='center-outer'; X=35; Y=79 },
+            @{ Name='center-foot'; X=46; Y=85 },
+            @{ Name='center-inner'; X=47; Y=83 },
+            @{ Name='second-valley'; X=52; Y=76 },
+            @{ Name='second-underside'; X=59; Y=75 },
+            @{ Name='rear-outer'; X=61; Y=79 },
+            @{ Name='rear-foot'; X=66; Y=83 },
+            @{ Name='rear-inner'; X=70; Y=78 },
+            @{ Name='upper-rear-rim'; X=74; Y=62 },
+            @{ Name='lower-rear-rim'; X=70; Y=72 },
+            @{ Name='hair-neck-occlusion'; X=17; Y=69 },
+            @{ Name='ribbon-rear-rim-occlusion'; X=74; Y=57 }
+        )
+        foreach ($support in $frozenOuterSupports)
+        {
+            $supportCoordinate = "$($support.X),$($support.Y)"
+            Assert-Equal $baselineOpen.GetPixel($support.X, $support.Y).ToArgb() `
+                $open.GetPixel($support.X, $support.Y).ToArgb() `
+                "Open $($support.Name) outer support changed at $supportCoordinate."
+            Assert-Equal $baselineClosed.GetPixel($support.X, $support.Y).ToArgb() `
+                $closed.GetPixel($support.X, $support.Y).ToArgb() `
+                "Closed $($support.Name) outer support changed at $supportCoordinate."
         }
 
         Assert-True ($eyeChanges.Count -ge 80) 'Both eyes did not visibly close.'
@@ -255,7 +319,7 @@ try
         }
         Assert-Equal 0 $open.GetPixel(0,0).A 'Transparent margin was lost.'
         Assert-True ($open.GetPixel(43,75).A -ge 240) 'Opaque body hit probe was lost.'
-        Write-Output "NATIVE96 PIXEL EVIDENCE: correction=$($openCorrection.Count), bounds=$($bounds.MinX),$($bounds.MinY)..$($bounds.MaxX),$($bounds.MaxY)."
+        Write-Output "NATIVE96 PIXEL EVIDENCE: correction=$($openCorrection.Count), bounds=$($bounds.MinX),$($bounds.MinY)..$($bounds.MaxX),$($bounds.MaxY); mask=$correctionCoordinateHash."
     }
     finally
     {
@@ -316,4 +380,4 @@ Assert-Frame $image 'dororong-closed-eyes.png' 'Sleep'
 $presenter.Render([Dororong.Core.Behavior.PetSnapshot]::new($stateType::Idle,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,0.68,$false,$null))
 Assert-Frame $image 'dororong-closed-eyes.png' 'Idle blink'
 
-Write-Output 'EXACT ART PASS: exact 225px authority, deterministic native-96 frames, subtractive body invariants, independent body protection, identical eye-state correction, alpha hygiene, clean-hair references, eye semantics, 96-DPI one-to-one presenter, native alpha hit testing, and state mapping passed.'
+Write-Output 'EXACT ART PASS: exact 225px authority, deterministic native-96 frames, pinned subtractive mask, frozen segment/outer-support fixtures, independent body protection, identical eye-state correction, alpha hygiene, clean-hair references, eye semantics, 96-DPI one-to-one presenter, native alpha hit testing, and state mapping passed.'

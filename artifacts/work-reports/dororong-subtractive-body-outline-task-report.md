@@ -102,7 +102,7 @@ NATIVE96 PIXEL EVIDENCE: correction=58, bounds=18,67..72,85.
 EXACT ART PASS: exact 225px authority, deterministic native-96 frames, subtractive body invariants, independent body protection, identical eye-state correction, alpha hygiene, clean-hair references, eye semantics, 96-DPI one-to-one presenter, native alpha hit testing, and state mapping passed.
 ```
 
-+## Fresh completion verification
+## Fresh completion verification
 
 Command:
 
@@ -246,3 +246,127 @@ No `docs/verification/*manual-attempt*.md` file was edited or staged.
 ## Concerns
 
 - Actual-Windows attempt 5 remains frozen FAIL evidence and was not rerun. The completed claim is intentionally limited to deterministic repository assets at native 96px.
+
+## Review fix round 1 — freeze the reviewed mask and outer supports
+
+### Finding addressed
+
+The first task commit allowed any future fully opaque, channel-wise lightening inside the broad body protection rectangles. That could admit unreviewed drift at preserved outer supports such as `(17,72)` and `(46,85)`.
+
+This fix changes only the exact-art regression and reports. The visually approved generator and open/closed assets remain byte-identical to commit `40b87ee582c29f16ffd265162e16dcb04a8cde94`.
+
+### Exact reviewed mask fixture
+
+Canonicalization is independent of generator source structure:
+
+1. Enumerate the actual generated-open versus uncorrected-open changed-coordinate set.
+2. Convert it to a string array.
+3. Sort with `[StringComparer]::Ordinal`.
+4. Join `x,y` strings with a single LF (`\n`) and no trailing LF.
+5. Hash the UTF-8 bytes with SHA-256.
+
+The required diagnostic was printed before pinning:
+
+```text
+NATIVE96 MASK DIAGNOSTIC: count=58, sha256=B52663439383D7B9E52D0664F0248E8A084EC21D041F1B7D565D2D4FA2EF11EB.
+NATIVE96 PIXEL EVIDENCE: correction=58, bounds=18,67..72,85; mask=B52663439383D7B9E52D0664F0248E8A084EC21D041F1B7D565D2D4FA2EF11EB.
+EXACT ART PASS: exact 225px authority, deterministic native-96 frames, pinned subtractive mask, frozen segment/outer-support fixtures, independent body protection, identical eye-state correction, alpha hygiene, clean-hair references, eye semantics, 96-DPI one-to-one presenter, native alpha hit testing, and state mapping passed.
+```
+
+Pinned values:
+
+- Coordinate count: `58`.
+- SHA-256: `B52663439383D7B9E52D0664F0248E8A084EC21D041F1B7D565D2D4FA2EF11EB`.
+- The test uses a direct `Assert-Equal` against both values; broad-band membership cannot admit an added or removed coordinate.
+
+### Exact-mask mutation RED
+
+A temporary test-only mutation replaced reviewed coordinate `19,75` with frozen outer support `17,72` in both observed correction sets. Count remained `58`, so the exact mask assertion—not the count—had to catch the drift. The synthetic lines were removed immediately after this run.
+
+Command:
+
+```powershell
+pwsh -NoProfile -File tests/Dororong.App.ExactArt.Tests.ps1 -Configuration Release
+```
+
+Exit code: `1`.
+
+Output:
+
+```text
+The reviewed subtractive native body correction mask changed. Expected
+'B52663439383D7B9E52D0664F0248E8A084EC21D041F1B7D565D2D4FA2EF11EB', observed
+'DF04D297CF384A95DF03A8F67011EA2FBAB43DA04121F0A9CA9033AD9223A86A'.
+```
+
+### Literal reviewed correction probes
+
+These expectations are handwritten from the approved subtractive candidate rather than derived from `$nativeBodyLightenRuns`. Both open and closed correction sets must contain each coordinate.
+
+| Named segment | Reviewed correction probe |
+|---|---:|
+| Front outer | `19,75` |
+| Front inner | `25,77` |
+| Front foot | `23,80` |
+| First valley | `28,74` |
+| First underside | `31,75` |
+| Center outer | `36,79` |
+| Center foot | `43,85` |
+| Center inner | `46,84` |
+| Second valley | `52,75` |
+| Second underside | `60,75` |
+| Rear outer | `62,79` |
+| Rear foot | `66,82` |
+| Rear inner | `69,79` |
+| Lower rear rim | `69,72` |
+
+The upper rear rim intentionally has no correction in the approved candidate and is protected by the outer-support fixture below.
+
+### Literal frozen outer-support and occlusion fixture
+
+For every coordinate, both generated open and generated closed RGBA must remain byte-identical to their corresponding uncorrected baselines.
+
+| Named segment / endpoint | Coordinate | Frozen uncorrected-open RGBA |
+|---|---:|---|
+| Front outer | `17,72` | `A255/RGB11,11,11` |
+| Front inner | `26,77` | `A255/RGB32,32,32` |
+| Front foot | `22,80` | `A255/RGB20,20,20` |
+| First valley | `28,75` | `A247/RGB8,8,8` |
+| First underside | `32,76` | `A255/RGB43,43,43` |
+| Center outer | `35,79` | `A255/RGB9,9,9` |
+| Center foot | `46,85` | `A255/RGB13,13,13` |
+| Center inner | `47,83` | `A255/RGB15,15,15` |
+| Second valley | `52,76` | `A255/RGB28,28,28` |
+| Second underside | `59,75` | `A255/RGB40,40,40` |
+| Rear outer | `61,79` | `A255/RGB22,22,22` |
+| Rear foot | `66,83` | `A255/RGB20,20,20` |
+| Rear inner | `70,78` | `A253/RGB30,30,30` |
+| Upper rear rim | `74,62` | `A255/RGB52,52,52` |
+| Lower rear rim | `70,72` | `A240/RGB42,42,42` |
+| Hair-neck legal occlusion endpoint | `17,69` | `A255/RGB118,116,117` |
+| Ribbon/rear-rim legal occlusion endpoint | `74,57` | `A255/RGB49,49,49` |
+
+### Final focused verification
+
+Command:
+
+```powershell
+pwsh -NoProfile -File tests/Dororong.App.ExactArt.Tests.ps1 -Configuration Release
+```
+
+Exit code: `0`.
+
+Output:
+
+```text
+NATIVE96 PIXEL EVIDENCE: correction=58, bounds=18,67..72,85; mask=B52663439383D7B9E52D0664F0248E8A084EC21D041F1B7D565D2D4FA2EF11EB.
+EXACT ART PASS: exact 225px authority, deterministic native-96 frames, pinned subtractive mask, frozen segment/outer-support fixtures, independent body protection, identical eye-state correction, alpha hygiene, clean-hair references, eye semantics, 96-DPI one-to-one presenter, native alpha hit testing, and state mapping passed.
+```
+
+### Scope and remaining boundary
+
+- Changed implementation path: `tests/Dororong.App.ExactArt.Tests.ps1`.
+- Updated durable report: `artifacts/work-reports/dororong-subtractive-body-outline-task-report.md`.
+- Updated ignored coordination report: `.superpowers/sdd/2026-08-27-dororong-subtractive-body-outline/task-1-report.md`.
+- Source, generator, open asset, closed asset, and all manual-attempt files are unchanged.
+- The independent native visual PASS stands; actual-Windows attempt 5 remains frozen FAIL evidence and is not upgraded.
