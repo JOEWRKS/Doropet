@@ -396,9 +396,9 @@ README describes the reviewed body mask, continuous half-pixel contour, `8x8` in
 - [ ] **Step 2: Run fresh full verification and publish**
 
 ```powershell
-dotnet restore Dororong.sln
-dotnet test Dororong.sln --configuration Release --no-restore
-dotnet build Dororong.sln --configuration Release --no-restore
+dotnet restore DororongDesktopPet.sln
+dotnet test DororongDesktopPet.sln --configuration Release --no-restore
+dotnet build DororongDesktopPet.sln --configuration Release --no-restore
 pwsh -NoProfile -File tests/Dororong.App.BodyMask.Tests.ps1
 pwsh -NoProfile -File tests/Dororong.App.ContinuousAuthority.Tests.ps1
 pwsh -NoProfile -File tests/Dororong.App.SubpixelOutline.Tests.ps1
