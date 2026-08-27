@@ -351,7 +351,7 @@ Task 5 is blocked until independent review approves production/test independence
 
 Keep source identity, 96x96 dimensions/pixel format, alpha-zero RGB hygiene, presenter 96-DPI arrangement, native alpha hit testing, state mapping, eye confinement, mouth preservation, and open/closed alpha equality.
 
-Remove assertions for native coordinate lightening, partial-alpha freezing, protection bands, and the rejected subtractive correction. Add a generator text failure for New-NativeBodyLightenRun, nativeBodyLightenRuns, Apply-SubtractiveNativeBodyCorrection, or any local body-coordinate correction. Require the real generator to emit:
+Remove assertions for native coordinate lightening, partial-alpha freezing, protection bands, and the rejected subtractive correction. Invoke the real generator through its required SourcePath, BodyMaskPath, OutputDirectory, and EvidenceDirectory interface. Independently invoke the reviewed body rasterizer inside the test and require the generated source-open candidate to match that direct result at every pixel. Independently resize that source candidate once through the reviewed resize boundary and require the native-open candidate to match at every pixel; this behavioral equality forbids any extra native correction without scanning source text. Require the real generator to emit:
 
     source-open-baseline.png
     source-open-candidate.png
@@ -365,7 +365,7 @@ Run:
     dotnet build src/Dororong.App/Dororong.App.csproj --configuration Release
     pwsh -NoProfile -File tests/Dororong.App.ExactArt.Tests.ps1 -Configuration Release
 
-Expected: build exit 0; exact-art exit 1 naming the first superseded generator symbol.
+Expected: build exit 0; exact-art exit 1 because the current generator does not accept the required BodyMaskPath parameter. Record the PowerShell parameter-binding failure as the causal RED.
 
 - [ ] **Step 2: Replace the generator body pipeline**
 
