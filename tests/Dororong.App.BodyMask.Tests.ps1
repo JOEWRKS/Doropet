@@ -17,14 +17,20 @@ function Assert-PointArray([object]$Points, [string]$Label)
 {
     Assert-True ($null -ne $Points) "$Label is missing."
     $pointList = @($Points)
-    Assert-True ($pointList.Count -gt 0) "$Label is empty."
+    Assert-True ($pointList.Count -ge 5) "$Label has fewer than five samples."
+
+    $coordinates = @()
 
     foreach ($point in $pointList)
     {
         Assert-True ($point -is [System.Collections.IList]) "$Label contains a non-array point."
         Assert-Equal 2 $point.Count "$Label contains a point that is not an X/Y pair."
         Assert-True ($point[0] -is [int] -and $point[1] -is [int]) "$Label contains a non-integer coordinate."
+        $coordinates += "$($point[0]),$($point[1])"
     }
+
+    Assert-Equal $coordinates.Count @($coordinates | Sort-Object -Unique).Count `
+        "$Label contains duplicate coordinates."
 }
 
 function Assert-Point([object]$Point, [string]$Label)
@@ -36,13 +42,43 @@ function Assert-Point([object]$Point, [string]$Label)
         "$Label contains a non-integer coordinate."
 }
 
+function Get-OpticalInk([System.Drawing.Color]$Pixel)
+{
+    $alpha = $Pixel.A / 255.0
+    $luma = ($Pixel.R + $Pixel.G + $Pixel.B) / (3.0 * 255.0)
+    return $alpha * (1.0 - $luma)
+}
+
+function Assert-ScanCrossesOutline(
+    [System.Drawing.Bitmap]$Bitmap,
+    [object]$Points,
+    [string]$Label)
+{
+    $inkSamples = @()
+    foreach ($point in @($Points))
+    {
+        $x = [int]$point[0]
+        $y = [int]$point[1]
+        Assert-True ($x -ge 0 -and $x -lt $Bitmap.Width -and $y -ge 0 -and $y -lt $Bitmap.Height) `
+            "$Label coordinate ($x,$y) is outside the sampled bitmap."
+        $inkSamples += Get-OpticalInk $Bitmap.GetPixel($x, $y)
+    }
+
+    Assert-True (($inkSamples | Measure-Object -Maximum).Maximum -ge 0.30) `
+        "$Label does not cross a dark outline."
+    Assert-True (($inkSamples | Measure-Object -Minimum).Minimum -le 0.10) `
+        "$Label does not include a light side of the outline."
+}
+
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $sourcePath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical-source.png'
+$nativePath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical.png'
 $maskPath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-body-region-mask.png'
 $authorityPath = Join-Path $repositoryRoot 'tests/fixtures/dororong-body-outline-authority.psd1'
 
 Assert-Equal 'F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504' `
     (Get-FileHash -Algorithm SHA256 -LiteralPath $sourcePath).Hash 'Canonical source changed.'
+Assert-True (Test-Path -LiteralPath $nativePath) 'Canonical native authority is missing.'
 Assert-True (Test-Path -LiteralPath $maskPath) 'Reviewed body-region mask is missing.'
 Assert-True (Test-Path -LiteralPath $authorityPath) 'Independent body-outline authority is missing.'
 Assert-Equal 'E256F3DC28929A49624C6308F77C994F061240CB7D2C9E80780AAD4A300C0779' `
@@ -52,12 +88,15 @@ Add-Type -AssemblyName System.Drawing
 
 $authority = Import-PowerShellDataFile -LiteralPath $authorityPath
 $source = [System.Drawing.Bitmap]::new($sourcePath)
+$native = [System.Drawing.Bitmap]::new($nativePath)
 $mask = [System.Drawing.Bitmap]::new($maskPath)
 
 try
 {
     Assert-Equal 225 $mask.Width 'Body-region mask width changed.'
     Assert-Equal 225 $mask.Height 'Body-region mask height changed.'
+    Assert-Equal 96 $native.Width 'Canonical native authority width changed.'
+    Assert-Equal 96 $native.Height 'Canonical native authority height changed.'
     Assert-Equal ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb) $mask.PixelFormat `
         'Body-region mask is not 32bpp ARGB.'
 
@@ -141,8 +180,6 @@ try
             "Hair anchor '$($anchor.Name)' has an invalid kind."
         Assert-PointArray $anchor.SourceSamples "Hair anchor '$($anchor.Name)' SourceSamples"
         Assert-PointArray $anchor.NativeSamples "Hair anchor '$($anchor.Name)' NativeSamples"
-        Assert-Equal @($anchor.SourceSamples).Count @($anchor.NativeSamples).Count `
-            "Hair anchor '$($anchor.Name)' source/native sample counts differ."
         Assert-Point $anchor.Fill "Hair anchor '$($anchor.Name)' Fill"
         Assert-Point $anchor.Ink "Hair anchor '$($anchor.Name)' Ink"
     }
@@ -168,10 +205,12 @@ try
     {
         Assert-PointArray $normal.SourceSamples "Body normal '$($normal.Name)' SourceSamples"
         Assert-PointArray $normal.NativeSamples "Body normal '$($normal.Name)' NativeSamples"
-        Assert-Equal @($normal.SourceSamples).Count @($normal.NativeSamples).Count `
-            "Body normal '$($normal.Name)' source/native sample counts differ."
         Assert-Point $normal.Fill "Body normal '$($normal.Name)' Fill"
     }
+
+    $secondUnderside = @($bodyNormals | Where-Object Name -eq 'SecondUnderside')[0]
+    Assert-ScanCrossesOutline $source $secondUnderside.SourceSamples 'SecondUnderside source scan'
+    Assert-ScanCrossesOutline $native $secondUnderside.NativeSamples 'SecondUnderside native scan'
 
     $protectedPoints = @($authority.ProtectedPoints)
     $protectedNames = @($protectedPoints | ForEach-Object { [string]$_.Name })
@@ -226,5 +265,6 @@ try
 finally
 {
     $mask.Dispose()
+    $native.Dispose()
     $source.Dispose()
 }
