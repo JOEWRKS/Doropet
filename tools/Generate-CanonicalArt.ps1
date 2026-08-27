@@ -149,182 +149,105 @@ function Resize-ToNative96([System.Drawing.Bitmap]$Bitmap)
     }
 }
 
-function New-NativeBodyContour
+function New-NativeBodyLightenRun(
+    [int]$Y, [int]$StartX, [int]$EndX,
+    [int]$FillX, [int]$FillY, [double]$Blend)
 {
-    $path = [System.Drawing.Drawing2D.GraphicsPath]::new()
-    $path.StartFigure()
-    $path.AddBezier(18.8, 70.7, 18.6, 74.5, 18.4, 78.1, 21.2, 80.1)
-    $path.AddBezier(21.2, 80.1, 23.1, 81.5, 25.7, 80.5, 25.5, 77.3)
-    $path.AddBezier(25.5, 77.3, 25.3, 75.0, 24.7, 72.7, 25.2, 71.6)
-    $path.AddBezier(25.2, 71.6, 28.4, 74.2, 31.8, 75.4, 34.8, 76.5)
-    $path.AddBezier(34.8, 76.5, 35.4, 80.0, 37.0, 83.4, 40.3, 85.0)
-    $path.AddBezier(40.3, 85.0, 42.5, 86.3, 46.0, 85.1, 46.7, 82.2)
-    $path.AddBezier(46.7, 82.2, 47.1, 79.9, 46.6, 77.8, 47.0, 76.6)
-    $path.AddBezier(47.0, 76.6, 52.3, 76.3, 57.3, 74.3, 60.5, 71.3)
-    $path.AddBezier(60.5, 71.3, 60.2, 75.6, 60.7, 79.7, 63.6, 82.5)
-    $path.AddBezier(63.6, 82.5, 65.6, 84.5, 68.7, 83.8, 69.5, 81.2)
-    $path.AddBezier(69.5, 81.2, 70.3, 78.5, 68.9, 76.6, 69.4, 74.7)
-    $path.AddBezier(69.4, 74.7, 72.8, 69.0, 74.7, 64.4, 74.4, 59.7)
-    return $path
+    if ($StartX -gt $EndX -or $Blend -le 0.0 -or $Blend -gt 1.0)
+    {
+        throw 'Invalid native body lighten run.'
+    }
+    return @{ Y=$Y; StartX=$StartX; EndX=$EndX; FillX=$FillX; FillY=$FillY; Blend=$Blend }
 }
 
-function New-PathMask(
-    [System.Drawing.Drawing2D.GraphicsPath]$Path,
-    [float]$Width)
-{
-    $scale = 4
-    $highResolutionMask = [System.Drawing.Bitmap]::new(
-        96 * $scale,
-        96 * $scale,
-        [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    $graphics = [System.Drawing.Graphics]::FromImage($highResolutionMask)
-    try
-    {
-        $graphics.Clear([System.Drawing.Color]::Transparent)
-        $graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
-        $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-        $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
-        $scaledPath = $Path.Clone()
-        try
-        {
-            $matrix = [System.Drawing.Drawing2D.Matrix]::new()
-            try
-            {
-                $matrix.Scale($scale, $scale)
-                $scaledPath.Transform($matrix)
-            }
-            finally
-            {
-                $matrix.Dispose()
-            }
-            $pen = [System.Drawing.Pen]::new([System.Drawing.Color]::White, $Width * $scale)
-            try
-            {
-                $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
-                $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-                $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-                $graphics.DrawPath($pen, $scaledPath)
-            }
-            finally
-            {
-                $pen.Dispose()
-            }
-        }
-        finally
-        {
-            $scaledPath.Dispose()
-        }
-    }
-    finally
-    {
-        $graphics.Dispose()
-    }
+$nativeBodyLightenRuns = @(
+    # Lower rear rim; the upper rim already matches the clean one-pixel hair reference.
+    New-NativeBodyLightenRun 67 72 72 71 67 0.55
+    New-NativeBodyLightenRun 68 71 71 70 68 0.55
+    New-NativeBodyLightenRun 69 70 70 69 69 0.55
+    New-NativeBodyLightenRun 70 70 70 69 70 0.55
+    New-NativeBodyLightenRun 71 69 69 68 71 0.55
+    New-NativeBodyLightenRun 72 69 69 68 72 0.55
+    New-NativeBodyLightenRun 73 68 68 67 73 0.55
+    New-NativeBodyLightenRun 74 68 68 67 74 0.55
 
-    $mask = [System.Drawing.Bitmap]::new(96, 96, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    for ($y = 0; $y -lt 96; $y++)
-    {
-        for ($x = 0; $x -lt 96; $x++)
-        {
-            $alphaSum = 0
-            for ($sampleY = 0; $sampleY -lt $scale; $sampleY++)
-            {
-                for ($sampleX = 0; $sampleX -lt $scale; $sampleX++)
-                {
-                    $alphaSum += $highResolutionMask.GetPixel(
-                        ($x * $scale) + $sampleX,
-                        ($y * $scale) + $sampleY).A
-                }
-            }
-            $alpha = [Math]::Round($alphaSum / ($scale * $scale))
-            $mask.SetPixel($x, $y, [System.Drawing.Color]::FromArgb($alpha, 255, 255, 255))
-        }
-    }
-    $highResolutionMask.Dispose()
-    return $mask
-}
+    # Front outer edge, foot, and inner edge.
+    New-NativeBodyLightenRun 72 18 18 19 72 0.55
+    New-NativeBodyLightenRun 73 18 18 19 73 0.55
+    New-NativeBodyLightenRun 74 19 19 20 74 0.55
+    New-NativeBodyLightenRun 75 19 19 20 75 0.55
+    New-NativeBodyLightenRun 77 20 20 21 77 0.55
+    New-NativeBodyLightenRun 78 21 21 22 78 0.55
+    New-NativeBodyLightenRun 79 22 22 23 79 0.55
+    New-NativeBodyLightenRun 80 23 24 23 79 0.50
+    New-NativeBodyLightenRun 76 25 25 24 76 0.55
+    New-NativeBodyLightenRun 77 25 25 24 77 0.55
+    New-NativeBodyLightenRun 78 25 25 24 78 0.55
+    New-NativeBodyLightenRun 79 24 24 23 79 0.55
 
-function Get-LocalBodyFill(
-    [System.Drawing.Bitmap]$Bitmap,
-    [int]$X,
-    [int]$Y)
-{
-    $best = [System.Drawing.Color]::FromArgb(255, 255, 255, 255)
-    $bestLuminance = -1
-    for ($radius = 1; $radius -le 4; $radius++)
-    {
-        for ($sampleY = [Math]::Max(0, $Y - $radius); $sampleY -le [Math]::Min(95, $Y + $radius); $sampleY++)
-        {
-            for ($sampleX = [Math]::Max(0, $X - $radius); $sampleX -le [Math]::Min(95, $X + $radius); $sampleX++)
-            {
-                $pixel = $Bitmap.GetPixel($sampleX, $sampleY)
-                if ($pixel.A -lt 224)
-                {
-                    continue
-                }
-                $luminance = (0.2126 * $pixel.R) + (0.7152 * $pixel.G) + (0.0722 * $pixel.B)
-                if ($luminance -gt $bestLuminance)
-                {
-                    $best = $pixel
-                    $bestLuminance = $luminance
-                }
-            }
-        }
-        if ($bestLuminance -ge 245)
-        {
-            break
-        }
-    }
-    return $best
-}
+    # First valley and underside.
+    New-NativeBodyLightenRun 74 28 28 28 73 0.55
+    New-NativeBodyLightenRun 75 29 34 31 74 0.45
 
-function Apply-NativeBodyCorrection([System.Drawing.Bitmap]$Bitmap)
+    # Center outer edge, foot, and inner edge.
+    New-NativeBodyLightenRun 76 35 35 36 76 0.55
+    New-NativeBodyLightenRun 77 35 35 36 77 0.55
+    New-NativeBodyLightenRun 79 36 36 37 79 0.55
+    New-NativeBodyLightenRun 80 36 36 37 80 0.55
+    New-NativeBodyLightenRun 81 37 37 38 81 0.55
+    New-NativeBodyLightenRun 82 38 38 39 82 0.55
+    New-NativeBodyLightenRun 83 39 39 40 83 0.55
+    New-NativeBodyLightenRun 84 41 41 42 84 0.55
+    New-NativeBodyLightenRun 85 42 45 42 84 0.50
+    New-NativeBodyLightenRun 77 46 46 45 77 0.55
+    New-NativeBodyLightenRun 83 46 46 45 83 0.55
+    New-NativeBodyLightenRun 84 46 46 45 84 0.55
+
+    # Second valley and underside into the rear leg.
+    New-NativeBodyLightenRun 75 52 52 52 74 0.55
+    New-NativeBodyLightenRun 74 60 60 61 74 0.55
+    New-NativeBodyLightenRun 75 60 60 61 75 0.55
+    New-NativeBodyLightenRun 76 60 60 61 76 0.55
+    New-NativeBodyLightenRun 78 61 61 62 78 0.55
+    New-NativeBodyLightenRun 79 62 62 63 79 0.55
+    New-NativeBodyLightenRun 80 62 62 63 80 0.55
+    New-NativeBodyLightenRun 81 63 63 64 81 0.55
+
+    # Rear foot and inner edge.
+    New-NativeBodyLightenRun 82 64 67 65 81 0.50
+    New-NativeBodyLightenRun 78 69 69 68 78 0.55
+    New-NativeBodyLightenRun 79 69 69 68 79 0.55
+    New-NativeBodyLightenRun 81 68 68 67 81 0.55
+)
+
+function Apply-SubtractiveNativeBodyCorrection([System.Drawing.Bitmap]$Bitmap)
 {
-    $strokePath = New-NativeBodyContour
-    $valleyClearPath = [System.Drawing.Drawing2D.GraphicsPath]::new()
-    $valleyClearPath.StartFigure()
-    $valleyClearPath.AddLine(62.7, 67.4, 61.5, 70.0)
-    $clearMask = New-PathMask $strokePath 3.5
-    $valleyClearMask = New-PathMask $valleyClearPath 2.5
-    $strokeMask = New-PathMask $strokePath 1.35
     $baseline = $Bitmap.Clone()
     try
     {
-        $strokeColor = [System.Drawing.Color]::FromArgb(255, 31, 20, 25)
-        for ($y = 0; $y -lt 96; $y++)
+        foreach ($run in $nativeBodyLightenRuns)
         {
-            for ($x = 0; $x -lt 96; $x++)
+            $fill = $baseline.GetPixel($run.FillX, $run.FillY)
+            if ($fill.A -ne 255) { throw "Body fill sample is not opaque at ($($run.FillX),$($run.FillY))." }
+
+            for ($x = $run.StartX; $x -le $run.EndX; $x++)
             {
-                $original = $Bitmap.GetPixel($x, $y)
-                if ($original.A -eq 0)
+                $original = $baseline.GetPixel($x, $run.Y)
+                if ($original.A -ne 255) { throw "Body correction is not opaque at ($x,$($run.Y))." }
+                if ($fill.R -lt $original.R -or $fill.G -lt $original.G -or $fill.B -lt $original.B)
                 {
-                    $Bitmap.SetPixel($x, $y, [System.Drawing.Color]::FromArgb(0, 0, 0, 0))
-                    continue
-                }
-                if ($clearMask.GetPixel($x, $y).A -eq 0 -and $valleyClearMask.GetPixel($x, $y).A -lt 128)
-                {
-                    continue
+                    throw "Body fill sample darkens ($x,$($run.Y))."
                 }
 
-                $fill = Get-LocalBodyFill $baseline $x $y
-                $coverage = $strokeMask.GetPixel($x, $y).A / 255.0
-                if (($coverage * ($original.A / 255.0)) -lt 0.16)
-                {
-                    $coverage = 0.0
-                }
-                $red = [Math]::Round(($fill.R * (1.0 - $coverage)) + ($strokeColor.R * $coverage))
-                $green = [Math]::Round(($fill.G * (1.0 - $coverage)) + ($strokeColor.G * $coverage))
-                $blue = [Math]::Round(($fill.B * (1.0 - $coverage)) + ($strokeColor.B * $coverage))
-                $Bitmap.SetPixel($x, $y, [System.Drawing.Color]::FromArgb($original.A, $red, $green, $blue))
+                $red = [Math]::Round($original.R + (($fill.R - $original.R) * $run.Blend))
+                $green = [Math]::Round($original.G + (($fill.G - $original.G) * $run.Blend))
+                $blue = [Math]::Round($original.B + (($fill.B - $original.B) * $run.Blend))
+                $Bitmap.SetPixel($x, $run.Y, [System.Drawing.Color]::FromArgb(255, $red, $green, $blue))
             }
         }
     }
     finally
     {
-        $strokePath.Dispose()
-        $valleyClearPath.Dispose()
-        $clearMask.Dispose()
-        $valleyClearMask.Dispose()
-        $strokeMask.Dispose()
         $baseline.Dispose()
     }
 }
@@ -452,8 +375,8 @@ try
                         [System.Drawing.Imaging.ImageFormat]::Png)
                 }
 
-                Apply-NativeBodyCorrection $openBaseline
-                Apply-NativeBodyCorrection $closedBaseline
+                Apply-SubtractiveNativeBodyCorrection $openBaseline
+                Apply-SubtractiveNativeBodyCorrection $closedBaseline
                 $openBaseline.Save(
                     (Join-Path $OutputDirectory 'dororong-canonical.png'),
                     [System.Drawing.Imaging.ImageFormat]::Png)
