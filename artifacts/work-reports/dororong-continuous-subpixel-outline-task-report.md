@@ -29,6 +29,8 @@ NativeFill = @([int]x,[int]y)
 
 Hair anchors additionally contain literal `SourceInk` and `NativeInk` points. Source fill/ink points preserve the earlier `Fill`/`Ink` values. Native points are the brightest or darkest opaque legacy sample by Rec. 709 luminance, with ordinal `Y,X` ties. Coverage uses only the continuous fields after they exist.
 
+Fix round 1 resolved an ambiguity in the original unqualified extrema wording. Four native hair legacy arrays contain a transparent absolute-darkest sample, while Task 1 separately requires every selected reference coordinate to be opaque. Because transparent RGB contributes no visible optical luminance, `brightest` and `darkest` are evaluated only over opaque legacy native samples. This clarification matches the implemented test contract and did not change any frozen authority coordinate or fixture byte.
+
 ## RED and GREEN evidence
 
 Required RED, before any fixture field was added:
