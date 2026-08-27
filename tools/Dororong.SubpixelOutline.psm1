@@ -139,10 +139,10 @@ function New-DororongVisibleContour(
             {
                 $neighborX = $x + [int]$direction.Dx
                 $neighborY = $y + [int]$direction.Dy
-                $isTransparent = $neighborX -lt 0 -or $neighborY -lt 0 -or
-                    $neighborX -ge $Source.Width -or $neighborY -ge $Source.Height
-                if (-not $isTransparent)
-                { $isTransparent = $Source.GetPixel($neighborX, $neighborY).A -eq 0 }
+                if ($neighborX -lt 0 -or $neighborY -lt 0 -or
+                    $neighborX -ge $Source.Width -or $neighborY -ge $Source.Height)
+                { continue }
+                $isTransparent = $Source.GetPixel($neighborX, $neighborY).A -eq 0
                 if (-not $isTransparent)
                 { continue }
 

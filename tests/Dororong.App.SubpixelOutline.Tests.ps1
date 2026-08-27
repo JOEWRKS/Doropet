@@ -138,10 +138,10 @@ function Get-IndependentVisibleSegments(
             {
                 $neighborX = $x + [int]$direction.Dx
                 $neighborY = $y + [int]$direction.Dy
-                $transparent = $neighborX -lt 0 -or $neighborY -lt 0 -or
-                    $neighborX -ge $Source.Width -or $neighborY -ge $Source.Height
-                if (-not $transparent)
-                { $transparent = $Source.GetPixel($neighborX,$neighborY).A -eq 0 }
+                if ($neighborX -lt 0 -or $neighborY -lt 0 -or
+                    $neighborX -ge $Source.Width -or $neighborY -ge $Source.Height)
+                { continue }
+                $transparent = $Source.GetPixel($neighborX,$neighborY).A -eq 0
                 if (-not $transparent) { continue }
                 $x12=(2*$x)+[int]$direction.X1; $y12=(2*$y)+[int]$direction.Y1
                 $x22=(2*$x)+[int]$direction.X2; $y22=(2*$y)+[int]$direction.Y2
@@ -358,6 +358,24 @@ try
         (@($constants.LegalEndpoints|ForEach-Object{"$($_.X),$($_.Y)"})-join '|') 'Legal endpoints changed.'
     Assert-Equal '20,125|104,131|24,95|109,64|54,62|24,143' `
         (@($constants.OutlineSamples|ForEach-Object{"$($_[0]),$($_[1])"})-join '|') 'Outline samples changed.'
+
+    # Off-canvas space is not a processed-source pixel and therefore cannot
+    # contribute an exposed edge. This catches treating canvas bounds as alpha zero.
+    $canvasEdge=New-SyntheticPair 1 1
+    try
+    {
+        Set-WritablePixel $canvasEdge 0 0
+        $actualCanvasEdge=New-DororongVisibleContour `
+            $canvasEdge.Source $canvasEdge.Mask ([Drawing.PointF[]]@())
+        Assert-Equal 0 $actualCanvasEdge.ExposedSegmentCount `
+            'Off-canvas neighbors emitted production exposed edges.'
+        $independentCanvasEdge=@(Get-IndependentVisibleSegments `
+            $canvasEdge.Source $canvasEdge.Mask ([Drawing.PointF[]]@()))
+        Assert-Equal 0 @($independentCanvasEdge|Where-Object Kind -eq 'E').Count `
+            'Off-canvas neighbors emitted independent exposed edges.'
+        Write-Output 'SYNTHETIC EDGE PASS offCanvasExposed=0'
+    }
+    finally{$canvasEdge.Source.Dispose();$canvasEdge.Mask.Dispose()}
 
     $rectangle=New-SyntheticPair
     try
