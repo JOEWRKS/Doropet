@@ -629,17 +629,20 @@ try
     Assert-ScanCrossesOutline $source $secondUnderside.SourceSamples 'SecondUnderside source scan'
     Assert-ScanCrossesOutline $native $secondUnderside.NativeSamples 'SecondUnderside native scan'
 
-    $protectedPoints = @($authority.ProtectedPoints)
+    $historicalEndpointNames = @(
+        'LegalEndpoint-FrontOcclusion',
+        'LegalEndpoint-RearOcclusion'
+    )
+    $protectedPoints = @($authority.ProtectedPoints | Where-Object {
+        [string]$_.Name -notin $historicalEndpointNames
+    })
     $protectedNames = @($protectedPoints | ForEach-Object { [string]$_.Name })
     foreach ($category in @('Head', 'Hair', 'Face', 'Mouth', 'Eyes', 'Rose', 'Bow', 'Ribbons'))
     {
         Assert-True (@($protectedPoints | Where-Object { $_.Name -like "$category-*" }).Count -ge 2) `
             "Authority fixture has fewer than two '$category' protected points."
     }
-    foreach ($requiredName in @(
-        'NoTailRear-Upper', 'NoTailRear-Lower',
-        'LegalEndpoint-FrontOcclusion', 'LegalEndpoint-RearOcclusion'
-    ))
+    foreach ($requiredName in @('NoTailRear-Upper', 'NoTailRear-Lower'))
     {
         Assert-True ($protectedNames -contains $requiredName) `
             "Authority fixture is missing protected point '$requiredName'."
@@ -652,6 +655,25 @@ try
             "Protected point '$($protected.Name)' is out of bounds."
         Assert-Equal 0 $mask.GetPixel($protectedX, $protectedY).R `
             "Protected point '$($protected.Name)' is writable."
+    }
+
+    foreach ($occlusionSide in @(
+        @{ Name = 'Front'; Body = @(118,151); Protected = @(119,151) },
+        @{ Name = 'Rear'; Body = @(161,116); Protected = @(160,116) }
+    ))
+    {
+        $bodyX = [int]$occlusionSide.Body[0]
+        $bodyY = [int]$occlusionSide.Body[1]
+        $protectedX = [int]$occlusionSide.Protected[0]
+        $protectedY = [int]$occlusionSide.Protected[1]
+        Assert-Equal 255 $source.GetPixel($bodyX, $bodyY).A `
+            "$($occlusionSide.Name) occlusion body side is not source-opaque."
+        Assert-Equal 255 $source.GetPixel($protectedX, $protectedY).A `
+            "$($occlusionSide.Name) occlusion protected side is not source-opaque."
+        Assert-Equal 255 $mask.GetPixel($bodyX, $bodyY).R `
+            "$($occlusionSide.Name) occlusion body side is not writable."
+        Assert-Equal 0 $mask.GetPixel($protectedX, $protectedY).R `
+            "$($occlusionSide.Name) occlusion protected side is writable."
     }
 
     foreach ($sample in @($authority.FillSamples))
@@ -692,6 +714,8 @@ finally
         if ($resolvedMutationDirectory.StartsWith($resolvedTemporaryRoot, [StringComparison]::OrdinalIgnoreCase) -and
             [System.IO.Directory]::Exists($resolvedMutationDirectory))
         { Remove-Item -LiteralPath $resolvedMutationDirectory -Recurse -Force }
+        Assert-True (-not [System.IO.Directory]::Exists($resolvedMutationDirectory)) `
+            "Mutation cleanup readback failure: directory remains at '$resolvedMutationDirectory'."
     }
     if ($null -ne $productionOwnership -and $null -ne $productionOwnership.Mask)
     { $productionOwnership.Mask.Dispose() }
