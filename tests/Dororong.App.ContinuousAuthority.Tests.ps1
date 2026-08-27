@@ -343,7 +343,7 @@ function Get-DororongNamedContourSegments(
         FrontFoot=@{ MinX=48.5; MaxX=62.5; MinY=189.5; MaxY=193.5 }
         FrontInner=@{ MinX=62.5; MaxX=65.5; MinY=176.5; MaxY=186.5 }
         FirstValley=@{ MinX=66.5; MaxX=73.5; MinY=176.5; MaxY=181.5 }
-        FirstUnderside=@{ MinX=72.5; MaxX=79.5; MinY=178.5; MaxY=184.5 }
+        FirstUnderside=@{ MinX=73.5; MaxX=79.0; MinY=178.5; MaxY=184.5 }
         CenterOuter=@{ MinX=79.5; MaxX=83.5; MinY=181.5; MaxY=191.5 }
         CenterFoot=@{ MinX=96.5; MaxX=110.5; MinY=203.5; MaxY=206.5 }
         CenterInner=@{ MinX=112.5; MaxX=116.5; MinY=183.5; MaxY=191.5 }
@@ -539,6 +539,15 @@ try
     $approvedSourceContour=@(Get-DororongApprovedSourceContour $source $mask)
     Assert-True ($approvedSourceContour.Count -gt 0) `
         'Independent approved source contour derivation produced no segments.'
+
+    $neighboringContourMutation=@{
+        X1Eighth=624; Y1Eighth=1464; X2Eighth=648; Y2Eighth=1464 }
+    $neighboringContourHits=@(Get-DororongUniqueSegmentIntersections `
+        $neighboringContourMutation `
+        (Get-DororongNamedContourSegments `
+            $approvedSourceContour 'FirstUnderside'))
+    Assert-Equal 0 $neighboringContourHits.Count `
+        "Body normal 'FirstUnderside' neighboring-contour mutation was accepted."
 
     $hairAnchors=@($authority.HairAnchors)
     $bodyNormals=@($authority.BodyNormals)
