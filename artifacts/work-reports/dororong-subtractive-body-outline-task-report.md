@@ -2,9 +2,9 @@
 
 ## Result
 
-**Repository native-asset visual verdict: PASS.** The exact regenerated open and closed 96px runtime PNGs use one reviewed subtractive mask over the deterministic source-derived resize. All 58 changed coordinates are fully opaque baseline pixels, all RGB changes are channel-wise lightening, the open and closed correction sets and corrected RGB values are identical, and partial-alpha pixels are byte-identical to the baseline.
+**Repository native-asset visual verdict: PASS.** The exact regenerated open and closed 96px runtime PNGs use one reviewed subtractive mask over the deterministic source-derived resize. All 58 changed coordinates are fully opaque baseline pixels, all RGB changes are channel-wise lightening, the open and closed correction sets and corrected RGB values are identical, and partial-alpha pixels are byte-identical to the baseline. Fresh Task 3 restore, 78-test Release verification, build, focused checks, and framework-dependent `win-x64` publish also passed from reviewed source commit `54485bb9498b59b55b8626325e85b0c3eb677dda`.
 
-This verdict is limited to exact repository assets at native 96px and nearest-neighbor inspection. It does not replace or upgrade actual-Windows attempt 5; `docs/verification/2026-08-27-m1-windows-acceptance-manual-attempt-5.md` remains frozen FAIL evidence.
+This verdict is limited to exact repository assets at native 96px, nearest-neighbor inspection, and repository automation. It does not replace or upgrade actual-Windows attempt 5; `docs/verification/2026-08-27-m1-windows-acceptance-manual-attempt-5.md` remains frozen FAIL evidence. The current Task 3 publish has not been observed on the Windows desktop; its body, closed-eye, and user acceptance remain UNVERIFIED until attempt 6.
 
 ## Implementation
 
@@ -370,3 +370,60 @@ EXACT ART PASS: exact 225px authority, deterministic native-96 frames, pinned su
 - Updated ignored coordination report: `.superpowers/sdd/2026-08-27-dororong-subtractive-body-outline/task-1-report.md`.
 - Source, generator, open asset, closed asset, and all manual-attempt files are unchanged.
 - The independent native visual PASS stands; actual-Windows attempt 5 remains frozen FAIL evidence and is not upgraded.
+
+## Task 3 durable handoff and fresh release artifact
+
+### Reviewed source and target boundary
+
+- Reviewed source HEAD before documentation commit: `54485bb9498b59b55b8626325e85b0c3eb677dda` (`test: freeze reviewed Dororong body thinning`).
+- Branch: `feature/dororong-m1`.
+- Worktree: `D:\JOEWRKS\.worktrees\DororongDesktopPet-m1`.
+- Target readback: Microsoft Windows 10 Pro, version `10.0.19045`, build `19045`, x64.
+- System DPI readback: `96`; the one-to-one WPF presentation claim remains limited to the reviewed 96-DPI / 100%-scale target. Other DPI/scaling targets are unverified.
+- Publish type and path: framework-dependent `win-x64` at `artifacts/publish/win-x64`; the target requires the .NET 8 Desktop Runtime.
+
+### Fresh automated verification
+
+All commands below ran once from reviewed source HEAD `54485bb9498b59b55b8626325e85b0c3eb677dda`, before any tracked documentation edit.
+
+| Command | Exit | Exact result |
+|---|---:|---|
+| `dotnet restore DororongDesktopPet.sln` | `0` | All projects were already up to date for restore. |
+| `dotnet test DororongDesktopPet.sln --configuration Release --no-restore` | `0` | `78` passed, `0` failed, `0` skipped, `78` total; one test assembly; reported duration `238 ms`. |
+| `dotnet build DororongDesktopPet.sln --configuration Release --no-restore` | `0` | Build succeeded; `0` warnings, `0` errors; elapsed `00:00:02.71`. |
+| `pwsh -NoProfile -File tests/Dororong.App.ExactArt.Tests.ps1 -Configuration Release` | `0` | `correction=58`, bounds `18,67..72,85`, pinned mask `B52663439383D7B9E52D0664F0248E8A084EC21D041F1B7D565D2D4FA2EF11EB`; exact-art PASS. |
+| `pwsh -NoProfile -File tests/Dororong.App.RuntimeComposition.Tests.ps1 -Configuration Release` | `0` | Runtime-composition PASS for startup, one-shot fatal handling, actual `PetLoop` wiring, fault path, and disposal. |
+| `pwsh -NoProfile -File tests/Dororong.App.DraggedAngle.Tests.ps1 -Configuration Release` | `0` | DRAGGED angle PASS: center `0`, symmetric points `-4/+4`, clamps `-8/+8`. |
+| `dotnet publish src/Dororong.App/Dororong.App.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts/publish/win-x64` | `0` | Expected restore/build/publish lines only; the required executable, application DLL, and core DLL exist. No warning or error line was emitted. |
+
+The command outputs contained no unexpected diagnostic or skip beyond the explicit test count above. Restore reported an already-current graph; publish performed its expected runtime-specific restore and emitted the final output directory. Repository automation proves only the properties each command checks; it does not prove live Windows rendering, body/eye appearance, user acceptance, or process identity.
+
+### Exact artifact identity
+
+| Artifact | Bytes | SHA-256 |
+|---|---:|---|
+| Exact 225x225 source `src/Dororong.App/Assets/dororong-canonical-source.png` | 45,681 | `F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504` |
+| Native-96 open `src/Dororong.App/Assets/dororong-canonical.png` | 10,029 | `611A1367E92C37659CF63A549656BCE01EEDEF5DE3CA348C6FADFB98A5D88DC3` |
+| Native-96 closed `src/Dororong.App/Assets/dororong-closed-eyes.png` | 9,995 | `B2ADEC262AA15E9BE86D4DFC9A2087CE5514C06145A337715C145BF2671B12E4` |
+| Published `artifacts/publish/win-x64/Dororong.App.exe` | 150,016 | `C52492395120EB6F863F2694DCC0D6FF5E13B0F9E11BE3388A1CD49CF014DDCA` |
+| Published `artifacts/publish/win-x64/Dororong.App.dll` | 57,856 | `D3514D98EF8DE9EBDDDAC3EAC638BBBC98A2D15663DFC3C6342DD52600893C85` |
+| Published `artifacts/publish/win-x64/Dororong.Core.dll` | 32,256 | `8C553D87BF276AE8A94C63363EB14E5D0544C692F5ECC58C8EC905CBCB19236B` |
+
+### Independent review and visual surfaces
+
+The exact open and closed assets above received independent native/nearest visual PASS. The subsequent scoped re-review found every reported finding addressed and no new Critical/Important breakage. The approved review surfaces were:
+
+- exact 225px source alone before baseline or candidate inspection;
+- uncorrected open native-96 baseline alone on white and RGB `(18,20,28)`, at native size and 8x nearest-neighbor;
+- exact candidate open and closed native-96 frames on both backgrounds, at native size and 8x nearest-neighbor;
+- candidate body crop at 16x nearest-neighbor on both backgrounds for segment and endpoint inspection.
+
+The review checked source identity anchors, all named body segments and valleys, legal hair/ribbon occlusion endpoints, protected parts, alpha-edge response on both backgrounds, open/closed body consistency, and high-salience branches/endpoints/fringes/missing spans. This remains a repository-asset verdict, not a live-rendering verdict.
+
+### Current limitations and next acceptance layer
+
+- Manual attempt 5 remains frozen FAIL evidence for the rejected redraw artifact and was not edited, overwritten, or upgraded.
+- The current subtractive publish was not launched by Task 3. Actual-Windows body, closed-eye, and user acceptance remain UNVERIFIED until Task 4 / manual attempt 6 on the current PC.
+- WALK and CLICK_REACTION motion remain deferred by the user's earlier instruction.
+- A successful build, test, asset review, hash match, assembly check, or process-liveness check cannot establish live Windows rendering.
+- Milestone 1 remains incomplete pending the required actual-Windows user observation.
