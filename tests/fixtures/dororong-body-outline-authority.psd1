@@ -195,8 +195,8 @@
             Name = 'SecondValley'
             SourceSamples = @(@(132, 168), @(135, 170), @(138, 172), @(141, 174), @(144, 176))
             NativeSamples = @(@(56, 72), @(58, 73), @(59, 73), @(60, 74), @(61, 75))
-            SourceNormal = @{ X1Eighth = 1056; Y1Eighth = 1344; X2Eighth = 1104; Y2Eighth = 1376 }
-            NativeNormal = @{ X1Eighth = 440; Y1Eighth = 560; X2Eighth = 464; Y2Eighth = 592 }
+            SourceNormal = @{ X1Eighth = 1104; Y1Eighth = 1376; X2Eighth = 1152; Y2Eighth = 1408 }
+            NativeNormal = @{ X1Eighth = 464; Y1Eighth = 592; X2Eighth = 504; Y2Eighth = 592 }
             SourceFill = @(132, 168)
             NativeFill = @(56, 72)
             Fill = @(132, 168)

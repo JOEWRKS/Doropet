@@ -214,6 +214,214 @@ function Test-NormalIntersectsAlpha(
     return $last.A -gt 0.0
 }
 
+function Test-DororongNeutralContourPixel([Drawing.Color]$Color)
+{
+    $minimum=[Math]::Min($Color.R,[Math]::Min($Color.G,$Color.B))
+    $maximum=[Math]::Max($Color.R,[Math]::Max($Color.G,$Color.B))
+    return $Color.A -gt 0 -and ($maximum-$minimum) -le 8
+}
+
+function Get-DororongApprovedSourceContour(
+    [Drawing.Bitmap]$Source,
+    [Drawing.Bitmap]$Mask)
+{
+    Assert-Equal $Source.Width $Mask.Width `
+        'Source/mask width differs during independent contour derivation.'
+    Assert-Equal $Source.Height $Mask.Height `
+        'Source/mask height differs during independent contour derivation.'
+
+    $segments=[Collections.Generic.List[object]]::new()
+    $directions=@(
+        [pscustomobject]@{ DX=-1; DY=0; Side='Left' }
+        [pscustomobject]@{ DX=1; DY=0; Side='Right' }
+        [pscustomobject]@{ DX=0; DY=-1; Side='Top' }
+        [pscustomobject]@{ DX=0; DY=1; Side='Bottom' })
+
+    for($y=0;$y -lt $Mask.Height;$y++)
+    {
+        for($x=0;$x -lt $Mask.Width;$x++)
+        {
+            $maskValue=$Mask.GetPixel($x,$y).R
+            Assert-True ($maskValue -eq 0 -or $maskValue -eq 255) `
+                "Reviewed mask contains intermediate value '$maskValue' at ($x,$y)."
+            if($maskValue -ne 255)
+            { continue }
+
+            $insideColor=$Source.GetPixel($x,$y)
+            foreach($direction in $directions)
+            {
+                $neighborX=$x+$direction.DX
+                $neighborY=$y+$direction.DY
+                if($neighborX -lt 0 -or $neighborY -lt 0 -or `
+                    $neighborX -ge $Mask.Width -or $neighborY -ge $Mask.Height)
+                { continue }
+
+                $neighborMaskValue=$Mask.GetPixel($neighborX,$neighborY).R
+                if($neighborMaskValue -eq 255)
+                { continue }
+                Assert-Equal 0 $neighborMaskValue `
+                    "Reviewed mask contains an intermediate neighbor at ($neighborX,$neighborY)."
+
+                $outsideColor=$Source.GetPixel($neighborX,$neighborY)
+                if(-not(Test-DororongNeutralContourPixel $insideColor) -or `
+                    -not(Test-DororongNeutralContourPixel $outsideColor))
+                { continue }
+
+                switch($direction.Side)
+                {
+                    'Left' {
+                        $x1=$x-0.5; $y1=$y-0.5; $x2=$x-0.5; $y2=$y+0.5
+                    }
+                    'Right' {
+                        $x1=$x+0.5; $y1=$y-0.5; $x2=$x+0.5; $y2=$y+0.5
+                    }
+                    'Top' {
+                        $x1=$x-0.5; $y1=$y-0.5; $x2=$x+0.5; $y2=$y-0.5
+                    }
+                    'Bottom' {
+                        $x1=$x-0.5; $y1=$y+0.5; $x2=$x+0.5; $y2=$y+0.5
+                    }
+                }
+                $segments.Add([pscustomobject]@{
+                    X1=[double]$x1; Y1=[double]$y1
+                    X2=[double]$x2; Y2=[double]$y2
+                    Kind='Exposed'
+                })
+            }
+        }
+    }
+
+    $legalEndpoints=@(
+        [pscustomobject]@{ Name='FrontOcclusion'; X=112.0; Y=151.0 }
+        [pscustomobject]@{ Name='RearOcclusion'; X=157.0; Y=116.0 })
+    foreach($endpoint in $legalEndpoints)
+    {
+        Assert-Equal 0 $Mask.GetPixel([int]$endpoint.X,[int]$endpoint.Y).R `
+            "Legal endpoint '$($endpoint.Name)' moved into the writable mask."
+        Assert-Equal 255 $Source.GetPixel([int]$endpoint.X,[int]$endpoint.Y).A `
+            "Legal endpoint '$($endpoint.Name)' is no longer source-opaque."
+
+        $nearest=$null
+        $nearestDistance=[double]::PositiveInfinity
+        foreach($segment in @($segments))
+        {
+            foreach($vertex in @(
+                [pscustomobject]@{ X=$segment.X1; Y=$segment.Y1 }
+                [pscustomobject]@{ X=$segment.X2; Y=$segment.Y2 }))
+            {
+                $distance=(($vertex.X-$endpoint.X)*($vertex.X-$endpoint.X))+`
+                    (($vertex.Y-$endpoint.Y)*($vertex.Y-$endpoint.Y))
+                $isOrdinallyEarlier=$null -eq $nearest -or `
+                    $vertex.Y -lt $nearest.Y -or `
+                    ($vertex.Y -eq $nearest.Y -and $vertex.X -lt $nearest.X)
+                if($distance -lt ($nearestDistance-0.000000001) -or `
+                    ([Math]::Abs($distance-$nearestDistance) -le 0.000000001 -and `
+                    $isOrdinallyEarlier))
+                {
+                    $nearest=$vertex
+                    $nearestDistance=$distance
+                }
+            }
+        }
+        Assert-True ($null -ne $nearest) `
+            "Legal endpoint '$($endpoint.Name)' has no exposed contour vertex."
+        $segments.Add([pscustomobject]@{
+            X1=[double]$nearest.X; Y1=[double]$nearest.Y
+            X2=[double]$endpoint.X; Y2=[double]$endpoint.Y
+            Kind='LegalContinuation'
+        })
+    }
+    return @($segments)
+}
+
+function Get-DororongNamedContourSegments(
+    [object]$ApprovedContour,
+    [string]$Name)
+{
+    $windows=@{
+        FrontOuter=@{ MinX=36.5; MaxX=39.5; MinY=160.5; MaxY=171.5 }
+        FrontFoot=@{ MinX=48.5; MaxX=62.5; MinY=189.5; MaxY=193.5 }
+        FrontInner=@{ MinX=62.5; MaxX=65.5; MinY=176.5; MaxY=186.5 }
+        FirstValley=@{ MinX=66.5; MaxX=73.5; MinY=176.5; MaxY=181.5 }
+        FirstUnderside=@{ MinX=72.5; MaxX=79.5; MinY=178.5; MaxY=184.5 }
+        CenterOuter=@{ MinX=79.5; MaxX=83.5; MinY=181.5; MaxY=191.5 }
+        CenterFoot=@{ MinX=96.5; MaxX=110.5; MinY=203.5; MaxY=206.5 }
+        CenterInner=@{ MinX=112.5; MaxX=116.5; MinY=183.5; MaxY=191.5 }
+        SecondValley=@{ MinX=138.5; MaxX=145.5; MinY=171.5; MaxY=178.5 }
+        SecondUnderside=@{ MinX=123.5; MaxX=129.5; MinY=176.5; MaxY=181.5 }
+        RearOuter=@{ MinX=164.5; MaxX=168.5; MinY=174.5; MaxY=185.5 }
+        RearFoot=@{ MinX=149.5; MaxX=161.5; MinY=196.5; MaxY=200.5 }
+        RearInner=@{ MinX=137.5; MaxX=141.5; MinY=176.5; MaxY=184.5 }
+        UpperRearRim=@{ MinX=174.5; MaxX=178.5; MinY=122.5; MaxY=135.5 }
+        LowerRearRim=@{ MinX=174.5; MaxX=178.5; MinY=148.5; MaxY=160.5 }
+    }
+    Assert-True $windows.ContainsKey($Name) `
+        "Body normal '$Name' has no independently reviewed contour window."
+    $window=$windows[$Name]
+    return @($ApprovedContour | Where-Object {
+        $midX=($_.X1+$_.X2)/2.0
+        $midY=($_.Y1+$_.Y2)/2.0
+        $midX -ge $window.MinX -and $midX -le $window.MaxX -and `
+        $midY -ge $window.MinY -and $midY -le $window.MaxY
+    })
+}
+
+function Get-DororongUniqueSegmentIntersections(
+    [hashtable]$Normal,
+    [object]$Segments)
+{
+    $px=$Normal.X1Eighth/8.0; $py=$Normal.Y1Eighth/8.0
+    $rx=($Normal.X2Eighth-$Normal.X1Eighth)/8.0
+    $ry=($Normal.Y2Eighth-$Normal.Y1Eighth)/8.0
+    $epsilon=0.000000001
+    $unique=@{}
+
+    foreach($segment in @($Segments))
+    {
+        $qx=[double]$segment.X1; $qy=[double]$segment.Y1
+        $sx=[double]$segment.X2-$qx; $sy=[double]$segment.Y2-$qy
+        $crossRS=($rx*$sy)-($ry*$sx)
+        $qpx=$qx-$px; $qpy=$qy-$py
+        $crossQPR=($qpx*$ry)-($qpy*$rx)
+
+        $points=@()
+        if([Math]::Abs($crossRS) -le $epsilon)
+        {
+            if([Math]::Abs($crossQPR) -gt $epsilon)
+            { continue }
+            $normalLengthSquared=($rx*$rx)+($ry*$ry)
+            $t1=(($qpx*$rx)+($qpy*$ry))/$normalLengthSquared
+            $q2px=([double]$segment.X2)-$px
+            $q2py=([double]$segment.Y2)-$py
+            $t2=(($q2px*$rx)+($q2py*$ry))/$normalLengthSquared
+            $overlapStart=[Math]::Max(0.0,[Math]::Min($t1,$t2))
+            $overlapEnd=[Math]::Min(1.0,[Math]::Max($t1,$t2))
+            if($overlapStart -gt ($overlapEnd+$epsilon))
+            { continue }
+            $points=@($overlapStart,$overlapEnd)
+        }
+        else
+        {
+            $t=(($qpx*$sy)-($qpy*$sx))/$crossRS
+            $u=(($qpx*$ry)-($qpy*$rx))/$crossRS
+            if($t -lt -$epsilon -or $t -gt (1.0+$epsilon) -or `
+                $u -lt -$epsilon -or $u -gt (1.0+$epsilon))
+            { continue }
+            $points=@([Math]::Clamp($t,0.0,1.0))
+        }
+
+        foreach($t in $points)
+        {
+            $x=$px+($t*$rx); $y=$py+($t*$ry)
+            $key=[String]::Format(
+                [Globalization.CultureInfo]::InvariantCulture,
+                '{0:F9},{1:F9}',$x,$y)
+            $unique[$key]=[pscustomobject]@{ X=$x; Y=$y }
+        }
+    }
+    return @($unique.Values)
+}
+
 function Replace-FirstLiteral([string]$Text, [string]$Old, [string]$New, [string]$Label)
 {
     $index = $Text.IndexOf($Old, [StringComparison]::Ordinal)
@@ -305,6 +513,16 @@ try
 finally
 { $integration.Dispose() }
 
+$sharedVertexSegments=@(
+    [pscustomobject]@{ X1=0.0; Y1=0.0; X2=1.0; Y2=0.0 }
+    [pscustomobject]@{ X1=1.0; Y1=0.0; X2=1.0; Y2=1.0 })
+$sharedVertexNormal=@{
+    X1Eighth=4; Y1Eighth=-4; X2Eighth=12; Y2Eighth=4 }
+Assert-Equal 1 `
+    @(Get-DororongUniqueSegmentIntersections `
+        $sharedVertexNormal $sharedVertexSegments).Count `
+    'A shared stair-step contour vertex was counted as more than one crossing.'
+
 $authority = Import-PowerShellDataFile -LiteralPath $authorityPath
 $source = [Drawing.Bitmap]::new($sourcePath)
 $native = [Drawing.Bitmap]::new($nativePath)
@@ -317,6 +535,10 @@ try
     Assert-Equal 96 $native.Height 'Committed native-open height changed.'
     Assert-Equal 225 $mask.Width 'Reviewed mask width changed.'
     Assert-Equal 225 $mask.Height 'Reviewed mask height changed.'
+
+    $approvedSourceContour=@(Get-DororongApprovedSourceContour $source $mask)
+    Assert-True ($approvedSourceContour.Count -gt 0) `
+        'Independent approved source contour derivation produced no segments.'
 
     $hairAnchors=@($authority.HairAnchors)
     $bodyNormals=@($authority.BodyNormals)
@@ -410,6 +632,15 @@ try
             $source $entry.SourceNormal $sourceFill $bodyInk) -gt 0.0) `
             "$label source continuous integral is not positive."
 
+        $namedContour=@(Get-DororongNamedContourSegments `
+            $approvedSourceContour $entry.Name)
+        $contourIntersections=@(Get-DororongUniqueSegmentIntersections `
+            $entry.SourceNormal $namedContour)
+        Assert-True ($contourIntersections.Count -gt 0) `
+            "$label SourceNormal does not intersect the approved contour."
+        Assert-Equal 1 $contourIntersections.Count `
+            "$label SourceNormal intersects the approved contour more than once."
+
         Assert-True (Test-NormalIntersectsAlpha $native $entry.NativeNormal) `
             "$label native location normal does not intersect committed body alpha."
     }
@@ -476,7 +707,7 @@ finally
     { [IO.Directory]::Delete($temporaryRoot,$true) }
 }
 
-$expectedAuthorityHash='D7F947518118805862404EE47459E9533D2DCCBB98B841C8B106F3EE7694D639'
+$expectedAuthorityHash='87D0311B043368E0E21C2FD3E17EE7AC79FE8D217BEF5F231C4B3D1CD341490B'
 $authorityHash=(Get-FileHash -Algorithm SHA256 -LiteralPath $authorityPath).Hash
 Assert-Equal $expectedAuthorityHash $authorityHash 'Continuous authority fixture changed.'
 Write-Output "CONTINUOUS AUTHORITY PASS hash=$authorityHash hair=6 body=15"
