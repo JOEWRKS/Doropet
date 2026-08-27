@@ -13,6 +13,258 @@ function Assert-True([bool]$Condition, [string]$Message)
     { throw $Message }
 }
 
+function Get-Sha256Text([string]$Text)
+{
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try
+    {
+        return [Convert]::ToHexString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Text)))
+    }
+    finally
+    { $sha.Dispose() }
+}
+
+function Get-PngSha256([System.Drawing.Bitmap]$Bitmap)
+{
+    $stream = [System.IO.MemoryStream]::new()
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try
+    {
+        $Bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+        return [Convert]::ToHexString($sha.ComputeHash($stream.ToArray()))
+    }
+    finally
+    {
+        $sha.Dispose()
+        $stream.Dispose()
+    }
+}
+
+function Copy-OwnershipConfiguration([hashtable]$Configuration)
+{
+    $copy = @{}
+    foreach ($key in $Configuration.Keys)
+    { $copy[$key] = $Configuration[$key] }
+    $copy.InvalidSeedCoordinate = @{
+        X = [int]$Configuration.InvalidSeedCoordinate.X
+        Y = [int]$Configuration.InvalidSeedCoordinate.Y
+    }
+    $copy.ContactOffsets = @($Configuration.ContactOffsets | ForEach-Object {
+        @{ X = [int]$_.X; Y = [int]$_.Y }
+    })
+    $copy.ProtectedAnchors = @($Configuration.ProtectedAnchors | ForEach-Object {
+        @{ Name = [string]$_.Name; X = [int]$_.X; Y = [int]$_.Y }
+    })
+    return $copy
+}
+
+function Assert-ThrowsLike(
+    [scriptblock]$Action,
+    [string]$ExpectedPattern,
+    [string]$Label)
+{
+    try
+    {
+        & $Action | Out-Null
+    }
+    catch
+    {
+        $message = $_.Exception.Message
+        if ($message -notmatch $ExpectedPattern)
+        { throw "$Label reached the wrong assertion. Expected '$ExpectedPattern', observed '$message'." }
+        return $message
+    }
+    throw "$Label did not reach an assertion."
+}
+
+function Get-IndependentBodyOwnership(
+    [System.Drawing.Bitmap]$Source,
+    [System.Drawing.Bitmap]$Seed,
+    [object[]]$Anchors)
+{
+    $width = $Source.Width
+    $height = $Source.Height
+    $nearWhite = [bool[,]]::new($width, $height)
+    $boundaryBackground = [bool[,]]::new($width, $height)
+    $queue = [System.Collections.Generic.Queue[int]]::new()
+
+    for ($y = 0; $y -lt $height; $y++)
+    {
+        for ($x = 0; $x -lt $width; $x++)
+        {
+            $pixel = $Source.GetPixel($x, $y)
+            $nearWhite[$x,$y] = $pixel.R -ge 225 -and $pixel.G -ge 225 -and $pixel.B -ge 225
+        }
+    }
+
+    foreach ($x in 0..($width - 1))
+    {
+        foreach ($y in @(0, ($height - 1)))
+        {
+            if ($nearWhite[$x,$y] -and -not $boundaryBackground[$x,$y])
+            {
+                $boundaryBackground[$x,$y] = $true
+                $queue.Enqueue(($y * $width) + $x)
+            }
+        }
+    }
+    foreach ($y in 0..($height - 1))
+    {
+        foreach ($x in @(0, ($width - 1)))
+        {
+            if ($nearWhite[$x,$y] -and -not $boundaryBackground[$x,$y])
+            {
+                $boundaryBackground[$x,$y] = $true
+                $queue.Enqueue(($y * $width) + $x)
+            }
+        }
+    }
+
+    $neighbors = @(@(-1,0), @(1,0), @(0,-1), @(0,1))
+    while ($queue.Count -gt 0)
+    {
+        $encoded = $queue.Dequeue()
+        $currentX = $encoded % $width
+        $currentY = [int][Math]::Floor($encoded / $width)
+        foreach ($offset in $neighbors)
+        {
+            $nextX = $currentX + $offset[0]
+            $nextY = $currentY + $offset[1]
+            if ($nextX -lt 0 -or $nextX -ge $width -or $nextY -lt 0 -or $nextY -ge $height)
+            { continue }
+            if ($nearWhite[$nextX,$nextY] -and -not $boundaryBackground[$nextX,$nextY])
+            {
+                $boundaryBackground[$nextX,$nextY] = $true
+                $queue.Enqueue(($nextY * $width) + $nextX)
+            }
+        }
+    }
+
+    $opaque = [bool[,]]::new($width, $height)
+    $cleanedSeed = [bool[,]]::new($width, $height)
+    for ($y = 0; $y -lt $height; $y++)
+    {
+        for ($x = 0; $x -lt $width; $x++)
+        {
+            $opaque[$x,$y] = -not $boundaryBackground[$x,$y]
+            $cleanedSeed[$x,$y] = $Seed.GetPixel($x, $y).R -eq 255
+        }
+    }
+    $cleanedSeed[138,174] = $false
+
+    $anchorSet = [System.Collections.Generic.HashSet[int]]::new()
+    foreach ($anchor in $Anchors)
+    { [void]$anchorSet.Add(([int]$anchor[1] * $width) + [int]$anchor[0]) }
+
+    $visited = [bool[,]]::new($width, $height)
+    $selected = [System.Collections.Generic.List[object]]::new()
+    $protected = [System.Collections.Generic.List[object]]::new()
+    for ($y = 0; $y -lt $height; $y++)
+    {
+        for ($x = 0; $x -lt $width; $x++)
+        {
+            if (-not $opaque[$x,$y] -or $cleanedSeed[$x,$y] -or $visited[$x,$y])
+            { continue }
+
+            $pixels = [System.Collections.Generic.List[int]]::new()
+            $touchesSeed = $false
+            $touchesExterior = $false
+            $containsAnchor = $false
+            $visited[$x,$y] = $true
+            $queue.Enqueue(($y * $width) + $x)
+            while ($queue.Count -gt 0)
+            {
+                $encoded = $queue.Dequeue()
+                $pixels.Add($encoded)
+                if ($anchorSet.Contains($encoded))
+                { $containsAnchor = $true }
+
+                $currentX = $encoded % $width
+                $currentY = [int][Math]::Floor($encoded / $width)
+                foreach ($offset in $neighbors)
+                {
+                    $nextX = $currentX + $offset[0]
+                    $nextY = $currentY + $offset[1]
+                    if ($nextX -lt 0 -or $nextX -ge $width -or $nextY -lt 0 -or $nextY -ge $height)
+                    { continue }
+                    if ($cleanedSeed[$nextX,$nextY])
+                    { $touchesSeed = $true }
+                    if (-not $opaque[$nextX,$nextY])
+                    { $touchesExterior = $true }
+                    if ($opaque[$nextX,$nextY] -and -not $cleanedSeed[$nextX,$nextY] -and -not $visited[$nextX,$nextY])
+                    {
+                        $visited[$nextX,$nextY] = $true
+                        $queue.Enqueue(($nextY * $width) + $nextX)
+                    }
+                }
+            }
+
+            $component = [pscustomobject]@{
+                Pixels = @($pixels | Sort-Object)
+                TouchesSeed = $touchesSeed
+                TouchesExterior = $touchesExterior
+                ContainsAnchor = $containsAnchor
+            }
+            if ($containsAnchor)
+            { $protected.Add($component) }
+            elseif ($touchesSeed -and $touchesExterior)
+            { $selected.Add($component) }
+        }
+    }
+
+    $maximumSpread = 0
+    foreach ($component in $selected)
+    {
+        foreach ($encoded in $component.Pixels)
+        {
+            $pixel = $Source.GetPixel($encoded % $width, [int][Math]::Floor($encoded / $width))
+            $spread = [Math]::Max($pixel.R, [Math]::Max($pixel.G, $pixel.B)) -
+                [Math]::Min($pixel.R, [Math]::Min($pixel.G, $pixel.B))
+            if ($spread -gt $maximumSpread)
+            { $maximumSpread = $spread }
+        }
+    }
+
+    $membershipRecords = @(
+        $selected |
+            Sort-Object { $_.Pixels[0] } |
+            ForEach-Object {
+                $coordinates = @($_.Pixels | ForEach-Object {
+                    $pixelX = $_ % $width
+                    $pixelY = [int][Math]::Floor($_ / $width)
+                    "$pixelY,$pixelX"
+                }) -join ';'
+                "C|$($_.Pixels.Count)|$coordinates"
+            })
+    $membershipText = $membershipRecords -join "`n"
+
+    $expected = [bool[,]]::new($width, $height)
+    for ($y = 0; $y -lt $height; $y++)
+    {
+        for ($x = 0; $x -lt $width; $x++)
+        { $expected[$x,$y] = $cleanedSeed[$x,$y] }
+    }
+    foreach ($component in $selected)
+    {
+        foreach ($encoded in $component.Pixels)
+        {
+            $pixelX = $encoded % $width
+            $pixelY = [int][Math]::Floor($encoded / $width)
+            $expected[$pixelX,$pixelY] = $true
+        }
+    }
+
+    return [pscustomobject]@{
+        ExpectedMask = $expected
+        SelectedComponents = @($selected)
+        SelectedPixelCount = [int](@($selected | ForEach-Object Pixels).Count)
+        MaximumSpread = $maximumSpread
+        ProtectedComponents = @($protected)
+        MembershipRecords = $membershipRecords
+        MembershipHash = Get-Sha256Text $membershipText
+    }
+}
+
 function Assert-PointArray([object]$Points, [string]$Label)
 {
     Assert-True ($null -ne $Points) "$Label is missing."
@@ -74,22 +326,43 @@ $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $sourcePath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical-source.png'
 $nativePath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical.png'
 $maskPath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-body-region-mask.png'
+$seedPath = Join-Path $repositoryRoot 'tests/fixtures/dororong-body-region-seed.png'
 $authorityPath = Join-Path $repositoryRoot 'tests/fixtures/dororong-body-outline-authority.psd1'
+$sourceRasterModulePath = Join-Path $repositoryRoot 'tools/Dororong.SourceRaster.psm1'
+$ownershipModulePath = Join-Path $repositoryRoot 'tools/Dororong.BodyOwnership.psm1'
+$ownershipConstantsPath = Join-Path $repositoryRoot 'tools/Dororong.BodyOwnership.Constants.psd1'
+$expectedAnchors = @(
+    @(52,68), @(99,72), @(23,116), @(106,139),
+    @(39,132), @(84,145), @(63,142), @(78,140),
+    @(52,122), @(92,124), @(137,84), @(143,89),
+    @(135,105), @(150,108), @(159,98), @(151,128),
+    @(181,127), @(180,163)
+)
 
 Assert-Equal 'F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504' `
     (Get-FileHash -Algorithm SHA256 -LiteralPath $sourcePath).Hash 'Canonical source changed.'
 Assert-True (Test-Path -LiteralPath $nativePath) 'Canonical native authority is missing.'
 Assert-True (Test-Path -LiteralPath $maskPath) 'Reviewed body-region mask is missing.'
+Assert-True (Test-Path -LiteralPath $seedPath) 'Immutable predecessor body-region seed is missing.'
 Assert-True (Test-Path -LiteralPath $authorityPath) 'Independent body-outline authority is missing.'
 Assert-Equal 'E256F3DC28929A49624C6308F77C994F061240CB7D2C9E80780AAD4A300C0779' `
-    (Get-FileHash -Algorithm SHA256 -LiteralPath $maskPath).Hash 'Reviewed body-region mask changed.'
+    (Get-FileHash -Algorithm SHA256 -LiteralPath $seedPath).Hash 'Immutable predecessor body-region seed changed.'
 
 Add-Type -AssemblyName System.Drawing
+Import-Module $sourceRasterModulePath -Force
+Import-Module $ownershipModulePath -Force
 
 $authority = Import-PowerShellDataFile -LiteralPath $authorityPath
+$ownershipConfiguration = Import-PowerShellDataFile -LiteralPath $ownershipConstantsPath
 $source = [System.Drawing.Bitmap]::new($sourcePath)
 $native = [System.Drawing.Bitmap]::new($nativePath)
 $mask = [System.Drawing.Bitmap]::new($maskPath)
+$seed = [System.Drawing.Bitmap]::new($seedPath)
+$processedSource = $null
+$resizedSource = $null
+$productionSeed = $null
+$productionOwnership = $null
+$mutationDirectories = [System.Collections.Generic.List[string]]::new()
 
 try
 {
@@ -133,6 +406,150 @@ try
     }
 
     Assert-True ($writableCount -gt 0) 'Body-region mask contains no writable pixels.'
+
+    $ownership = Get-IndependentBodyOwnership $source $seed $expectedAnchors
+    Assert-Equal 82 $ownership.SelectedComponents.Count `
+        'Independent ownership selected-component count changed.'
+    Assert-Equal 167 $ownership.SelectedPixelCount `
+        'Independent ownership selected-pixel count changed.'
+    Assert-Equal 4 $ownership.MaximumSpread `
+        'Independent ownership maximum selected channel spread changed.'
+    Assert-Equal 1 $ownership.ProtectedComponents.Count `
+        'Independent ownership anchored protected-component count changed.'
+    Assert-Equal 11988 $ownership.ProtectedComponents[0].Pixels.Count `
+        'Independent ownership anchored protected-component size changed.'
+    Assert-Equal '30945B766547723F9860941DEB70C74465912E2604E5EDADBBB69E91C78D708D' `
+        $ownership.MembershipHash 'Independent ownership membership hash changed.'
+
+    $processedSource = Remove-DororongBoundaryBackground $source
+    $resizedSource = Resize-DororongPremultiplied96 $processedSource
+    Assert-Equal ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb) `
+        $resizedSource.PixelFormat 'Premultiplied native resize pixel format changed.'
+    Assert-Equal 96 $resizedSource.Width 'Premultiplied native resize width changed.'
+    Assert-Equal 96 $resizedSource.Height 'Premultiplied native resize height changed.'
+    Assert-Equal '3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59' `
+        (Get-PngSha256 $resizedSource) `
+        'Premultiplied native resize differs from the pre-refactor generator baseline.'
+    $productionSeed = Import-DororongBinaryMask $seedPath
+    $productionOwnership = Get-DororongBodyOwnership `
+        $processedSource $productionSeed $ownershipConfiguration
+    Assert-Equal $ownership.MembershipHash $productionOwnership.MembershipHash `
+        'Production ownership membership differs from the independent membership.'
+    Assert-Equal ($ownership.MembershipRecords -join "`n") `
+        ($productionOwnership.MembershipRecords -join "`n") `
+        'Production ownership records differ from the independent records.'
+    for ($y = 0; $y -lt $mask.Height; $y++)
+    {
+        for ($x = 0; $x -lt $mask.Width; $x++)
+        {
+            Assert-Equal $ownership.ExpectedMask[$x,$y] `
+                ($productionOwnership.Mask.GetPixel($x, $y).R -eq 255) `
+                "Production ownership mask differs from the independent union at ($x,$y)."
+        }
+    }
+
+    $mutationMessages = [System.Collections.Generic.List[string]]::new()
+    $temporaryRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+
+    $mutationDirectory = Join-Path $temporaryRoot ("dororong-ownership-writable-alpha-" + [guid]::NewGuid())
+    [System.IO.Directory]::CreateDirectory($mutationDirectory) | Out-Null
+    $mutationDirectories.Add($mutationDirectory)
+    $mutationConfiguration = Copy-OwnershipConfiguration $ownershipConfiguration
+    $mutationConfiguration.InvalidSeedCoordinate = @{ X = 137; Y = 174 }
+    $mutationMessage = Assert-ThrowsLike {
+        Get-DororongBodyOwnership $processedSource $productionSeed $mutationConfiguration
+    } 'Writable-alpha failure' 'Restore invalid seed bit mutation'
+    $mutationMessages.Add("restore-seed-bit => $mutationMessage")
+
+    $mutationDirectory = Join-Path $temporaryRoot ("dororong-ownership-remove-component-" + [guid]::NewGuid())
+    [System.IO.Directory]::CreateDirectory($mutationDirectory) | Out-Null
+    $mutationDirectories.Add($mutationDirectory)
+    $mutationSeedPath = Join-Path $mutationDirectory 'mutation-seed.png'
+    $mutationSeed = $productionSeed.Clone()
+    try
+    {
+        foreach ($encoded in $ownership.SelectedComponents[0].Pixels)
+        {
+            $pixelX = $encoded % 225
+            $pixelY = [int][Math]::Floor($encoded / 225)
+            $mutationSeed.SetPixel($pixelX, $pixelY, [System.Drawing.Color]::FromArgb(255,255,255,255))
+        }
+        $mutationSeed.Save($mutationSeedPath, [System.Drawing.Imaging.ImageFormat]::Png)
+    }
+    finally
+    { $mutationSeed.Dispose() }
+    $importedMutationSeed = Import-DororongBinaryMask $mutationSeedPath
+    try
+    {
+        $mutationMessage = Assert-ThrowsLike {
+            Get-DororongBodyOwnership $processedSource $importedMutationSeed $ownershipConfiguration
+        } 'Component membership failure' 'Remove selected component mutation'
+        $mutationMessages.Add("remove-selected-component => $mutationMessage")
+    }
+    finally
+    { $importedMutationSeed.Dispose() }
+
+    $mutationDirectory = Join-Path $temporaryRoot ("dororong-ownership-protected-anchor-" + [guid]::NewGuid())
+    [System.IO.Directory]::CreateDirectory($mutationDirectory) | Out-Null
+    $mutationDirectories.Add($mutationDirectory)
+    $mutationSeedPath = Join-Path $mutationDirectory 'mutation-seed.png'
+    $mutationSeed = $productionSeed.Clone()
+    try
+    {
+        $mutationSeed.SetPixel(52, 68, [System.Drawing.Color]::FromArgb(255,255,255,255))
+        $mutationSeed.Save($mutationSeedPath, [System.Drawing.Imaging.ImageFormat]::Png)
+    }
+    finally
+    { $mutationSeed.Dispose() }
+    $importedMutationSeed = Import-DororongBinaryMask $mutationSeedPath
+    try
+    {
+        $mutationMessage = Assert-ThrowsLike {
+            Get-DororongBodyOwnership $processedSource $importedMutationSeed $ownershipConfiguration
+        } 'Protected-anchor failure' 'Add anchored-component pixel mutation'
+        $mutationMessages.Add("add-anchored-pixel => $mutationMessage")
+    }
+    finally
+    { $importedMutationSeed.Dispose() }
+
+    $mutationDirectory = Join-Path $temporaryRoot ("dororong-ownership-diagonal-contact-" + [guid]::NewGuid())
+    [System.IO.Directory]::CreateDirectory($mutationDirectory) | Out-Null
+    $mutationDirectories.Add($mutationDirectory)
+    $mutationConfiguration = Copy-OwnershipConfiguration $ownershipConfiguration
+    $mutationConfiguration.ContactOffsets = @(
+        @{ X = -1; Y = -1 }, @{ X = 1; Y = -1 },
+        @{ X = -1; Y = 1 }, @{ X = 1; Y = 1 }
+    )
+    $mutationMessage = Assert-ThrowsLike {
+        Get-DororongBodyOwnership $processedSource $productionSeed $mutationConfiguration
+    } 'Four-neighbor contact assertion failed' 'Diagonal-only contact mutation'
+    $mutationMessages.Add("diagonal-only-contact => $mutationMessage")
+
+    $mutationDirectory = Join-Path $temporaryRoot ("dororong-ownership-anchor-set-" + [guid]::NewGuid())
+    [System.IO.Directory]::CreateDirectory($mutationDirectory) | Out-Null
+    $mutationDirectories.Add($mutationDirectory)
+    $mutationConfiguration = Copy-OwnershipConfiguration $ownershipConfiguration
+    $mutationConfiguration.ProtectedAnchors[0].X = 53
+    $mutationMessage = Assert-ThrowsLike {
+        Get-DororongBodyOwnership $processedSource $productionSeed $mutationConfiguration
+    } 'Protected anchor-set failure' 'Changed anchor-coordinate mutation'
+    $mutationMessages.Add("change-anchor-coordinate => $mutationMessage")
+
+    $firstMismatch = $null
+    for ($y = 0; $y -lt $mask.Height -and $null -eq $firstMismatch; $y++)
+    {
+        for ($x = 0; $x -lt $mask.Width; $x++)
+        {
+            $actualWritable = $mask.GetPixel($x, $y).R -eq 255
+            if ($actualWritable -ne $ownership.ExpectedMask[$x,$y])
+            {
+                $firstMismatch = "$x,$y"
+                break
+            }
+        }
+    }
+    Assert-True ($null -eq $firstMismatch) `
+        "Final body-region mask differs from the independent ownership union at ($firstMismatch); observed final count $writableCount."
 
     $unvisited = [System.Collections.Generic.HashSet[string]]::new($writable)
     $componentCount = 0
@@ -260,10 +677,28 @@ try
     }
 
     $maskHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $maskPath).Hash
+    Assert-Equal 'D08B3A941C662F1CBC55C486C13FD4C6CD8901DA9CD5CF8512509698219FE46F' `
+        $maskHash 'Reviewed complete body-ownership mask changed.'
+    foreach ($mutationMessage in $mutationMessages)
+    { Write-Output "OWNERSHIP MUTATION PASS $mutationMessage" }
     Write-Output "BODY MASK PASS hash=$maskHash count=$writableCount bounds=$minimumX,$minimumY-$maximumX,$maximumY"
 }
 finally
 {
+    foreach ($mutationDirectory in $mutationDirectories)
+    {
+        $resolvedMutationDirectory = [System.IO.Path]::GetFullPath($mutationDirectory)
+        $resolvedTemporaryRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+        if ($resolvedMutationDirectory.StartsWith($resolvedTemporaryRoot, [StringComparison]::OrdinalIgnoreCase) -and
+            [System.IO.Directory]::Exists($resolvedMutationDirectory))
+        { Remove-Item -LiteralPath $resolvedMutationDirectory -Recurse -Force }
+    }
+    if ($null -ne $productionOwnership -and $null -ne $productionOwnership.Mask)
+    { $productionOwnership.Mask.Dispose() }
+    if ($null -ne $productionSeed) { $productionSeed.Dispose() }
+    if ($null -ne $resizedSource) { $resizedSource.Dispose() }
+    if ($null -ne $processedSource) { $processedSource.Dispose() }
+    $seed.Dispose()
     $mask.Dispose()
     $native.Dispose()
     $source.Dispose()
