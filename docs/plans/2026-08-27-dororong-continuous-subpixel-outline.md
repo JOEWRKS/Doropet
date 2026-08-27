@@ -140,6 +140,8 @@ For every existing source/native sample array, set the normal endpoints to the f
 
 The focused test samples the pinned source/native reference along each line at `0.125` spacing. Hair lines must contain exactly one contiguous darkness run at threshold `0.10`, have near-zero darkness at both ends, and have a positive integral. Body source lines must contain exactly one contiguous original-body-ink run, have at least one near-white fill-side interval, and intersect the approved mask. Native body lines are location authority only at this stage; require in-bounds, nonzero length, and intersection with the committed body alpha, but do not approve their current body thickness.
 
+Independently derive the approved source half-pixel contour from the pinned source and binary mask inside the focused test; do not import production geometry code. Every body `SourceNormal` must geometrically cross its named exposed contour or one legal continuation. Intersections at contiguous stair-step edges sharing the same crossing vertex count as one crossing, but a line that crosses only retained legacy source ink and never reaches the approved contour fails with `Body normal '<name>' SourceNormal does not intersect the approved contour.` This assertion must fail against the pre-correction `SecondValley` authority before its endpoints change. No feasibility interval, candidate pixel, or sweep score may participate in the expected value.
+
 The test pins the final PSD1 SHA-256 only after these semantic checks pass. It also proves a copied fixture with one moved endpoint, one swapped fill/ink reference, or a duplicate endpoint fails with a named error.
 
 - [ ] **Step 5: Generate and inspect source-only authority overlays**
@@ -147,6 +149,8 @@ The test pins the final PSD1 SHA-256 only after these semantic checks pass. It a
 `tools/New-ContinuousOutlineAuthority.ps1` accepts `-SourcePath`, `-MaskPath`, `-NativePath`, `-AuthorityPath`, and `-EvidenceDirectory`. It validates all pinned hashes and draws only reference overlays: blue hair normals, red body normals, green fill points, black ink points, and labeled endpoints at native scale plus nearest-neighbor 4x. It must not reconstruct, erase, recolor, or write a body candidate.
 
 Inspect the exact source/native overlays and their 4x versions. Every line must cross the named visible stroke once without crossing a junction, protected part, separate stroke, or unrelated body segment. Record concrete observations for all six hair anchors and all fifteen body normals. If a line is invalid, correct only its literal authority coordinates before any feasibility work and rerun the mutation checks.
+
+Owner-authorized recovery after the first empty continuous sweep: reopen Task 1 only for normals that fail the new geometric-contour assertion. A fresh authoring worker may read the pinned source, mask, current authority, and reference-only overlays, but not the Task 2 report, Task 2 test, uncommitted production modules, candidate data, per-normal passing intervals, or sweep scores. Capture the exact contour-intersection RED first, select replacement endpoints from geometry alone, generate a new attempt-specific source/native plus 4x overlay set, inspect all affected relationships, pin the new fixture hash, rerun the three authority mutations and both Task 1 focused tests, and commit the authority correction for fresh review. The source/mask, hair references and medians, tolerance, fill rule, legal endpoints, and one-global-width rule remain frozen.
 
 - [ ] **Step 6: Run GREEN and commit the authority**
 
@@ -244,6 +248,8 @@ Using the pinned source, shared background removal, approved mask, exact contour
 For each width, require every body measurement inside `[0.9 * sourceHairMedian, 1.1 * sourceHairMedian]`. The intersection must be non-empty. Select the passing width that minimizes the maximum absolute relative error across all body normals; if scores tie within `1e-12`, choose the smaller width. Write the selected numeric literal as `Width` in the constants PSD1, rerun the entire sweep, and assert the literal equals the deterministic selection.
 
 If the intersection is empty, stop without product asset changes or commit and report all per-normal intervals. Do not move normals, edit the mask, change constants/tolerances, or add local corrections after seeing the sweep.
+
+The first empty sweep is preserved as rejected evidence rather than tuned. After the owner-authorized Task 1 contour-crossing correction receives a new fixture hash and independent review, discard only the uncommitted feasibility result, keep the implementation tests, and repeat the complete 241-width sweep from the corrected frozen authority. If that repeated intersection is empty, stop again; do not reopen authority from sweep results a second time.
 
 - [ ] **Step 6: Record source-only evidence and commit feasible geometry**
 
