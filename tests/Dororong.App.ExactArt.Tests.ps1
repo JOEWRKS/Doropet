@@ -480,6 +480,181 @@ function Get-OpticalInk([Drawing.Color]$Pixel)
     return [Math]::Max(0.0,$alpha * (255.0 - $luminance) / 255.0)
 }
 
+function Get-BitmapPixelHash([Drawing.Bitmap]$Bitmap)
+{
+    $bytes=[Collections.Generic.List[byte]]::new($Bitmap.Width*$Bitmap.Height*4)
+    for($y=0;$y-lt$Bitmap.Height;$y++)
+    {
+        for($x=0;$x-lt$Bitmap.Width;$x++)
+        {
+            $pixel=$Bitmap.GetPixel($x,$y)
+            $bytes.Add($pixel.A);$bytes.Add($pixel.R);$bytes.Add($pixel.G);$bytes.Add($pixel.B)
+        }
+    }
+    return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes.ToArray()))
+}
+
+$script:IndependentEyeBlankSpecs=@(
+    @{
+        Name='left'; Runs=@(
+            '114:43-59','115:44-60','116:44-62','117:43-63','118:43-64','119:43-64',
+            '120:43-65','121:43-64','122:43-64','123:43-64','124:43-64','125:43-64',
+            '126:43-64','127:43-64','128:43-64','129:43-64','130:43-64','131:44-63',
+            '132:45-62','133:46-61','134:48-59','135:51-57')
+        MinimumX=43;MaximumX=64;MinimumY=114;MaximumY=135
+        TopLeftX=42;TopLeftY=137;TopRightX=66;TopRightY=136
+        BottomLeftX=48;BottomLeftY=143;BottomRightX=64;BottomRightY=143
+    },
+    @{
+        Name='right'; Runs=@(
+            '114:92-100','115:89-103','116:86-105','117:86-106','118:86-106','119:86-106',
+            '120:86-106','121:86-106','122:86-106','123:86-106','124:86-106','125:86-106',
+            '126:86-106','127:86-106','128:86-106','129:86-106','130:86-106','131:86-106',
+            '132:86-106','133:87-105','134:88-104','135:90-103','136:93-103','137:86-103',
+            '138:86-102','139:88-102','140:89-101','141:99-101','142:99-100','143:99-100')
+        MinimumX=86;MaximumX=106;MinimumY=114;MaximumY=143
+        TopLeftX=65;TopLeftY=134;TopRightX=106;TopRightY=142
+        BottomLeftX=86;BottomLeftY=144;BottomRightX=106;BottomRightY=144
+    })
+
+function Get-IndependentEyeBlankColor(
+    [Drawing.Bitmap]$FaceSource,[int]$X,[int]$Y,[hashtable]$Eye)
+{
+    $topLeft=$FaceSource.GetPixel($Eye.TopLeftX,$Eye.TopLeftY)
+    $topRight=$FaceSource.GetPixel($Eye.TopRightX,$Eye.TopRightY)
+    $bottomLeft=$FaceSource.GetPixel($Eye.BottomLeftX,$Eye.BottomLeftY)
+    $bottomRight=$FaceSource.GetPixel($Eye.BottomRightX,$Eye.BottomRightY)
+    $xRatio=($X-$Eye.MinimumX)/($Eye.MaximumX-$Eye.MinimumX)
+    $yRatio=($Y-$Eye.MinimumY)/($Eye.MaximumY-$Eye.MinimumY)
+    $channels=foreach($channel in @('R','G','B'))
+    {
+        $top=$topLeft.$channel+(($topRight.$channel-$topLeft.$channel)*$xRatio)
+        $bottom=$bottomLeft.$channel+(($bottomRight.$channel-$bottomLeft.$channel)*$xRatio)
+        [int][Math]::Round($top+(($bottom-$top)*$yRatio),0,[MidpointRounding]::ToEven)
+    }
+    return [Drawing.Color]::FromArgb(255,$channels[0],$channels[1],$channels[2])
+}
+
+function New-IndependentEyeBlank([Drawing.Bitmap]$Open,[Drawing.Bitmap]$FaceSource)
+{
+    $blank=Copy-Bitmap32 $Open
+    try
+    {
+        foreach($eye in $script:IndependentEyeBlankSpecs)
+        {
+            foreach($encodedRun in $eye.Runs)
+            {
+                $parts=$encodedRun.Split(':');$y=[int]$parts[0];$bounds=$parts[1].Split('-')
+                foreach($x in ([int]$bounds[0])..([int]$bounds[1]))
+                {
+                    $face=Get-IndependentEyeBlankColor $FaceSource $x $y $eye
+                    $alpha=$blank.GetPixel($x,$y).A
+                    $blank.SetPixel($x,$y,[Drawing.Color]::FromArgb(
+                        $alpha,$face.R,$face.G,$face.B))
+                }
+            }
+        }
+        return $blank
+    }
+    catch{$blank.Dispose();throw}
+}
+
+function Measure-NativeOpenEyeAperture(
+    [Drawing.Bitmap]$Open,[string]$Name,[int]$StartX,[int]$EndX,[int]$StartY,[int]$EndY)
+{
+    $count=0;$sumX=0.0;$sumY=0.0;$minX=999;$maxX=-1;$minY=999;$maxY=-1
+    for($y=$StartY;$y-le$EndY;$y++)
+    {
+        for($x=$StartX;$x-le$EndX;$x++)
+        {
+            $pixel=$Open.GetPixel($x,$y)
+            if($pixel.A-eq0-or($pixel.B-$pixel.R)-lt10){continue}
+            $count++;$sumX+=$x;$sumY+=$y
+            $minX=[Math]::Min($minX,$x);$maxX=[Math]::Max($maxX,$x)
+            $minY=[Math]::Min($minY,$y);$maxY=[Math]::Max($maxY,$y)
+        }
+    }
+    Assert-True ($count-gt0) "$Name canonical open aperture has no visible color pixels."
+    return [pscustomobject]@{
+        Name=$Name;VisibleWidth=$maxX-$minX+1;Bounds="($minX,$minY)-($maxX,$maxY)"
+        CenterX=$sumX/$count;CenterY=$sumY/$count
+    }
+}
+
+function Measure-NativeClosedEyeCurve(
+    [Drawing.Bitmap]$Blank,[Drawing.Bitmap]$Closed,[string]$Name,
+    [int]$StartX,[int]$EndX,[int]$StartY,[int]$EndY)
+{
+    $gain=[double[]]::new(96*96)
+    $total=0.0;$weightedX=0.0;$weightedY=0.0
+    $minX=999;$maxX=-1;$minY=999;$maxY=-1
+    for($y=$StartY;$y-le$EndY;$y++)
+    {
+        for($x=$StartX;$x-le$EndX;$x++)
+        {
+            $value=[Math]::Max(0.0,
+                (Get-OpticalInk $Closed.GetPixel($x,$y))-(Get-OpticalInk $Blank.GetPixel($x,$y)))
+            if($value-lt0.01){continue}
+            $gain[($y*96)+$x]=$value;$total+=$value;$weightedX+=($x*$value);$weightedY+=($y*$value)
+            $minX=[Math]::Min($minX,$x);$maxX=[Math]::Max($maxX,$x)
+            $minY=[Math]::Min($minY,$y);$maxY=[Math]::Max($maxY,$y)
+        }
+    }
+    Assert-True ($total-gt0.0) "$Name closed curve has no measurable native ink gain."
+
+    $columns=[Collections.Generic.List[object]]::new()
+    for($x=$minX;$x-le$maxX;$x++)
+    {
+        $columnTotal=0.0;$columnWeightedY=0.0
+        for($y=$minY;$y-le$maxY;$y++)
+        {
+            $value=$gain[($y*96)+$x]
+            $columnTotal+=$value;$columnWeightedY+=($y*$value)
+        }
+        if($columnTotal-ge0.02)
+        {$columns.Add([pscustomobject]@{X=$x;Y=$columnWeightedY/$columnTotal;Weight=$columnTotal})}
+    }
+    Assert-True ($columns.Count-ge5) "$Name closed curve has fewer than five visible native columns."
+    $edgeCount=[Math]::Max(1,[int][Math]::Ceiling($columns.Count*0.20))
+    $edgeColumns=@($columns|Select-Object -First $edgeCount)+@($columns|Select-Object -Last $edgeCount)
+    $endpointY=($edgeColumns|Measure-Object Y -Average).Average
+    $centerX=$weightedX/$total
+    $centerColumns=@($columns|Sort-Object @{Expression={[Math]::Abs($_.X-$centerX)}}|Select-Object -First 3)
+    $centerY=($centerColumns|Measure-Object Y -Average).Average
+
+    $active=[bool[]]::new(96*96)
+    for($y=$minY;$y-le$maxY;$y++)
+    {for($x=$minX;$x-le$maxX;$x++){$active[($y*96)+$x]=$gain[($y*96)+$x]-ge0.04}}
+    $components=0
+    for($y=$minY;$y-le$maxY;$y++)
+    {
+        for($x=$minX;$x-le$maxX;$x++)
+        {
+            $index=($y*96)+$x
+            if(-not$active[$index]){continue}
+            $components++;$queue=[Collections.Generic.Queue[int]]::new();$queue.Enqueue($index);$active[$index]=$false
+            while($queue.Count-gt0)
+            {
+                $current=$queue.Dequeue();$currentX=$current%96;$currentY=[int][Math]::Floor($current/96)
+                foreach($dy in -1..1){foreach($dx in -1..1)
+                {
+                    if($dx-eq0-and$dy-eq0){continue}
+                    $nextX=$currentX+$dx;$nextY=$currentY+$dy
+                    if($nextX-lt$minX-or$nextX-gt$maxX-or$nextY-lt$minY-or$nextY-gt$maxY){continue}
+                    $next=($nextY*96)+$nextX
+                    if(-not$active[$next]){continue}
+                    $active[$next]=$false;$queue.Enqueue($next)
+                }}
+            }
+        }
+    }
+    return [pscustomobject]@{
+        Name=$Name;VisibleWidth=$maxX-$minX+1;Bounds="($minX,$minY)-($maxX,$maxY)"
+        CenterX=$centerX;CenterY=$weightedY/$total;EndpointY=$endpointY
+        CurveCenterY=$centerY;Dip=$centerY-$endpointY;Components=$components;TotalInk=$total
+    }
+}
+
 function Assert-SourceEyeChangeContract(
     [Drawing.Bitmap]$SourceOpen,[Drawing.Bitmap]$SourceClosed)
 {
@@ -520,94 +695,38 @@ function Assert-SourceEyeChangeContract(
 
 function Assert-EyeAndMouthContract(
     [Drawing.Bitmap]$SourceOpen,[Drawing.Bitmap]$SourceClosed,
-    [Drawing.Bitmap]$NativeOpen,[Drawing.Bitmap]$NativeClosed)
+    [Drawing.Bitmap]$NativeOpen,[Drawing.Bitmap]$NativeBlank,[Drawing.Bitmap]$NativeClosed)
 {
     $sourceChanges=Assert-SourceEyeChangeContract $SourceOpen $SourceClosed
 
+    $measurements=[Collections.Generic.List[object]]::new()
     foreach($eye in @(
-        @{Name='left'; SourceStartX=43;SourceEndX=64;NativeOpenStartX=18;NativeOpenEndX=29;
-            UpperEndpoints=@('46,124','58,124'); LowerCenter='52,126';
-            ClearedCenters=@('52,124','52,127'); ClearedOuter=@('44,124','60,124');
-            NativeUpperEndpoints=@('19,53','24,53'); NativeCenterX=22},
-        @{Name='right'; SourceStartX=86;SourceEndX=106;NativeOpenStartX=35;NativeOpenEndX=47;
-            UpperEndpoints=@('88,124','100,124'); LowerCenter='94,126';
-            ClearedCenters=@('94,124','94,127'); ClearedOuter=@('86,124','102,124');
-            NativeUpperEndpoints=@('37,53','42,53'); NativeCenterX=40}))
+        @{Name='viewer-left';StartX=16;EndX=30;StartY=46;EndY=61},
+        @{Name='viewer-right';StartX=34;EndX=48;StartY=46;EndY=63}))
     {
-        $openIrisXs=[Collections.Generic.List[int]]::new()
-        foreach($y in 49..61)
-        {
-            foreach($x in $eye.NativeOpenStartX..$eye.NativeOpenEndX)
-            {
-                $pixel=$NativeOpen.GetPixel($x,$y)
-                if($pixel.A-gt0-and($pixel.B-$pixel.R)-ge10){$openIrisXs.Add($x)}
-            }
-        }
-        $openCenterX=[int][Math]::Round(
-            (($openIrisXs|Measure-Object -Minimum).Minimum+
-             ($openIrisXs|Measure-Object -Maximum).Maximum)/2.0,
-            0,[MidpointRounding]::ToEven)
-        $lidInk=0.0;$lidWeightedX=0.0
-        foreach($y in 124..126)
-        {
-            foreach($x in $eye.SourceStartX..$eye.SourceEndX)
-            {
-                $ink=Get-OpticalInk $SourceClosed.GetPixel($x,$y)
-                if($ink-ge0.30){$lidInk+=$ink;$lidWeightedX+=($x*$ink)}
-            }
-        }
-        $sourceLidCenterX=$lidWeightedX/$lidInk
-        $nativeLidCenterX=[int][Math]::Round(
-            ((($sourceLidCenterX+0.5)*96.0/225.0)-0.5),
-            0,[MidpointRounding]::AwayFromZero)
-        Assert-Equal $openCenterX $nativeLidCenterX `
-            "$($eye.Name) lid horizontal center is not aligned with the canonical open eye (open=$openCenterX, lid=$nativeLidCenterX, sourceLid=$sourceLidCenterX)."
-        foreach($probe in $eye.UpperEndpoints + @($eye.LowerCenter))
-        {
-            $parts=$probe.Split(',')
-            Assert-True ((Get-OpticalInk $SourceClosed.GetPixel([int]$parts[0],[int]$parts[1])) -ge 0.30) `
-                "$($eye.Name) shallow cup is missing at source $probe."
-        }
-        foreach($probe in $eye.ClearedCenters)
-        {
-            $parts=$probe.Split(',')
-            Assert-True ((Get-OpticalInk $SourceClosed.GetPixel([int]$parts[0],[int]$parts[1])) -le 0.20) `
-                "$($eye.Name) rejected center survived at source $probe."
-        }
-        foreach($probe in $eye.ClearedOuter)
-        {
-            $parts=$probe.Split(',')
-            Assert-True ((Get-OpticalInk $SourceClosed.GetPixel([int]$parts[0],[int]$parts[1])) -le 0.30) `
-                "$($eye.Name) rejected wide endpoint survived at source $probe."
-        }
-        foreach($probe in $eye.NativeUpperEndpoints)
-        {
-            $parts=$probe.Split(',')
-            Assert-True ((Get-OpticalInk $NativeClosed.GetPixel([int]$parts[0],[int]$parts[1])) -ge 0.25) `
-                "$($eye.Name) shallow-cup endpoint is missing after the single production resize at native $probe."
-        }
-        $lowerCenterInk=Get-OpticalInk $NativeClosed.GetPixel($eye.NativeCenterX,54)
-        $centerInk=0.0;$centerWeightedY=0.0
-        foreach($y in 52..55)
-        {
-            $ink=Get-OpticalInk $NativeClosed.GetPixel($eye.NativeCenterX,$y)
-            $centerInk+=$ink;$centerWeightedY+=($y*$ink)
-        }
-        $centerY=$centerWeightedY/$centerInk
-        $endpointYs=@($eye.NativeUpperEndpoints|ForEach-Object{
-            $x=[int]$_.Split(',')[0];$inkTotal=0.0;$weightedY=0.0
-            foreach($y in 52..55)
-            {
-                $ink=Get-OpticalInk $NativeClosed.GetPixel($x,$y)
-                $inkTotal+=$ink;$weightedY+=($y*$ink)
-            }
-            $weightedY/$inkTotal
-        })
-        $endpointY=($endpointYs|Measure-Object -Average).Average
-        $dip=$centerY-$endpointY
-        Assert-True ($lowerCenterInk -ge 0.25 -and $dip -ge 0.25 -and $dip -le 0.85) `
-            "$($eye.Name) shallow cup did not retain a gentle downward center after the single production resize (endpointY=$endpointY, centerY=$centerY, dip=$dip, lower=$lowerCenterInk)."
+        $aperture=Measure-NativeOpenEyeAperture $NativeOpen $eye.Name `
+            $eye.StartX $eye.EndX $eye.StartY $eye.EndY
+        $curve=Measure-NativeClosedEyeCurve $NativeBlank $NativeClosed $eye.Name `
+            $eye.StartX $eye.EndX $eye.StartY $eye.EndY
+        Assert-True ([Math]::Abs($curve.CenterX-$aperture.CenterX)-le0.60) `
+            "$($eye.Name) closed curve is horizontally misaligned with its canonical aperture (aperture=$($aperture.CenterX), curve=$($curve.CenterX))."
+        Assert-True ([Math]::Abs($curve.CenterY-$aperture.CenterY)-le0.60) `
+            "$($eye.Name) closed curve is vertically misaligned with its canonical aperture (aperture=$($aperture.CenterY), curve=$($curve.CenterY))."
+        Assert-True ($curve.VisibleWidth-ge$aperture.VisibleWidth-and
+            $curve.VisibleWidth-le($aperture.VisibleWidth+3)) `
+            "$($eye.Name) closed curve does not cover roughly the visible aperture width (aperture=$($aperture.VisibleWidth), curve=$($curve.VisibleWidth), bounds=$($curve.Bounds))."
+        Assert-Equal 1 $curve.Components `
+            "$($eye.Name) closed curve is not one connected native component."
+        Assert-True ($curve.Dip-ge0.75-and$curve.Dip-le1.15) `
+            "$($eye.Name) closed curve does not retain a gentle roughly one-pixel downward-center dip (dip=$($curve.Dip), endpointY=$($curve.EndpointY), centerY=$($curve.CurveCenterY))."
+        Write-Output "CLOSED EYE METRICS name=$($eye.Name) apertureBounds=$($aperture.Bounds) apertureCenter=$($aperture.CenterX),$($aperture.CenterY) curveBounds=$($curve.Bounds) curveCenter=$($curve.CenterX),$($curve.CenterY) width=$($curve.VisibleWidth) components=$($curve.Components) dip=$($curve.Dip)"
+        $measurements.Add([pscustomobject]@{Aperture=$aperture;Curve=$curve})
     }
+    $apertureSeparation=$measurements[1].Aperture.CenterY-$measurements[0].Aperture.CenterY
+    $curveSeparation=$measurements[1].Curve.CenterY-$measurements[0].Curve.CenterY
+    Assert-True ($curveSeparation-ge2.40-and
+        [Math]::Abs($curveSeparation-$apertureSeparation)-le0.50) `
+        "Independent left/right closed-eye heights do not preserve canonical asymmetry (aperture=$apertureSeparation, curve=$curveSeparation)."
 
     $nativeChanges = 0
     for ($y = 0; $y -lt 96; $y++)
@@ -628,15 +747,9 @@ function Assert-EyeAndMouthContract(
     Assert-True ($nativeChanges -ge 80) 'Both native eyes did not visibly close.'
 
     foreach ($eye in @(
-        @{ Name='left'; StartX=18; EndX=29; LidY=53; Lower=@('20,55','22,56','25,55') },
-        @{ Name='right'; StartX=35; EndX=47; LidY=53; Lower=@('42,56','43,58','42,60') }))
+        @{ Name='left'; Lower=@('20,55','22,56','25,55') },
+        @{ Name='right'; Lower=@('42,56','43,58','42,60') }))
     {
-        $lidInk = 0
-        for ($x = $eye.StartX; $x -le $eye.EndX; $x++)
-        {
-            if ((Get-OpticalInk $NativeClosed.GetPixel($x,$eye.LidY)) -ge 0.30) { $lidInk++ }
-        }
-        Assert-True ($lidInk -ge 4) "$($eye.Name) closed lid is not visible."
         foreach ($probe in $eye.Lower)
         {
             $parts = $probe.Split(',')
@@ -789,10 +902,10 @@ $expectedHashes = [ordered]@{
     Authority = 'DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
     SourceOpen = 'D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF'
     SourceOpenBaseline = '8F542A4F1B2671789BD7CD4980D890BF96CFCC9DADBC9D4E61963CCE2D384CCB'
-    SourceClosed = '3AEADE8B54A3423B9CB54D9AB323A9C79177678C9CB134CF15B5CBC089340AF0'
+    SourceClosed = '7FE167DBD0419A4A91457D60388824C6DA5913E93DCF9DC25957716959995B89'
     NativeOpen = '238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511'
     NativeOpenBaseline = '3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59'
-    NativeClosed = 'D0C0BE25471A92D65948132CE6154BA8AF56FF1F59FCDB8D0C4EDF64B206747A'
+    NativeClosed = '9DEEE528E19D412FC1BA4CC2FD83E507DCFBA3ED13268836BB72B0717C9D2238'
     Contour = 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65'
 }
 foreach ($name in @('Source','Seed','Mask','Authority'))
@@ -818,6 +931,7 @@ if(-not[string]::IsNullOrWhiteSpace($EyeOnlyOpenPath)-or
         'Eye-only mode requires open/closed source and native candidate paths.'
     $eyeOpen=$null;$eyeClosed=$null;$eyeNativeOpen=$null;$eyeNativeClosed=$null
     $eyeRaw=$null;$eyeSource=$null;$eyeSeed=$null;$eyeMask=$null
+    $eyeBlank=$null;$eyeBlankProxy=$null;$eyeNativeBlank=$null
     $eyeOpenProxy=$null;$eyeClosedProxy=$null;$eyeDirectNativeOpen=$null;$eyeDirectNativeClosed=$null
     try
     {
@@ -832,7 +946,6 @@ if(-not[string]::IsNullOrWhiteSpace($EyeOnlyOpenPath)-or
         $sourceChanges=Assert-SourceEyeChangeContract $eyeOpen $eyeClosed
         Assert-AlphaZeroRgb $eyeNativeOpen 'Eye-only native-open candidate'
         Assert-AlphaZeroRgb $eyeNativeClosed 'Eye-only native-closed candidate'
-        Assert-EyeAndMouthContract $eyeOpen $eyeClosed $eyeNativeOpen $eyeNativeClosed
         Assert-MutationRejected 'source-eye-outside-membership' `
             'escaped exact reviewed source eye stencil/lid membership' {
             $mutated=Copy-Bitmap32 $eyeClosed
@@ -865,6 +978,13 @@ if(-not[string]::IsNullOrWhiteSpace($EyeOnlyOpenPath)-or
         $null=Assert-ProxyMembership $eyeComponents $eyeMask.Width 'Eye-only independent proxy'
         $eyeOpenProxy=New-IndependentResizeProxy $eyeOpen $eyeFill $eyeComponents
         $eyeClosedProxy=New-IndependentResizeProxy $eyeClosed $eyeFill $eyeComponents
+        $eyeBlank=New-IndependentEyeBlank $eyeOpen $eyeSource
+        Assert-Equal '4DCFA02B90809A64AE7908CF6228388B2DEE88D97EBD4CE54F236721D97DAD45' `
+            (Get-BitmapPixelHash $eyeBlank) 'Independent eye-only source blank pixels changed.'
+        $eyeBlankProxy=New-IndependentResizeProxy $eyeBlank $eyeFill $eyeComponents
+        $eyeNativeBlank=Resize-DororongPremultiplied96 $eyeBlankProxy
+        Assert-Equal 'F7E8F8B6C789A9F4AF1A7393DB369C5378B0FD53E4260A13837FF6F1D4493206' `
+            (Get-BitmapPixelHash $eyeNativeBlank) 'Independent eye-only native blank pixels changed.'
         Assert-ProxyInputEqualityOutsideEyes $eyeOpenProxy $eyeClosedProxy 'Eye-only independent proxy'
         $eyeDirectNativeOpen=Resize-DororongPremultiplied96 $eyeOpenProxy
         $eyeDirectNativeClosed=Resize-DororongPremultiplied96 $eyeClosedProxy
@@ -872,6 +992,7 @@ if(-not[string]::IsNullOrWhiteSpace($EyeOnlyOpenPath)-or
             'Eye-only native-open differs from one independent proxy resize.'
         Assert-BitmapEqual $eyeDirectNativeClosed $eyeNativeClosed `
             'Eye-only native-closed differs from one independent proxy resize.'
+        Assert-EyeAndMouthContract $eyeOpen $eyeClosed $eyeNativeOpen $eyeNativeBlank $eyeNativeClosed
         . (Join-Path $repositoryRoot 'tests/support/Dororong.ContinuousOptics.ps1')
         $eyeAuthority=Import-PowerShellDataFile -LiteralPath $paths.Authority
         $eyeOutline=Get-OutlineMedianColor $eyeSource @($eyeConstants.OutlineSamples)
@@ -881,7 +1002,8 @@ if(-not[string]::IsNullOrWhiteSpace($EyeOnlyOpenPath)-or
     }
     finally
     {
-        foreach($bitmap in @($eyeDirectNativeClosed,$eyeDirectNativeOpen,$eyeClosedProxy,$eyeOpenProxy,
+        foreach($bitmap in @($eyeDirectNativeClosed,$eyeDirectNativeOpen,$eyeNativeBlank,$eyeBlankProxy,$eyeBlank,
+            $eyeClosedProxy,$eyeOpenProxy,
             $eyeMask,$eyeSeed,$eyeSource,$eyeRaw,$eyeNativeClosed,$eyeNativeOpen,$eyeClosed,$eyeOpen))
         {if($null-ne$bitmap){$bitmap.Dispose()}}
     }
@@ -1018,7 +1140,8 @@ Assert-Equal $expectedHashes.NativeOpen `
 $raw=$null; $source=$null; $seed=$null; $mask=$null; $direct=$null
 $directProxy=$null; $directNative=$null; $baselineNative=$null; $sourceBaseline=$null
 $sourceOpen=$null; $sourceClosed=$null; $nativeBaseline=$null
-$sourceOpenProxy=$null; $sourceClosedProxy=$null
+$sourceOpenProxy=$null; $sourceClosedProxy=$null; $sourceEyeBlank=$null
+$sourceEyeBlankProxy=$null; $nativeEyeBlank=$null
 $nativeOpen=$null; $nativeClosed=$null; $generatedOpen=$null; $generatedClosed=$null
 try
 {
@@ -1062,11 +1185,18 @@ try
     Assert-SourceBodyEquality $sourceOpen $sourceClosed $mask 'Source candidate'
     $sourceOpenProxy=New-IndependentResizeProxy $sourceOpen $direct.FillField $proxyComponents
     $sourceClosedProxy=New-IndependentResizeProxy $sourceClosed $direct.FillField $proxyComponents
+    $sourceEyeBlank=New-IndependentEyeBlank $sourceOpen $source
+    Assert-Equal '4DCFA02B90809A64AE7908CF6228388B2DEE88D97EBD4CE54F236721D97DAD45' `
+        (Get-BitmapPixelHash $sourceEyeBlank) 'Independent source eye blank pixels changed.'
+    $sourceEyeBlankProxy=New-IndependentResizeProxy $sourceEyeBlank $direct.FillField $proxyComponents
+    $nativeEyeBlank=Resize-DororongPremultiplied96 $sourceEyeBlankProxy
+    Assert-Equal 'F7E8F8B6C789A9F4AF1A7393DB369C5378B0FD53E4260A13837FF6F1D4493206' `
+        (Get-BitmapPixelHash $nativeEyeBlank) 'Independent native eye blank pixels changed.'
     Assert-ProxyInputEqualityOutsideEyes $sourceOpenProxy $sourceClosedProxy 'Canonical resize proxy'
     Assert-BitmapEqual $directProxy $sourceOpenProxy 'Direct and generated source-open resize proxies differ.'
     Assert-AlphaZeroRgb $nativeOpen 'Native-open candidate'
     Assert-AlphaZeroRgb $nativeClosed 'Native-closed candidate'
-    Assert-EyeAndMouthContract $sourceOpen $sourceClosed $nativeOpen $nativeClosed
+    Assert-EyeAndMouthContract $sourceOpen $sourceClosed $nativeOpen $nativeEyeBlank $nativeClosed
     $metrics = Measure-NativeBodyMetrics $nativeOpen $authority $direct.OutlineColor
 
     Assert-MutationRejected 'width-plus-1-over-64' 'Source-open fixed-width mutation' {
@@ -1221,8 +1351,9 @@ try
 }
 finally
 {
-    foreach ($bitmap in @($generatedClosed,$generatedOpen,$nativeClosed,$nativeOpen,$nativeBaseline,
-        $sourceClosedProxy,$sourceOpenProxy,$sourceClosed,$sourceOpen,$sourceBaseline,$baselineNative,
+    foreach ($bitmap in @($generatedClosed,$generatedOpen,$nativeClosed,$nativeOpen,$nativeEyeBlank,
+        $sourceEyeBlankProxy,$sourceEyeBlank,$nativeBaseline,$sourceClosedProxy,$sourceOpenProxy,
+        $sourceClosed,$sourceOpen,$sourceBaseline,$baselineNative,
         $directNative,$directProxy))
     { if ($null -ne $bitmap) { $bitmap.Dispose() } }
     if ($null -ne $direct -and $null -ne $direct.Candidate) { $direct.Candidate.Dispose() }

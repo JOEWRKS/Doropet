@@ -52,20 +52,97 @@ $rightEyeStencilRuns=@(
     '126:86-106','127:86-106','128:86-106','129:86-106','130:86-106','131:86-106',
     '132:86-106','133:87-105','134:88-104','135:90-103','136:93-103','137:86-103',
     '138:86-102','139:88-102','140:89-101','141:99-101','142:99-100','143:99-100')
-$leftLidRuns=@(
-    '124:45-47','124:57-59',
-    '125:46-48','125:56-58',
-    '126:48-56')
-$rightLidRuns=@(
-    '124:87-89','124:99-101',
-    '125:88-90','125:98-100',
-    '126:90-98')
+$closedEyeGeometry=@{
+    StrokeWidth=2.50
+    SubpixelFactor=8
+    CurveSegments=256
+    Left=@{P0=@(43.00,118.80);P1=@(54.440,124.40);P2=@(63.50,119.40)}
+    Right=@{P0=@(85.75,125.60);P1=@(92.298,131.55);P2=@(103.75,126.50)}
+}
 
 function ConvertFrom-CoordinateRun([string]$Run)
 {
     if($Run-notmatch'^(?<Y>\d+):(?<StartX>\d+)-(?<EndX>\d+)$')
     {throw "Invalid coordinate run '$Run'."}
     return [pscustomobject]@{Y=[int]$Matches.Y;StartX=[int]$Matches.StartX;EndX=[int]$Matches.EndX}
+}
+
+function New-CoordinateMask([string[]]$Runs,[int]$Width,[int]$Height)
+{
+    $mask=[bool[]]::new($Width*$Height)
+    foreach($encodedRun in $Runs)
+    {
+        $run=ConvertFrom-CoordinateRun $encodedRun
+        foreach($x in $run.StartX..$run.EndX){$mask[($run.Y*$Width)+$x]=$true}
+    }
+    return $mask
+}
+
+function Add-SubpixelQuadraticCurve(
+    [Drawing.Bitmap]$Bitmap,[bool[]]$Membership,[hashtable]$Eye,
+    [Drawing.Color]$LidColor,[double]$StrokeWidth,[int]$Factor,[int]$Segments)
+{
+    $p0x=[double]$Eye.P0[0];$p0y=[double]$Eye.P0[1]
+    $p1x=[double]$Eye.P1[0];$p1y=[double]$Eye.P1[1]
+    $p2x=[double]$Eye.P2[0];$p2y=[double]$Eye.P2[1]
+    $points=[double[,]]::new($Segments+1,2)
+    $minimumX=[double]::PositiveInfinity;$maximumX=[double]::NegativeInfinity
+    $minimumY=[double]::PositiveInfinity;$maximumY=[double]::NegativeInfinity
+    foreach($index in 0..$Segments)
+    {
+        $t=[double]$index/$Segments;$u=1.0-$t
+        $x=($u*$u*$p0x)+(2.0*$u*$t*$p1x)+($t*$t*$p2x)
+        $y=($u*$u*$p0y)+(2.0*$u*$t*$p1y)+($t*$t*$p2y)
+        $points[$index,0]=$x;$points[$index,1]=$y
+        $minimumX=[Math]::Min($minimumX,$x);$maximumX=[Math]::Max($maximumX,$x)
+        $minimumY=[Math]::Min($minimumY,$y);$maximumY=[Math]::Max($maximumY,$y)
+    }
+    $radius=$StrokeWidth/2.0;$radiusSquared=$radius*$radius
+    $startX=[Math]::Max(0,[int][Math]::Floor($minimumX-$radius-1.0))
+    $endX=[Math]::Min($Bitmap.Width-1,[int][Math]::Ceiling($maximumX+$radius+1.0))
+    $startY=[Math]::Max(0,[int][Math]::Floor($minimumY-$radius-1.0))
+    $endY=[Math]::Min($Bitmap.Height-1,[int][Math]::Ceiling($maximumY+$radius+1.0))
+    foreach($y in $startY..$endY)
+    {
+        foreach($x in $startX..$endX)
+        {
+            if(-not$Membership[($y*$Bitmap.Width)+$x]){continue}
+            $covered=0
+            foreach($sampleY in 0..($Factor-1))
+            {
+                $py=$y-0.5+(($sampleY+0.5)/$Factor)
+                foreach($sampleX in 0..($Factor-1))
+                {
+                    $px=$x-0.5+(($sampleX+0.5)/$Factor)
+                    $guess=[Math]::Max(0.0,[Math]::Min(1.0,($px-$p0x)/($p2x-$p0x)))
+                    $centerIndex=[int][Math]::Floor($guess*$Segments)
+                    $first=[Math]::Max(0,$centerIndex-7)
+                    $last=[Math]::Min($Segments-1,$centerIndex+7)
+                    $best=[double]::PositiveInfinity
+                    foreach($segmentIndex in $first..$last)
+                    {
+                        $ax=$points[$segmentIndex,0];$ay=$points[$segmentIndex,1]
+                        $bx=$points[($segmentIndex+1),0];$by=$points[($segmentIndex+1),1]
+                        $dx=$bx-$ax;$dy=$by-$ay;$lengthSquared=($dx*$dx)+($dy*$dy)
+                        $projection=if($lengthSquared-le0.0){0.0}else{
+                            ((($px-$ax)*$dx)+(($py-$ay)*$dy))/$lengthSquared}
+                        $projection=[Math]::Max(0.0,[Math]::Min(1.0,$projection))
+                        $nearestX=$ax+($projection*$dx);$nearestY=$ay+($projection*$dy)
+                        $distanceSquared=(($px-$nearestX)*($px-$nearestX))+(($py-$nearestY)*($py-$nearestY))
+                        if($distanceSquared-lt$best){$best=$distanceSquared}
+                    }
+                    if($best-le$radiusSquared){$covered++}
+                }
+            }
+            if($covered-eq0){continue}
+            $coverage=[double]$covered/($Factor*$Factor)
+            $base=$Bitmap.GetPixel($x,$y)
+            $red=[int][Math]::Round($base.R+(($LidColor.R-$base.R)*$coverage),0,[MidpointRounding]::ToEven)
+            $green=[int][Math]::Round($base.G+(($LidColor.G-$base.G)*$coverage),0,[MidpointRounding]::ToEven)
+            $blue=[int][Math]::Round($base.B+(($LidColor.B-$base.B)*$coverage),0,[MidpointRounding]::ToEven)
+            $Bitmap.SetPixel($x,$y,[Drawing.Color]::FromArgb($base.A,$red,$green,$blue))
+        }
+    }
 }
 
 function Get-BilinearFaceColor(
@@ -113,17 +190,15 @@ function New-ClosedEyeFrame([Drawing.Bitmap]$Open,[Drawing.Bitmap]$FaceSource)
                 }
             }
         }
-        $lidColor=$FaceSource.GetPixel(43,118)
-        foreach($encodedRun in @($leftLidRuns+$rightLidRuns))
-        {
-            $run=ConvertFrom-CoordinateRun $encodedRun
-            foreach($x in $run.StartX..$run.EndX)
-            {
-                $alpha=$closed.GetPixel($x,$run.Y).A
-                $closed.SetPixel($x,$run.Y,[Drawing.Color]::FromArgb(
-                    $alpha,$lidColor.R,$lidColor.G,$lidColor.B))
-            }
-        }
+        $lidColor=$Open.GetPixel(43,118)
+        $leftMask=New-CoordinateMask $leftEyeStencilRuns $closed.Width $closed.Height
+        $rightMask=New-CoordinateMask $rightEyeStencilRuns $closed.Width $closed.Height
+        Add-SubpixelQuadraticCurve $closed $leftMask $closedEyeGeometry.Left $lidColor `
+            ([double]$closedEyeGeometry.StrokeWidth) ([int]$closedEyeGeometry.SubpixelFactor) `
+            ([int]$closedEyeGeometry.CurveSegments)
+        Add-SubpixelQuadraticCurve $closed $rightMask $closedEyeGeometry.Right $lidColor `
+            ([double]$closedEyeGeometry.StrokeWidth) ([int]$closedEyeGeometry.SubpixelFactor) `
+            ([int]$closedEyeGeometry.CurveSegments)
         return $closed
     }
     catch{$closed.Dispose();throw}
