@@ -524,6 +524,21 @@ function Assert-EyeAndMouthContract(
 {
     $sourceChanges=Assert-SourceEyeChangeContract $SourceOpen $SourceClosed
 
+    foreach($eye in @(
+        @{Name='left'; Upper=@('47,124','61,124'); LowerCenter='54,127'; ClearedUpperCenter='54,121'},
+        @{Name='right'; Upper=@('89,124','103,124'); LowerCenter='96,127'; ClearedUpperCenter='96,121'}))
+    {
+        foreach($probe in $eye.Upper + @($eye.LowerCenter))
+        {
+            $parts=$probe.Split(',')
+            Assert-True ((Get-OpticalInk $SourceClosed.GetPixel([int]$parts[0],[int]$parts[1])) -ge 0.30) `
+                "$($eye.Name) resting lid is missing at source $probe."
+        }
+        $parts=$eye.ClearedUpperCenter.Split(',')
+        Assert-True ((Get-OpticalInk $SourceClosed.GetPixel([int]$parts[0],[int]$parts[1])) -le 0.20) `
+            "$($eye.Name) old raised lid center survived at source $($eye.ClearedUpperCenter)."
+    }
+
     $nativeChanges = 0
     for ($y = 0; $y -lt 96; $y++)
     {
@@ -542,9 +557,16 @@ function Assert-EyeAndMouthContract(
     }
     Assert-True ($nativeChanges -ge 80) 'Both native eyes did not visibly close.'
 
+    foreach($probe in @('23,54','41,54'))
+    {
+        $parts=$probe.Split(',')
+        Assert-True ((Get-OpticalInk $NativeClosed.GetPixel([int]$parts[0],[int]$parts[1])) -ge 0.25) `
+            "Resting lid lower center is missing after the single production resize at native $probe."
+    }
+
     foreach ($eye in @(
-        @{ Name='left'; StartX=18; EndX=29; LidY=52; Lower=@('20,55','22,56','25,55') },
-        @{ Name='right'; StartX=35; EndX=47; LidY=52; Lower=@('42,56','43,58','42,60') }))
+        @{ Name='left'; StartX=18; EndX=29; LidY=53; Lower=@('20,55','22,56','25,55') },
+        @{ Name='right'; StartX=35; EndX=47; LidY=53; Lower=@('42,56','43,58','42,60') }))
     {
         $lidInk = 0
         for ($x = $eye.StartX; $x -le $eye.EndX; $x++)
@@ -704,10 +726,10 @@ $expectedHashes = [ordered]@{
     Authority = 'DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
     SourceOpen = 'D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF'
     SourceOpenBaseline = '8F542A4F1B2671789BD7CD4980D890BF96CFCC9DADBC9D4E61963CCE2D384CCB'
-    SourceClosed = '70BC4C304CA8DF2D38A2FC2A451CCA8BF7A3099B8B4C81551869891511406551'
+    SourceClosed = '13B15B31FE2E84D6EC40862B5E689BFD53FC8436F9589A6D0D290F3AA996CE54'
     NativeOpen = '238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511'
     NativeOpenBaseline = '3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59'
-    NativeClosed = 'F48AB174F6DEE6C92F04E7363F854CC92AA1ED53504A728F7F69E8F1D0A0167E'
+    NativeClosed = 'CBBAAB05DC907B8CC2B9D863348F74AA5A0EA6E820B2EC9EC7FBC62FE337060A'
     Contour = 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65'
 }
 foreach ($name in @('Source','Seed','Mask','Authority'))
