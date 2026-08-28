@@ -31,7 +31,7 @@
 | ID | Expected observable | evidenceLayer | applicability | semantics |
 |---|---|---|---|---|
 | A-EYE-1 | The canonical open frame and every pixel outside the reviewed source/native eye support remain unchanged. | source/runtime asset identity | always: open and closed assets | acceptance |
-| A-EYE-2 | Both closed eyelids form shallow resting curves: their outer endpoints sit above their lower center, at matching visual height, with the open iris/pupil/lower oval fully removed. | exact 96x96 asset at native and nearest-neighbor enlarged scale | closed-eye frame | acceptance |
+| A-EYE-2 | Both closed eyelids form shallow lowered caps: their center sits above their outer endpoints, at matching visual height, with the open iris/pupil/lower oval fully removed. | exact 96x96 asset at native and nearest-neighbor enlarged scale | closed-eye frame | acceptance |
 | A-EYE-3 | Mouth, face boundary, hair, decorations, body silhouette, thin outline, and no-tail reading match the approved canonical frame. | exact 96x96 asset comparison | closed-eye frame | acceptance |
 | A-SLEEP-1 | SLEEP always uses the closed-eye frame, remains gently lowered, and changes both scale and vertical position over its 2.4-second phase without severe squash. | WPF presenter state/phase | SLEEP at phases 0.25 and 0.75 | acceptance |
 | A-WAKE-1 | Rendering a wake reaction after SLEEP clears the sleep transforms and uses the canonical open frame. | WPF presenter transition | SLEEP to CURIOUS, STARTLED, CLICK_REACTION, and DRAGGED | acceptance |
@@ -54,26 +54,26 @@
 
 - [ ] **Step 1: Add the resting-curve regression checks before changing the generator**
 
-  In `Assert-EyeAndMouthContract`, retain all current eye-removal, alpha, support, mouth, and protected-art checks. Add independent optical-ink probes that require each source lid to have dark endpoints at its upper row, a dark center at its lower row, and a cleared old upper-center pixel:
+  In `Assert-EyeAndMouthContract`, retain all current eye-removal, alpha, support, mouth, and protected-art checks. Add independent optical-ink probes that require each source lid to have a dark center at its upper row, dark endpoints at its lower row, and no dark lower-center continuation:
 
   ```powershell
   foreach($eye in @(
-      @{Name='left'; Upper=@('47,124','61,124'); LowerCenter='54,127'; ClearedUpperCenter='54,121'},
-      @{Name='right'; Upper=@('89,124','103,124'); LowerCenter='96,127'; ClearedUpperCenter='96,121'}))
+      @{Name='left'; UpperCenter='54,124'; Lower=@('47,127','61,127'); ClearedLowerCenter='54,127'},
+      @{Name='right'; UpperCenter='96,124'; Lower=@('89,127','103,127'); ClearedLowerCenter='96,127'}))
   {
-      foreach($probe in $eye.Upper + @($eye.LowerCenter))
+      foreach($probe in @($eye.UpperCenter) + $eye.Lower)
       {
           $parts=$probe.Split(',')
           Assert-True ((Get-OpticalInk $SourceClosed.GetPixel([int]$parts[0],[int]$parts[1])) -ge 0.30) `
               "$($eye.Name) resting lid is missing at source $probe."
       }
-      $parts=$eye.ClearedUpperCenter.Split(',')
+      $parts=$eye.ClearedLowerCenter.Split(',')
       Assert-True ((Get-OpticalInk $SourceClosed.GetPixel([int]$parts[0],[int]$parts[1])) -le 0.20) `
-          "$($eye.Name) old raised lid center survived at source $($eye.ClearedUpperCenter)."
+          "$($eye.Name) rejected cup-shaped lower center survived at source $($eye.ClearedLowerCenter)."
   }
   ```
 
-  Add native probes for the lower centers `(23,54)` and `(41,54)` with optical ink at least `0.25`. These checks catch the bug where the source curve exists but disappears or remains raised after the single production resize.
+  Add native probes for the raised cap centers `(23,53)` and `(41,53)` with optical ink at least `0.25`, plus candidate-local visual inspection of the lower endpoints. These checks catch the bug where the source cap exists but disappears after the single production resize.
 
 - [ ] **Step 2: Run the exact-art test and verify RED**
 
@@ -83,7 +83,7 @@
   pwsh -NoProfile -File tests/Dororong.App.ExactArt.Tests.ps1 -Configuration Release
   ```
 
-  Expected: FAIL on the new lower-center or cleared-upper-center resting-lid assertion while the generator still uses the old raised `^` lid runs. A syntax, missing-file, or build error is not the required RED result.
+  Expected: FAIL on the new upper-center or cleared-lower-center cap assertion while the generator still uses the rejected `⌣` lid runs. A syntax, missing-file, or build error is not the required RED result.
 
 - [ ] **Step 3: Replace only the lid runs**
 
@@ -91,15 +91,15 @@
 
   ```powershell
   $leftLidRuns=@(
-      '124:46-48','124:60-62',
-      '125:47-49','125:59-61',
-      '126:48-50','126:58-60',
-      '127:50-58')
+      '124:50-58',
+      '125:48-60',
+      '126:47-49','126:59-61',
+      '127:46-48','127:60-62')
   $rightLidRuns=@(
-      '124:88-90','124:102-104',
-      '125:89-91','125:101-103',
-      '126:90-92','126:100-102',
-      '127:92-100')
+      '124:92-100',
+      '125:90-102',
+      '126:89-91','126:101-103',
+      '127:88-90','127:102-104')
   ```
 
   Keep the lid color sampled from the canonical source outline. Do not edit the canonical source PNG, body mask, open runtime frame, or source/body outline code.
