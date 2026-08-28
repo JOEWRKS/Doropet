@@ -32,3 +32,9 @@ Evidence image: `docs/verification/evidence/attempt-8-user-phase-1-acceptance-an
 - Attempt 8 body-outline scope: **PASS**.
 - Attempt 8 broader M1 scope: **PARTIAL**; closed-eye expression/motion refinement is deferred by explicit user direction, and the remaining interaction/non-interference observations are still **UNVERIFIED**.
 - Cleanup: after the observation, recorded PID `15004` was matched by exact path and creation time, stopped, and read back with `0` exact-path survivors. The application was not relaunched.
+
+## Checkpoint provenance boundary
+
+The phase-1 body-outline remains **PASS** and overall Dororong M1 remains **PARTIAL**. Attempt-8 visual asset identity at checkpoint `3d901ba17dac9f869723cd0dd2cc1aac9e2301d3` is **PRESERVED**; exact runtime binary provenance from attempt 8 to that checkpoint is **UNVERIFIED**, and its cause is **UNVERIFIED**. These statements neither promote nor withdraw any existing PASS / PARTIAL / UNVERIFIED verdict.
+
+A read-only 1,173-file preservation search found none of the approved EXE/App DLL/Core DLL originals. Exactly one bounded reconstruction used the evidence-backed `34dd95b707b96f8b90ebf640114a7ecff670c1aa` plus only the E-only product/art-pipeline changes. Its EXE matched the attempt-8 hash exactly; its App DLL (`9A3BE34DA7B83C1712DD71BFA3F502E107F4DACAEFBCC87907C711FD3891F8A0`) and Core DLL (`7111A5A9B1D6A8A955DEBBE0F75B658168458CB6A303D5255822C5157637D84C`) did not. Both embedded runtime assets matched exactly: open `238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511` and closed `F48AB174F6DEE6C92F04E7363F854CC92AA1ED53504A728F7F69E8F1D0A0167E`. The `34dd95b..3d901ba` range contains no additional C#/XAML runtime-behavior change beyond the E-only product/art-pipeline work. Visual approval is therefore preserved, but exact runtime-binary equivalence is not claimed and no cause is inferred.

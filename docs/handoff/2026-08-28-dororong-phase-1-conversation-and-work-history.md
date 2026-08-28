@@ -455,3 +455,9 @@ b1e95ec feat: render one visible Dororong outline width
 ## 12. 저장 위치와 외부 메모 상태
 
 이 저장소 문서가 1차 인계의 기준 기록이다. Basic Memory에도 동일한 인계 메모를 만들려고 했지만 현재 계정의 Basic Memory 구독 만료로 저장할 수 없었다. 따라서 외부 메모의 존재를 가정하지 말고 이 파일과 저장소의 명세·검증 문서를 기준으로 이어간다.
+
+## 13. Attempt-8에서 checkpoint까지의 provenance 경계
+
+Phase-1 body-outline는 `PASS`, overall Dororong M1은 `PARTIAL`로 유지한다. Attempt-8 visual asset identity at checkpoint `3d901ba17dac9f869723cd0dd2cc1aac9e2301d3`는 `PRESERVED`지만, attempt 8에서 이 checkpoint까지의 exact runtime binary provenance는 `UNVERIFIED`이며 원인도 `UNVERIFIED`다. 이 경계는 기존 PASS / PARTIAL / UNVERIFIED 판정을 승격하거나 철회하지 않는다.
+
+승인 EXE/App DLL/Core DLL 원본은 저장소와 기존 artifacts의 1,173-file 보존 검색에서 발견되지 않았다. Evidence로 확인된 `34dd95b707b96f8b90ebf640114a7ecff670c1aa` 및 E-only product/art-pipeline 변경만 사용한 bounded reconstruction은 정확히 한 번 수행했다. EXE는 attempt-8 SHA-256 `C0EB20CCEED12E2430F499D6274D219515940C91DED5EB33EBD207580C2A3533`와 일치했지만, App DLL은 `9A3BE34DA7B83C1712DD71BFA3F502E107F4DACAEFBCC87907C711FD3891F8A0`, Core DLL은 `7111A5A9B1D6A8A955DEBBE0F75B658168458CB6A303D5255822C5157637D84C`로 승인 바이너리와 일치하지 않았다. Embedded runtime open `238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511`와 closed `F48AB174F6DEE6C92F04E7363F854CC92AA1ED53504A728F7F69E8F1D0A0167E`는 모두 정확히 일치했다. `34dd95b..3d901ba`에는 E-only product/art-pipeline 변경 외에 추가 C#/XAML runtime behavior 변경이 없다. 따라서 visual approval은 보존하지만 exact runtime-binary equivalence는 주장하지 않으며, 불일치 원인은 추정하지 않는다.
