@@ -4,6 +4,7 @@
     FillFloor = 225
     MaximumChroma = 8
     FillNeighborCount = 8
+    Width = 2.20898670201159
     WidthSweepMinimum = 0.25
     WidthSweepMaximum = 4.00
     WidthSweepStep = 0.015625
