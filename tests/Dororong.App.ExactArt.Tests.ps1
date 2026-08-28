@@ -702,12 +702,12 @@ $expectedHashes = [ordered]@{
     Seed = 'E256F3DC28929A49624C6308F77C994F061240CB7D2C9E80780AAD4A300C0779'
     Mask = 'D08B3A941C662F1CBC55C486C13FD4C6CD8901DA9CD5CF8512509698219FE46F'
     Authority = 'DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
-    SourceOpen = 'AB5E0F0990980F0393CF02FFDCDC15329EE7BC8F770D70D3DD68FCB775AD5A5A'
+    SourceOpen = 'D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF'
     SourceOpenBaseline = '8F542A4F1B2671789BD7CD4980D890BF96CFCC9DADBC9D4E61963CCE2D384CCB'
-    SourceClosed = '96B3F661B36E6871047D7C5FC03DA7A4A9A53408EDB3E7E2E7C4229336C920AC'
-    NativeOpen = 'F4C9B2CCE253522345F12D29F6CC634ACD0DE1C3151D7C923460E3D5EBA73B9A'
+    SourceClosed = '70BC4C304CA8DF2D38A2FC2A451CCA8BF7A3099B8B4C81551869891511406551'
+    NativeOpen = '238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511'
     NativeOpenBaseline = '3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59'
-    NativeClosed = '9B5411E88C031CA7D6542F6A1B3FD8E8C080BC061D96D4246B82011B9BF5A0BA'
+    NativeClosed = 'F48AB174F6DEE6C92F04E7363F854CC92AA1ED53504A728F7F69E8F1D0A0167E'
     Contour = 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65'
 }
 foreach ($name in @('Source','Seed','Mask','Authority'))
@@ -833,10 +833,10 @@ Import-Module $paths.SubpixelModule -Force
 $constants = Import-PowerShellDataFile -LiteralPath $paths.Constants
 $authority = Import-PowerShellDataFile -LiteralPath $paths.Authority
 Assert-Equal 8 ([int]$constants.SubpixelFactor) 'The exact raster factor changed.'
-Assert-Equal 2.20898670201159 ([double]$constants.Width) 'The exact outline width changed.'
+Assert-Equal 1.5 ([double]$constants.Width) 'The exact outline width changed.'
 
 # Test-first direct behavioral gate. This runs before the real generator so the
-# pre-production RED is an F raster mismatch, never parameter binding.
+# pre-production RED is an exact E-only raster mismatch, never parameter binding.
 $preRaw=$null;$preSource=$null;$preSeed=$null;$preMask=$null;$preDirect=$null
 $preProxy=$null;$preNative=$null
 try
@@ -847,18 +847,18 @@ try
     $preMask=Import-DororongBodyMask $paths.Mask
     $preDirect=New-DirectCandidate $preSource $preSeed $preMask $constants `
         ([int]$constants.SubpixelFactor) ([double]$constants.Width)
-    Assert-FillSeedContract $preSource $preSeed $preDirect.FillField 'Direct F fill samples'
+    Assert-FillSeedContract $preSource $preSeed $preDirect.FillField 'Direct E-only fill samples'
     Assert-Equal $expectedHashes.Contour (Get-DororongCanonicalContourHash $preDirect.Contour) `
         'Oracle-only frozen E-union-C contour changed.'
     Assert-AllPixelSmoothFill $preSource $preSeed $preMask $preDirect.Contour $preDirect.FillField
     $preComponents=@(Get-IndependentProxyComponents $preMask $preSource 7 8)
-    $null=Assert-ProxyMembership $preComponents $preMask.Width 'Direct F resize proxy'
+    $null=Assert-ProxyMembership $preComponents $preMask.Width 'Direct E-only resize proxy'
     Assert-Equal $expectedHashes.SourceOpen (Get-BitmapPngHash $preDirect.Candidate) `
-        'Direct production pipeline did not reproduce exact source-225 candidate F.'
+        'Direct production pipeline did not reproduce exact source-225 E-only candidate.'
     $preProxy=New-IndependentResizeProxy $preDirect.Candidate $preDirect.FillField $preComponents
     $preNative=Resize-DororongPremultiplied96 $preProxy
     Assert-Equal $expectedHashes.NativeOpen (Get-BitmapPngHash $preNative) `
-        'Direct production pipeline did not reproduce exact native-96 candidate F through one proxy resize.'
+        'Direct production pipeline did not reproduce exact native-96 E-only candidate through one proxy resize.'
 }
 finally
 {
@@ -875,8 +875,8 @@ if($OracleOnly)
     return
 }
 
-Assert-Equal 2.5 ([double]$constants.ExposedCoverageMultiplier) 'The F E multiplier changed.'
-Assert-Equal 0.125 ([double]$constants.ContinuationCoverageMultiplier) 'The F C multiplier changed.'
+Assert-Equal 2.5 ([double]$constants.ExposedCoverageMultiplier) 'The E-only exposed multiplier changed.'
+Assert-Equal 0.0 ([double]$constants.ContinuationCoverageMultiplier) 'The E-only continuation multiplier changed.'
 Assert-Equal 7 ([int]$constants.ProxyMaximumSize) 'The proxy maximum size changed.'
 Assert-Equal 8 ([int]$constants.ProxyMaximumChroma) 'The proxy maximum chroma changed.'
 Assert-Equal 6 ([int]$constants.ExpectedProxyComponentCount) 'The proxy component count changed.'
@@ -884,7 +884,7 @@ Assert-Equal 12 ([int]$constants.ExpectedProxyPixelCount) 'The proxy pixel count
 Assert-Equal '2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54' `
     $constants.ExpectedProxyMembershipSha256 'The proxy membership identity changed.'
 
-$candidateRoot = Join-Path $repositoryRoot '.superpowers/sdd/2026-08-27-dororong-complete-body-ownership-outline/task-5-runtime-integration/candidate'
+$candidateRoot = Join-Path $repositoryRoot '.superpowers/sdd/2026-08-28-dororong-e-only-thin-outline/runtime-integration'
 $runRoot = Join-Path $candidateRoot "exact-art-$([Guid]::NewGuid().ToString('N'))"
 $outputDirectory = Join-Path $runRoot 'output'
 $evidenceDirectory = Join-Path $runRoot 'evidence'
@@ -990,9 +990,9 @@ try
         try { Assert-BitmapEqual $direct.Candidate $mutated 'Source-open fixed-width mutation' }
         finally { $mutated.Dispose() }
     }
-    Assert-MutationRejected 'factor-8-to-4' 'Source-open factor mutation' {
-        $factorFourMap = New-DororongSubpixelDistanceMap $mask $direct.Contour 4
-        $mutated = Invoke-DororongSubpixelOutline $source $mask $direct.FillField $factorFourMap `
+    Assert-MutationRejected 'factor-8-to-2' 'Source-open factor mutation' {
+        $factorTwoMap = New-DororongSubpixelDistanceMap $mask $direct.Contour 2
+        $mutated = Invoke-DororongSubpixelOutline $source $mask $direct.FillField $factorTwoMap `
             $direct.OutlineColor ([double]$constants.Width)
         try { Assert-BitmapEqual $direct.Candidate $mutated 'Source-open factor mutation' }
         finally { $mutated.Dispose() }
@@ -1009,7 +1009,7 @@ try
         }
         finally { & $module { $script:OutlineConstants.ExposedCoverageMultiplier = 2.5 } }
     }
-    Assert-MutationRejected 'continuation-gain-0.125-to-1' 'Source-open continuation-gain mutation' {
+    Assert-MutationRejected 'continuation-gain-0-to-1' 'Source-open continuation-gain mutation' {
         $module = Get-Module Dororong.SubpixelOutline
         & $module { $script:OutlineConstants.ContinuationCoverageMultiplier = 1.0 }
         try
@@ -1019,7 +1019,7 @@ try
             try { Assert-BitmapEqual $direct.Candidate $mutated 'Source-open continuation-gain mutation' }
             finally { $mutated.Dispose() }
         }
-        finally { & $module { $script:OutlineConstants.ContinuationCoverageMultiplier = 0.125 } }
+        finally { & $module { $script:OutlineConstants.ContinuationCoverageMultiplier = 0.0 } }
     }
     Assert-MutationRejected 'retain-eligible-seed-rgb' 'Source-open retained-seed mutation' {
         $retainedFill=[Drawing.Color[,]]$direct.FillField.Clone()
@@ -1207,7 +1207,7 @@ $runtimeClosedHash=(Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeClosedPa
 $generatedClosedHash=(Get-FileHash -Algorithm SHA256 -LiteralPath $generatedClosedPath).Hash
 if($runtimeOpenHash-ne$expectedHashes.NativeOpen-or$runtimeClosedHash-ne$generatedClosedHash)
 {
-    throw "Committed runtime assets are stale after all F candidate, invariant, mutation, and presenter checks: expectedOpen=$($expectedHashes.NativeOpen) observedOpen=$runtimeOpenHash expectedClosed=$generatedClosedHash observedClosed=$runtimeClosedHash."
+    throw "Committed runtime assets are stale after all E-only candidate, invariant, mutation, and presenter checks: expectedOpen=$($expectedHashes.NativeOpen) observedOpen=$runtimeOpenHash expectedClosed=$generatedClosedHash observedClosed=$runtimeClosedHash."
 }
 
 Write-Output 'EXACT ART PASS: representative source/native reconstruction, fill provenance, source/protected/alpha invariants, open/closed body equality, reviewed eye semantics, causal mutations, 96-DPI presentation, alpha hit testing, and state mapping passed; native body optical diagnostics were recorded and did not gate PASS.'

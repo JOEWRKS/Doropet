@@ -619,7 +619,7 @@ Assert-Equal 'F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504' 
     (Get-FileHash -Algorithm SHA256 -LiteralPath $sourcePath).Hash 'Canonical source changed.'
 Assert-Equal 'D08B3A941C662F1CBC55C486C13FD4C6CD8901DA9CD5CF8512509698219FE46F' `
     (Get-FileHash -Algorithm SHA256 -LiteralPath $maskPath).Hash 'Final body-region mask changed.'
-Assert-Equal 'F4C9B2CCE253522345F12D29F6CC634ACD0DE1C3151D7C923460E3D5EBA73B9A' `
+Assert-Equal '238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511' `
     (Get-FileHash -Algorithm SHA256 -LiteralPath $nativePath).Hash 'Committed native-open authority changed.'
 Assert-True (Test-Path -LiteralPath $authorityPath) 'Continuous authority fixture is missing.'
 Assert-True (Test-Path -LiteralPath $supportPath) 'Continuous optics test helper is missing.'

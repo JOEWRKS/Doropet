@@ -474,7 +474,27 @@ Observed final state: build, BodyMask, ContinuousAuthority, Subpixel SyntheticOn
 
 The completed Task 5A implementation set awaiting whole-branch review is limited to `tools/Dororong.SubpixelOutline.psm1`, `tools/Dororong.SubpixelOutline.Constants.psd1`, `tests/Dororong.App.SubpixelOutline.Tests.ps1`, `tools/Generate-CanonicalArt.ps1`, `tests/Dororong.App.ExactArt.Tests.ps1`, `tests/Dororong.App.ContinuousAuthority.Tests.ps1`, `tools/New-ContinuousOutlineAuthority.ps1`, `src/Dororong.App/Assets/dororong-canonical.png`, and `src/Dororong.App/Assets/dororong-closed-eyes.png`.
 
-Task 5A's automated integration gate is complete. Task 6 and whole-branch review remain pending, and actual live Windows/WPF rendering and user acceptance remain `UNVERIFIED`.
+Task 5A's automated integration gate was complete at this checkpoint. Task 6, whole-branch review, and actual live Windows/WPF rendering were still pending at that point; the later Task 5B and Task 6 records supersede that pending status without rewriting this checkpoint's evidence.
+
+---
+
+### Task 5B: Replace the live-rejected F rendering with the E-only thin outline
+
+Actual-Windows attempt 7 rejected F even though its repository inspection and automated suite had passed: the body remained heavier than the unchanged head/hair line and the two internal continuation strokes were still visible at reduced opacity. The attempt-7 screenshot and record are authoritative `FAIL` evidence; later live items in that attempt remain `UNVERIFIED`.
+
+- [x] **Step 1: Diagnose and calibrate without changing protected art**
+
+The controller rejected the image-generation exploration because it changed the character identity and retained deterministic raster reconstruction. Three throwaway E-only candidates kept source, mask, seed, contour, endpoints, alpha, protected anchors, silhouette, proxy, fill, and resize fixed while testing `W = 1.5`, `1.625`, and `1.75`, E gain `2.5`, and C gain `0.0`. Native-96 and nearest-neighbor 4x inspection on white and RGB `(18,20,28)` selected `W = 1.5`; body high-opacity median is `0.75` versus unchanged hair `0.6875`, while the other two candidates are `0.875`. The selected native hash is `238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511`; calibration manifest is `.superpowers/sdd/2026-08-28-dororong-e-only-thin-outline/candidate-calibration/manifest.json`, SHA-256 `0E62125BA02C787AB758110B538892AA0BD06F50409EC684F94A207422ACDFEF`.
+
+- [x] **Step 2: Add a causal RED and integrate the minimal correction**
+
+Before production changes, `pwsh -NoProfile -File tests/Dororong.App.SubpixelOutline.Tests.ps1 -ThinOutlineOnly` exited `1`: body median was `1.125` against required `<= 0.75`, hair was `0.6875`, and zeroing the C-distance field first changed source output at `(159,111)`. Production then changed only active width `2.20898670201159 -> 1.5` and C gain `0.125 -> 0.0`; E gain stays `2.5`. The same command exited `0` with body median `0.75` and byte-identical output under a complete C-distance mutation. A separate C gain `0 -> 1` mutation proves causal sensitivity.
+
+- [x] **Step 3: Regenerate, inspect, and verify repository assets**
+
+The real generator and direct pipeline reproduce source-open `D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF`, source-closed `70BC4C304CA8DF2D38A2FC2A451CCA8BF7A3099B8B4C81551869891511406551`, runtime-open `238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511`, and runtime-closed `F48AB174F6DEE6C92F04E7363F854CC92AA1ED53504A728F7F69E8F1D0A0167E`. Source/native open and closed inspection shows no internal continuation ink, no protected-part change, and closed-eye differences confined to the reviewed eye regions. Release build, BodyMask, ContinuousAuthority, SyntheticOnly, full Subpixel, GeometryOnly, ReloadOnly, OracleOnly, and final full ExactArt exited `0`; `git diff --check` exited `0`. The first full ExactArt run correctly stopped at a stale `factor 8 -> 4` mutation that became byte-identical for W1.5; a diagnostic proved factor 2 differs, the exact-art mutation was retargeted to `8 -> 2`, the independent synthetic `8 -> 4` check was retained, and the single evidence-based full retry exited `0`.
+
+Independent read-only review reported no P0-P3 findings. At this Task 5B checkpoint, live WPF and user acceptance of the exact E-only artifact were still `UNVERIFIED` and were not promoted by repository results; attempt 8 later supplied the separate live body PASS.
 
 ---
 
@@ -485,14 +505,14 @@ Task 5A's automated integration gate is complete. Task 6 and whole-branch review
 - Modify: TASKS.md
 
 **Interfaces:**
-- Consumes: the reviewed Task 5A implementation set and exact asset/authority hashes.
+- Consumes: the reviewed Task 5B E-only implementation set and exact asset/authority hashes.
 - Produces: full automated evidence, publish identity, and accurate handoff with actual-Windows items still UNVERIFIED.
 
-- [ ] **Step 1: Update documentation without promoting live status**
+- [x] **Step 1: Update documentation without promoting live status**
 
-README explains the immutable seed, complete ownership mask, canonical E-union-C contour, all-pixel smooth fill with no retain-seed exception, fixed 8x8 E/C support, F optical transfer, deterministic resize-only proxy, one final resize, 96-DPI baseline, and exact commands. TASKS records attempts 5 and 6 as failures, both prior sweep mechanisms and attempt-2 candidate binding as superseded evidence, Tasks 1 through 5A by exact evidence, and the next live attempt as UNVERIFIED.
+README explains the immutable seed, complete ownership mask, canonical E-union-C authority, all-pixel smooth fill with no retain-seed exception, fixed 8x8 sampling, active `E -> 1.5` support with E gain `2.5`, zero rendered C contribution, deterministic resize-only proxy, one final resize, 96-DPI baseline, and exact commands. TASKS records attempt 7 and candidate F as failed evidence, Task 5B by exact evidence, and the next live attempt as UNVERIFIED.
 
-- [ ] **Step 2: Run fresh full verification and publish**
+- [x] **Step 2: Run fresh full verification and publish**
 
 Run:
 
@@ -509,16 +529,20 @@ Run:
 
 Every command must exit 0. Record test count, failures/skips, build warnings/errors, focused PASS lines, and SHA-256 for publish EXE/App DLL/Core DLL. Prove the published App DLL embeds the exact current open/closed PNG bytes and binds to the reviewed source commit.
 
-- [ ] **Step 3: Bind the publish to reviewed inputs**
+Observed 2026-08-28: restore, 78/78 core tests, zero-warning/zero-error Release build, BodyMask, ContinuousAuthority, full Subpixel, full ExactArt, RuntimeComposition, DraggedAngle, and framework-dependent `win-x64` publish each exited `0`. Published SHA-256 values are EXE `C0EB20CCEED12E2430F499D6274D219515940C91DED5EB33EBD207580C2A3533`, App DLL `F606F2EB8D46F541EF71298A1AD73C8F658DA41CC08E32A30D82116B6E0930FE`, and Core DLL `E0B24FCCA21D23B073A6E569646CF551B2685B6A929B2DDCEA586917BEB24BAE`.
 
-Record SHA-256 for publish EXE/App DLL/Core DLL, source, immutable seed, final mask, constants, subpixel module, generator, open frame, and closed frame. Prove the published App DLL embeds the exact current open/closed PNG bytes and reports the reviewed Task 5A source commit. Any identity mismatch fails before documentation is committed.
+- [x] **Step 3: Bind the publish to reviewed inputs**
 
-- [ ] **Step 4: Commit truthful handoff**
+Record SHA-256 for publish EXE/App DLL/Core DLL, source, immutable seed, final mask, constants, subpixel module, generator, open frame, and closed frame. Prove the published App DLL embeds the exact current E-only open/closed PNG bytes and reports the reviewed Task 5B source commit. Any identity mismatch fails before documentation is committed.
 
-    git add -- README.md TASKS.md
-    git commit -m "docs: hand off complete Dororong body outline"
+The published App DLL resource readback contains exact open `238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511` and closed `F48AB174F6DEE6C92F04E7363F854CC92AA1ED53504A728F7F69E8F1D0A0167E` bytes. Reviewed inputs remain source `F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504`, seed `E256F3DC28929A49624C6308F77C994F061240CB7D2C9E80780AAD4A300C0779`, mask `D08B3A941C662F1CBC55C486C13FD4C6CD8901DA9CD5CF8512509698219FE46F`, constants `73085C56D2910C6DA81DC2A9B62FE8BDA64A472B978752733883DFAF718098AD`, module `FDBDE6D3368C408E7139CF224EA5DBB02036E5C68018B5F968F59813D19A019C`, and generator `1A57E5B3DCD993136B9F91D6299678E1830E43629236C905DB96776709ED4622`. The working implementation has not yet been committed, so the publish is bound to these exact working-tree identities rather than falsely reported as a new commit.
 
-Task 6 is complete only after its task reviewer approves documentation truth and artifact identity. The controller then dispatches the broad whole-branch reviewer from plan base f09599b through the documentation HEAD. One reviewed fix wave addresses all Critical or Important findings. Repository review and successful publishing do not promote actual Windows observations.
+- [x] **Step 4: Commit truthful handoff**
+
+    git add -- README.md TASKS.md docs/specs docs/plans docs/verification docs/handoff src/Dororong.App/Assets tests tools
+    git commit -m "fix: close Dororong phase-one body art"
+
+Observed 2026-08-28: the documentation and artifact identities were reconciled with attempt 8, the phase-1 history was added, and the exact E-only body result received direct actual-Windows user acceptance. The earlier independent read-only review found no P0-P3 findings. Repository review and successful publishing did not promote the still-unobserved closed-eye expression/motion or remaining Windows interaction items.
 
 ---
 
@@ -528,13 +552,13 @@ This phase is not dispatched to an implementation subagent because the direct ob
 
 1. Resolve artifacts/publish/win-x64/Dororong.App.exe and inspect only processes whose resolved ExecutablePath exactly matches. If an ambiguous exact-path survivor exists, do not launch.
 2. Start the exact publish once and record PID, path, command line, creation time, documentation HEAD, executable/DLL/source/seed/mask/constants/open/closed hashes, and embedded commit. Liveness proves identity only.
-3. Ask only whether the live Dororong preserves the original no-tail, three-leg/two-valley silhouette with no protrusion and whether front, feet, valleys, undersides, and rear rim have one apparent weight matching the thin hair outline.
+3. Ask only whether the live Dororong preserves the original no-tail, three-leg/two-valley silhouette with no protrusion, whether front, feet, valleys, undersides, and rear rim have one apparent weight matching the thin head/hair outline, and whether the former internal continuation lines are completely absent rather than merely pale.
 4. Only after direct body PASS, ask whether closed eyes stay on the face while body pixels and mouth remain visually unchanged. Bind the user's exact observation and any screenshot hash.
 5. Stop only the recorded task-owned PID after observation or abnormal exit, then verify no exact-path survivor remains. Do not relaunch automatically after a crash or user stop.
-6. Create docs/verification/2026-08-27-m1-windows-acceptance-manual-attempt-7.md only after observation begins. Record exact artifact/PID/hash identity, user wording, each PASS/FAIL/UNVERIFIED result, and cleanup readback. A body FAIL stops closed-eye questioning and leaves Milestone 1 incomplete.
+6. Create `docs/verification/2026-08-28-m1-windows-acceptance-manual-attempt-8.md` only after observation begins. Record exact artifact/PID/hash identity, user wording, each PASS/FAIL/UNVERIFIED result, and cleanup readback. A body FAIL stops closed-eye questioning and leaves Milestone 1 incomplete.
 
 ---
 
 ## Completion boundary
 
-The outline implementation is complete only when Tasks 1 through 5A pass task-level specification and quality reviews, Task 6 passes the whole-branch review, every automated command exits 0, and the exact published artifact is identity-bound. The controller's pre-production F visual PASS does not satisfy this boundary. Milestone 1 remains incomplete until the user directly accepts the live open body and then the closed-eye integration on the current Windows 96-DPI environment. Every unobserved behavior remains UNVERIFIED rather than inferred.
+The phase-1 body-outline implementation is complete: Tasks 1 through 5B passed their specification and quality checks, Task 6 produced an identity-bound publish and truthful handoff, every recorded final automated command exited 0, and attempt 8 captured the user's direct live E-only body acceptance. Candidate F's repository-only visual PASS and attempt-7 live FAIL remain frozen historical evidence. Broader Milestone 1 remains partial because the user moved closed-eye expression/motion refinement into the next phase and the remaining actual-Windows interaction/non-interference items are still UNVERIFIED rather than inferred.

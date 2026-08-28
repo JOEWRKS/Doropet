@@ -4,9 +4,9 @@
     FillFloor = 225
     MaximumChroma = 8
     FillNeighborCount = 8
-    Width = 2.20898670201159
+    Width = 1.5
     ExposedCoverageMultiplier = 2.5
-    ContinuationCoverageMultiplier = 0.125
+    ContinuationCoverageMultiplier = 0.0
     ProxyMaximumSize = 7
     ProxyMaximumChroma = 8
     ExpectedProxyComponentCount = 6

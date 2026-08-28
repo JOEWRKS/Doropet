@@ -1,4 +1,4 @@
-param([switch]$GeometryOnly,[switch]$SyntheticOnly,[switch]$ReloadOnly)
+param([switch]$GeometryOnly,[switch]$SyntheticOnly,[switch]$ReloadOnly,[switch]$ThinOutlineOnly)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -418,7 +418,7 @@ function Get-IndependentKindSampleDistances(
 
 function Get-IndependentFCoverage(
     [double[]]$ExposedDistances,[double[]]$ContinuationDistances,[double]$Width,
-    [double]$ExposedGain=2.5,[double]$ContinuationGain=0.125)
+    [double]$ExposedGain=2.5,[double]$ContinuationGain=0.0)
 {
     $eRaw=Get-IndependentCoverage $ExposedDistances $Width
     $cRaw=Get-IndependentCoverage $ContinuationDistances ($Width/2.0)
@@ -588,6 +588,122 @@ function Get-ComponentMedianColor([Drawing.Bitmap]$Source,[object[]]$Samples)
         [int][Math]::Round((Get-Median ([double[]]$blue)),0,[MidpointRounding]::ToEven))
 }
 
+function Get-ThinOutlineOpticalInk([Drawing.Bitmap]$Bitmap,[double]$X,[double]$Y)
+{
+    $sample=Get-DororongBilinearPremultipliedSample $Bitmap $X $Y
+    $luminance=(0.2126*$sample.R)+(0.7152*$sample.G)+(0.0722*$sample.B)
+    return [double]($sample.A*(1.0-$luminance))
+}
+
+function Get-ThinOutlineHighOpacityRun([Drawing.Bitmap]$Bitmap,[hashtable]$Normal)
+{
+    $x1=$Normal.X1Eighth/8.0;$y1=$Normal.Y1Eighth/8.0
+    $x2=$Normal.X2Eighth/8.0;$y2=$Normal.Y2Eighth/8.0
+    $length=[Math]::Sqrt(($x2-$x1)*($x2-$x1)+($y2-$y1)*($y2-$y1))
+    $step=0.125;$runs=@();$start=$null;$last=0.0
+    for($distance=0.0;$distance-le$length+0.000000001;$distance+=$step)
+    {
+        $t=[Math]::Min(1.0,$distance/$length)
+        $ink=Get-ThinOutlineOpticalInk $Bitmap `
+            ($x1+(($x2-$x1)*$t)) ($y1+(($y2-$y1)*$t))
+        if($ink-ge0.50)
+        {
+            if($null-eq$start){$start=$distance}
+            $last=$distance
+        }
+        elseif($null-ne$start)
+        {$runs+=($last-$start+$step);$start=$null}
+    }
+    if($null-ne$start){$runs+=($last-$start+$step)}
+    if($runs.Count-eq0){return 0.0}
+    return [double](($runs|Measure-Object -Maximum).Maximum)
+}
+
+function Invoke-ThinOutlineDecisionContract(
+    [string]$RepositoryRoot,[string]$SourcePath,[string]$SeedPath,[string]$MaskPath,
+    [string]$AuthorityPath,[string]$SourceRasterModulePath,[string]$OutlineModulePath,
+    [string]$ConstantsPath,[string]$GeneratorPath,[string]$ContinuousOpticsPath)
+{
+    $runRoot=Join-Path $RepositoryRoot (
+        '.superpowers/sdd/2026-08-28-dororong-e-only-thin-outline/' +
+        'task-5-tdd-'+[Guid]::NewGuid().ToString('N'))
+    $outputDirectory=Join-Path $runRoot 'output'
+    $evidenceDirectory=Join-Path $runRoot 'evidence'
+    & $GeneratorPath -SourcePath $SourcePath -BodyMaskPath $MaskPath `
+        -OutputDirectory $outputDirectory -EvidenceDirectory $evidenceDirectory | Out-Null
+
+    Import-Module $SourceRasterModulePath -Force
+    Import-Module $OutlineModulePath -Force
+    . $ContinuousOpticsPath
+    $constants=Import-PowerShellDataFile -LiteralPath $ConstantsPath
+    $authority=Import-PowerShellDataFile -LiteralPath $AuthorityPath
+    $native=$generatedSource=$raw=$processed=$seed=$mask=$direct=$cMutation=$null
+    try
+    {
+        $native=[Drawing.Bitmap]::new((Join-Path $outputDirectory 'dororong-canonical.png'))
+        $generatedSource=[Drawing.Bitmap]::new((Join-Path $evidenceDirectory 'source-open-candidate.png'))
+        $bodyRuns=[double[]]@($authority.BodyNormals|ForEach-Object{
+            Get-ThinOutlineHighOpacityRun $native $_.NativeNormal})
+        $hairRuns=[double[]]@($authority.HairAnchors|ForEach-Object{
+            Get-ThinOutlineHighOpacityRun $native $_.NativeNormal})
+        $bodyMedian=Get-Median $bodyRuns
+        $hairMedian=Get-Median $hairRuns
+
+        $raw=[Drawing.Bitmap]::new($SourcePath)
+        $processed=Remove-DororongBoundaryBackground $raw
+        $seed=[Drawing.Bitmap]::new($SeedPath)
+        $mask=Import-DororongBodyMask $MaskPath
+        $endpoints=[Drawing.PointF[]]@($constants.LegalEndpoints|ForEach-Object{
+            [Drawing.PointF]::new([single]$_.X,[single]$_.Y)})
+        $contour=New-DororongVisibleContour $processed $mask $endpoints
+        Assert-Equal 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65' `
+            (Get-DororongCanonicalContourHash $contour) 'Thin-outline contour changed.'
+        $fill=New-DororongFillField $processed $seed $mask $contour
+        $distanceMap=New-DororongSubpixelDistanceMap $mask $contour ([int]$constants.SubpixelFactor)
+        $outline=Get-ComponentMedianColor $processed @($constants.OutlineSamples)
+        $direct=Invoke-DororongSubpixelOutline `
+            $processed $mask $fill $distanceMap $outline ([double]$constants.Width)
+        $zeroContinuationDistances=[double[]]::new($distanceMap.ContinuationDistances.Length)
+        $cMutationMap=[pscustomobject]@{
+            Width=$distanceMap.Width;Height=$distanceMap.Height;Factor=$distanceMap.Factor
+            SamplesPerPixel=$distanceMap.SamplesPerPixel;Mask=$distanceMap.Mask
+            ExposedDistances=$distanceMap.ExposedDistances
+            ContinuationDistances=$zeroContinuationDistances
+        }
+        $cMutation=Invoke-DororongSubpixelOutline `
+            $processed $mask $fill $cMutationMap $outline ([double]$constants.Width)
+
+        $directMismatch=$null;$cMismatch=$null
+        for($y=0;$y-lt$generatedSource.Height;$y++)
+        {
+            for($x=0;$x-lt$generatedSource.Width;$x++)
+            {
+                $generatedArgb=$generatedSource.GetPixel($x,$y).ToArgb()
+                if($null-eq$directMismatch-and$generatedArgb-ne$direct.GetPixel($x,$y).ToArgb())
+                {$directMismatch="$x,$y"}
+                if($null-eq$cMismatch-and$generatedArgb-ne$cMutation.GetPixel($x,$y).ToArgb())
+                {$cMismatch="$x,$y"}
+            }
+        }
+        Assert-True ($null-eq$directMismatch) `
+            "Direct real pipeline differs from generator source output at $directMismatch."
+
+        $failures=[Collections.Generic.List[string]]::new()
+        if($bodyMedian-gt0.750000000001)
+        {$failures.Add("native body high-opacity median expected <=0.75; observed $bodyMedian (hair=$hairMedian)")}
+        if($null-ne$cMismatch)
+        {$failures.Add("C-distance geometry mutation changed generator output at $cMismatch; expected byte-identical")}
+        if($failures.Count-gt0)
+        {throw "THIN OUTLINE DECISION FAIL: $($failures-join'; ') runRoot=$runRoot"}
+        Write-Output "THIN OUTLINE PASS bodyMedian=$bodyMedian hairMedian=$hairMedian cMutation=byte-identical runRoot=$runRoot"
+    }
+    finally
+    {
+        foreach($bitmap in @($cMutation,$direct,$mask,$seed,$processed,$raw,$generatedSource,$native))
+        {if($null-ne$bitmap){$bitmap.Dispose()}}
+    }
+}
+
 function Invoke-SyntheticFillAndRasterContract
 {
     $source=[Drawing.Bitmap]::new(25,25,[Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -696,41 +812,20 @@ function Invoke-SyntheticFillAndRasterContract
             }
         }
         $expectedCoverage=Get-IndependentFCoverage `
-            ([double[]](Get-IndependentKindSampleDistances 12 12 $coverageContour 'E')) `
-            ([double[]](Get-IndependentKindSampleDistances 12 12 $coverageContour 'C')) 0.16
-        Assert-Equal 0.03125 $expectedCoverage 'Independent F coverage fixture changed.'
-        Assert-Equal $expectedCoverage (Get-DororongOutlineCoverage $distanceMap 12 12 0.16) `
-            'Production F coverage differs from independent max(clamp(E*2.5),clamp(C*0.125)).'
+            ([double[]](Get-IndependentKindSampleDistances 2 12 $coverageContour 'E')) `
+            ([double[]](Get-IndependentKindSampleDistances 2 12 $coverageContour 'C')) 0.16
+        Assert-Equal 0.625 $expectedCoverage 'Independent E-only coverage fixture changed.'
+        Assert-Equal $expectedCoverage (Get-DororongOutlineCoverage $distanceMap 2 12 0.16) `
+            'Production coverage differs from independent clamp(E*2.5).'
 
-        # Production bug caught: removing continuation side scaling, or giving C
-        # multiplier 1 instead of 2, makes the centered continuation twice as thick.
         $sideCoverageContour=[pscustomobject]@{Segments=@(
             (New-Segment 'E' 1.5 11.5 1.5 12.5),
             (New-Segment 'C' 12.0 11.5 12.0 12.5))}
         $sideCoverageMap=New-DororongSubpixelDistanceMap $finalMask $sideCoverageContour 8
         Assert-Equal 0.625 (Get-DororongOutlineCoverage $sideCoverageMap 2 12 0.25) `
             'Exposed E support or fixed 2.5 optical multiplier changed.'
-        Assert-Equal 0.03125 (Get-DororongOutlineCoverage $sideCoverageMap 12 12 0.25) `
-            'Continuation C support or fixed 0.125 optical multiplier changed.'
-
-        $omittedContinuation=Get-IndependentCoverage ([double[]](
-            Get-IndependentSampleDistances 12 12 $sideCoverageContour -ExposedOnly)) 0.25
-        $failure=Assert-ThrowsLike {
-            Assert-Equal 0.25 $omittedContinuation `
-                'Continuation omission lost the required centered full thickness W.'
-        } 'Continuation omission lost the required centered full thickness W' `
-            'Omit-C coverage mutation'
-        Write-Output "MUTATION PASS label=continuation-coverage-omitted failure=$failure"
-
-        $fullRadiusContinuation=Get-IndependentCoverage ([double[]](
-            Get-IndependentSampleDistances 12 12 $sideCoverageContour `
-                -ContinuationMultiplier 1.0)) 0.25
-        $failure=Assert-ThrowsLike {
-            Assert-Equal 0.25 $fullRadiusContinuation `
-                'Continuation full-radius mutation doubled the required visible thickness W.'
-        } 'Continuation full-radius mutation doubled the required visible thickness W' `
-            'C multiplier 1 mutation'
-        Write-Output "MUTATION PASS label=continuation-full-radius-W failure=$failure"
+        Assert-Equal 0.0 (Get-DororongOutlineCoverage $sideCoverageMap 12 12 0.25) `
+            'Internal continuation geometry rendered nonzero coverage.'
 
         $halfRadiusExposed=Get-IndependentCoverage ([double[]](
             Get-IndependentSampleDistances 2 12 $sideCoverageContour `
@@ -746,12 +841,12 @@ function Invoke-SyntheticFillAndRasterContract
             ([double[]](Get-IndependentKindSampleDistances 2 12 $sideCoverageContour 'E')) 0.25
         $eGainOne=[Math]::Clamp($eRaw*1.0,0.0,1.0)
         Assert-True ($eGainOne-ne0.625) 'E multiplier 2.5 to 1.0 mutation survived.'
-        Write-Output 'MUTATION PASS label=e-multiplier-2.5-to-1.0 failure=F-coverage'
+        Write-Output 'MUTATION PASS label=e-multiplier-2.5-to-1.0 failure=E-only-coverage'
         $cRaw=Get-IndependentCoverage `
             ([double[]](Get-IndependentKindSampleDistances 12 12 $sideCoverageContour 'C')) 0.125
         $cGainOne=[Math]::Clamp($cRaw*1.0,0.0,1.0)
-        Assert-True ($cGainOne-ne0.03125) 'C multiplier 0.125 to 1.0 mutation survived.'
-        Write-Output 'MUTATION PASS label=c-multiplier-0.125-to-1.0 failure=F-coverage'
+        Assert-True ($cGainOne-gt0.0) 'C multiplier 0.0 to 1.0 mutation fixture produced no coverage.'
+        Write-Output 'MUTATION PASS label=c-multiplier-0-to-1 failure=E-only-coverage'
 
         $retainedSeed=$fillField[10,12]
         $expectedSeed=Get-IndependentInterpolatedColor 10 12 $independentSeeds
@@ -761,17 +856,17 @@ function Invoke-SyntheticFillAndRasterContract
         Write-Output 'MUTATION PASS label=retain-seed-output failure=eligible-sample-smooth-RGB'
 
         $factorFour=Get-IndependentCoverage `
-            ([double[]](Get-IndependentSampleDistances 12 12 $coverageContour 4)) 0.16
+            ([double[]](Get-IndependentKindSampleDistances 2 12 $coverageContour 'E' 4)) 0.16
         Assert-True ($factorFour-ne$expectedCoverage) 'Factor-8-to-4 mutation survived.'
         Write-Output 'MUTATION PASS label=factor-8-to-4 failure=coverage'
         $shiftedOrigin=Get-IndependentCoverage `
-            ([double[]](Get-IndependentSampleDistances 12 12 $coverageContour 8 0.5)) 0.16
+            ([double[]](Get-IndependentKindSampleDistances 2 12 $coverageContour 'E' 8 0.5)) 0.16
         Assert-True ($shiftedOrigin-ne$expectedCoverage) 'Sample-origin-plus-0.5 mutation survived.'
         Write-Output 'MUTATION PASS label=sample-origin-plus-0.5 failure=coverage'
         $exposedOnly=Get-IndependentCoverage `
-            ([double[]](Get-IndependentSampleDistances 12 12 $coverageContour 8 0.0 -ExposedOnly)) 0.16
-        Assert-True ($exposedOnly-ne$expectedCoverage) 'E-only-distance mutation survived.'
-        Write-Output 'MUTATION PASS label=e-only-distance-omits-c failure=coverage'
+            ([double[]](Get-IndependentSampleDistances 2 12 $coverageContour 8 0.0 -ExposedOnly)) 0.16
+        Assert-Equal $expectedCoverage ([Math]::Clamp($exposedOnly*2.5,0.0,1.0)) `
+            'E-only distance coverage changed when continuation geometry was omitted.'
 
         $admitted=@(Get-IndependentFillSeeds $source $seedMask $finalMask $contour 225 8.0 $false)
         Assert-Equal 10 $admitted.Count 'Newly-owned-seed mutation did not admit exactly one pixel.'
@@ -810,7 +905,7 @@ function Invoke-SyntheticFillAndRasterContract
             $tieCoverage=Get-IndependentFCoverage `
                 ([double[]](Get-IndependentKindSampleDistances 2 12 $sideCoverageContour 'E')) `
                 ([double[]](Get-IndependentKindSampleDistances 2 12 $sideCoverageContour 'C')) 0.25
-            Assert-Equal 0.625 $tieCoverage 'Exact-half F blend coverage fixture changed.'
+            Assert-Equal 0.625 $tieCoverage 'Exact-half E-only blend coverage fixture changed.'
             $tieOutline=[Drawing.Color]::FromArgb(255,14,24,34)
             $tieCandidate=Invoke-DororongSubpixelOutline `
                 $source $finalMask $tieFill $sideCoverageMap $tieOutline 0.25
@@ -857,7 +952,7 @@ function Invoke-SyntheticFillAndRasterContract
             finally{$alphaMutation.Dispose()}
         }
         finally{$candidate.Dispose()}
-        Write-Output 'SYNTHETIC RASTER PASS samples=64 coordinates=x-0.5+(i+0.5)/8 supports=E-W,C-W/2 transfer=max(clamp(E*2.5),clamp(C*0.125)) maskZero=byte-identical alpha=preserved'
+        Write-Output 'SYNTHETIC RASTER PASS samples=64 coordinates=x-0.5+(i+0.5)/8 supports=E-W transfer=clamp(E*2.5) C=geometry-only-zero-render maskZero=byte-identical alpha=preserved'
     }
     finally{$finalMask.Dispose();$seedMask.Dispose();$source.Dispose()}
 }
@@ -909,10 +1004,10 @@ function Invoke-TerminalSourceGate(
     Assert-Equal 0.25 $constants.WidthSweepMinimum 'Terminal width minimum changed.'
     Assert-Equal 4.00 $constants.WidthSweepMaximum 'Terminal width maximum changed.'
     Assert-Equal 0.015625 $constants.WidthSweepStep 'Terminal width step changed.'
-    Assert-Equal 2.20898670201159 ([double]$constants.Width) 'Fixed visible Width changed.'
-    Assert-Equal 1.104493351005795 ([double]$constants.Width/2.0) 'Fixed continuation radius W/2 changed.'
+    Assert-Equal 1.5 ([double]$constants.Width) 'Fixed visible Width changed.'
+    Assert-Equal 0.75 ([double]$constants.Width/2.0) 'Fixed continuation geometry radius W/2 changed.'
     Assert-Equal 2.5 ([double]$constants.ExposedCoverageMultiplier) 'Fixed E optical multiplier changed.'
-    Assert-Equal 0.125 ([double]$constants.ContinuationCoverageMultiplier) 'Fixed C optical multiplier changed.'
+    Assert-Equal 0.0 ([double]$constants.ContinuationCoverageMultiplier) 'Fixed C optical multiplier changed.'
     Assert-Equal 7 ([int]$constants.ProxyMaximumSize) 'Resize-proxy size limit changed.'
     Assert-Equal 8 ([int]$constants.ProxyMaximumChroma) 'Resize-proxy chroma limit changed.'
     Assert-Equal 6 ([int]$constants.ExpectedProxyComponentCount) 'Resize-proxy component count changed.'
@@ -954,7 +1049,7 @@ function Invoke-TerminalSourceGate(
         try
         {
             $sourceCandidateHash=Get-BytesSha256 (Get-BitmapPngBytes $candidate)
-            Assert-Equal 'AB5E0F0990980F0393CF02FFDCDC15329EE7BC8F770D70D3DD68FCB775AD5A5A' `
+            Assert-Equal 'D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF' `
                 $sourceCandidateHash 'Fixed source225 candidate PNG changed.'
             $proxyComponents=@(Get-IndependentResizeProxyComponents `
                 $mask $processedSource ([int]$constants.ProxyMaximumSize) ([int]$constants.ProxyMaximumChroma))
@@ -970,7 +1065,7 @@ function Invoke-TerminalSourceGate(
             $proxyCandidate=New-IndependentResizeProxy $candidate $fillField $proxyComponents
             $nativeCandidate=Resize-DororongPremultiplied96 $proxyCandidate
             $nativeCandidateHash=Get-BytesSha256 (Get-BitmapPngBytes $nativeCandidate)
-            Assert-Equal 'F4C9B2CCE253522345F12D29F6CC634ACD0DE1C3151D7C923460E3D5EBA73B9A' `
+            Assert-Equal '238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511' `
                 $nativeCandidateHash 'Fixed native96 candidate PNG changed.'
             $endpointText=@($constants.LegalEndpoints|ForEach-Object{"$($_.X),$($_.Y)"})-join '|'
             $widthText=([double]$constants.Width).ToString('R',[Globalization.CultureInfo]::InvariantCulture)
@@ -1026,6 +1121,8 @@ $authorityPath=Join-Path $repositoryRoot 'tests/fixtures/dororong-body-outline-a
 $sourceRasterModulePath=Join-Path $repositoryRoot 'tools/Dororong.SourceRaster.psm1'
 $outlineModulePath=Join-Path $repositoryRoot 'tools/Dororong.SubpixelOutline.psm1'
 $constantsPath=Join-Path $repositoryRoot 'tools/Dororong.SubpixelOutline.Constants.psd1'
+$generatorPath=Join-Path $repositoryRoot 'tools/Generate-CanonicalArt.ps1'
+$continuousOpticsPath=Join-Path $repositoryRoot 'tests/support/Dororong.ContinuousOptics.ps1'
 $evidenceDirectory=Join-Path $repositoryRoot '.superpowers/sdd/2026-08-27-dororong-complete-body-ownership-outline/contour-evidence'
 $legalEndpoints=[Drawing.PointF[]]@([Drawing.PointF]::new(118,151),[Drawing.PointF]::new(161,116))
 $expectedModuleExports=@(
@@ -1034,6 +1131,15 @@ $expectedModuleExports=@(
     'Get-DororongResizeProxyComponents','Get-DororongResizeProxyMembership',
     'New-DororongResizeProxy','New-DororongFillField','New-DororongSubpixelDistanceMap',
     'Get-DororongOutlineCoverage','Invoke-DororongSubpixelOutline')
+
+if($ThinOutlineOnly)
+{
+    Add-Type -AssemblyName System.Drawing
+    Invoke-ThinOutlineDecisionContract $repositoryRoot $sourcePath $seedPath $maskPath `
+        $authorityPath $sourceRasterModulePath $outlineModulePath $constantsPath `
+        $generatorPath $continuousOpticsPath
+    return
+}
 
 if($ReloadOnly)
 {
@@ -1119,7 +1225,7 @@ try
         'ExpectedProxyMembershipSha256')|Sort-Object
     Assert-Equal ($expectedKeys-join '|') (@($constants.Keys|Sort-Object)-join '|') `
         'Geometry constants contain missing or extra fields.'
-    Assert-Equal 2.20898670201159 ([double]$constants.Width) 'Fixed visible Width changed.'
+    Assert-Equal 1.5 ([double]$constants.Width) 'Fixed visible Width changed.'
     Assert-Equal 8 $constants.SubpixelFactor 'Subpixel factor changed.'
     Assert-Equal 8.0 $constants.FillDistance 'Fill distance changed.'
     Assert-Equal 225 $constants.FillFloor 'Fill floor changed.'
@@ -1129,7 +1235,7 @@ try
     Assert-Equal 4.00 $constants.WidthSweepMaximum 'Width sweep maximum changed.'
     Assert-Equal 0.015625 $constants.WidthSweepStep 'Width sweep step changed.'
     Assert-Equal 2.5 ([double]$constants.ExposedCoverageMultiplier) 'E optical multiplier changed.'
-    Assert-Equal 0.125 ([double]$constants.ContinuationCoverageMultiplier) 'C optical multiplier changed.'
+    Assert-Equal 0.0 ([double]$constants.ContinuationCoverageMultiplier) 'C optical multiplier changed.'
     Assert-Equal 7 ([int]$constants.ProxyMaximumSize) 'Proxy maximum size changed.'
     Assert-Equal 8 ([int]$constants.ProxyMaximumChroma) 'Proxy maximum chroma changed.'
     Assert-Equal 6 ([int]$constants.ExpectedProxyComponentCount) 'Expected proxy component count changed.'
