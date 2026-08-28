@@ -1,4 +1,4 @@
-param([switch]$GeometryOnly,[switch]$SyntheticOnly)
+param([switch]$GeometryOnly,[switch]$SyntheticOnly,[switch]$ReloadOnly)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -394,6 +394,39 @@ function Get-IndependentSampleDistances(
 function Get-IndependentCoverage([double[]]$Distances,[double]$Width)
 { return [double]@($Distances|Where-Object{$_ -le $Width}).Count/[double]$Distances.Count }
 
+function Get-IndependentKindSampleDistances(
+    [int]$X,[int]$Y,[object]$Contour,[string]$Kind,[int]$Factor=8,[double]$OriginShift=0.0)
+{
+    $distances=[Collections.Generic.List[double]]::new()
+    for($j=0;$j-lt$Factor;$j++)
+    {
+        for($i=0;$i-lt$Factor;$i++)
+        {
+            $sampleX=$X-0.5+(($i+0.5)/$Factor)+$OriginShift
+            $sampleY=$Y-0.5+(($j+0.5)/$Factor)+$OriginShift
+            $minimum=[double]::PositiveInfinity
+            foreach($segment in @($Contour.Segments|Where-Object Kind -eq $Kind))
+            {
+                $distance=Get-IndependentPointSegmentDistance $sampleX $sampleY $segment
+                if($distance-lt$minimum){$minimum=$distance}
+            }
+            $distances.Add($minimum)
+        }
+    }
+    return @($distances)
+}
+
+function Get-IndependentFCoverage(
+    [double[]]$ExposedDistances,[double[]]$ContinuationDistances,[double]$Width,
+    [double]$ExposedGain=2.5,[double]$ContinuationGain=0.125)
+{
+    $eRaw=Get-IndependentCoverage $ExposedDistances $Width
+    $cRaw=Get-IndependentCoverage $ContinuationDistances ($Width/2.0)
+    $e=[Math]::Clamp($eRaw*$ExposedGain,0.0,1.0)
+    $c=[Math]::Clamp($cRaw*$ContinuationGain,0.0,1.0)
+    return [Math]::Max($e,$c)
+}
+
 function Get-IndependentBlendedColor(
     [Drawing.Color]$Fill,[Drawing.Color]$Outline,[double]$Coverage,[int]$Alpha)
 {
@@ -415,8 +448,9 @@ function Assert-IndependentWritableBlend(
         for($x=0;$x-lt$Mask.Width;$x++)
         {
             if($Mask.GetPixel($x,$y).R-ne255){continue}
-            $distances=[double[]](Get-IndependentSampleDistances $x $y $Contour)
-            $coverage=Get-IndependentCoverage $distances $Width
+            $eDistances=[double[]](Get-IndependentKindSampleDistances $x $y $Contour 'E')
+            $cDistances=[double[]](Get-IndependentKindSampleDistances $x $y $Contour 'C')
+            $coverage=Get-IndependentFCoverage $eDistances $cDistances $Width
             $expected=Get-IndependentBlendedColor `
                 $FillField[$x,$y] $Outline $coverage $Source.GetPixel($x,$y).A
             $actual=$Candidate.GetPixel($x,$y)
@@ -442,6 +476,94 @@ function Assert-RasterPreservesAuthority(
             { Assert-Equal $before.ToArgb() $after.ToArgb() "Protected mask-zero RGB changed at ($x,$y)." }
         }
     }
+}
+
+function Get-IndependentResizeProxyComponents(
+    [Drawing.Bitmap]$Mask,[Drawing.Bitmap]$Source,[int]$MaximumSize=7,
+    [int]$MaximumChroma=8,[switch]$EightConnected)
+{
+    $visited=[bool[]]::new($Mask.Width*$Mask.Height)
+    $accepted=[Collections.Generic.List[object]]::new()
+    $offsets=if($EightConnected){
+        @(@(-1,-1),@(0,-1),@(1,-1),@(-1,0),@(1,0),@(-1,1),@(0,1),@(1,1))
+    }else{@(@(-1,0),@(1,0),@(0,-1),@(0,1))}
+    for($startY=0;$startY-lt$Mask.Height;$startY++)
+    {
+        for($startX=0;$startX-lt$Mask.Width;$startX++)
+        {
+            $startIndex=($startY*$Mask.Width)+$startX
+            if($visited[$startIndex]-or$Mask.GetPixel($startX,$startY).R-ne0){continue}
+            $queue=[Collections.Generic.Queue[int]]::new();$queue.Enqueue($startIndex)
+            $visited[$startIndex]=$true;$indices=[Collections.Generic.List[int]]::new()
+            $touchesFrame=$false;$observedChroma=0
+            $minX=$startX;$maxX=$startX;$minY=$startY;$maxY=$startY
+            while($queue.Count-gt0)
+            {
+                $index=$queue.Dequeue();$indices.Add($index)
+                $x=$index%$Mask.Width;$y=[int][Math]::Floor($index/$Mask.Width)
+                $minX=[Math]::Min($minX,$x);$maxX=[Math]::Max($maxX,$x)
+                $minY=[Math]::Min($minY,$y);$maxY=[Math]::Max($maxY,$y)
+                if($x-eq0-or$y-eq0-or$x-eq($Mask.Width-1)-or$y-eq($Mask.Height-1)){$touchesFrame=$true}
+                $pixel=$Source.GetPixel($x,$y)
+                $chroma=[Math]::Max($pixel.R,[Math]::Max($pixel.G,$pixel.B))-
+                    [Math]::Min($pixel.R,[Math]::Min($pixel.G,$pixel.B))
+                $observedChroma=[Math]::Max($observedChroma,$chroma)
+                foreach($offset in $offsets)
+                {
+                    $nx=$x+$offset[0];$ny=$y+$offset[1]
+                    if($nx-lt0-or$ny-lt0-or$nx-ge$Mask.Width-or$ny-ge$Mask.Height){continue}
+                    $neighborIndex=($ny*$Mask.Width)+$nx
+                    if(-not$visited[$neighborIndex]-and$Mask.GetPixel($nx,$ny).R-eq0)
+                    {$visited[$neighborIndex]=$true;$queue.Enqueue($neighborIndex)}
+                }
+            }
+            if(-not$touchesFrame-and$indices.Count-le$MaximumSize-and$observedChroma-le$MaximumChroma)
+            {
+                $accepted.Add([pscustomobject]@{
+                    Indices=[int[]]$indices.ToArray();Size=$indices.Count
+                    MinX=$minX;MinY=$minY;MaxX=$maxX;MaxY=$maxY;MaximumChroma=$observedChroma
+                })
+            }
+        }
+    }
+    return @($accepted)
+}
+
+function Get-IndependentResizeProxyMembership([object[]]$Components,[int]$Width)
+{
+    $records=@($Components|ForEach-Object{
+        $coordinates=@($_.Indices|ForEach-Object{
+            [pscustomobject]@{X=[int]($_%$Width);Y=[int][Math]::Floor($_/$Width)}
+        }|Sort-Object Y,X)
+        [pscustomobject]@{
+            FirstY=$coordinates[0].Y;FirstX=$coordinates[0].X
+            Record="C|$($coordinates.Count)|$(@($coordinates|ForEach-Object{"$($_.Y),$($_.X)"})-join ';')"
+        }
+    }|Sort-Object FirstY,FirstX|ForEach-Object Record)
+    $text=$records-join"`n"
+    return [pscustomobject]@{Records=$records;Hash=Get-Sha256Text $text}
+}
+
+function New-IndependentResizeProxy(
+    [Drawing.Bitmap]$Candidate,[Drawing.Color[,]]$FillField,[object[]]$Components)
+{
+    $proxy=$Candidate.Clone(
+        [Drawing.Rectangle]::new(0,0,$Candidate.Width,$Candidate.Height),
+        [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    try
+    {
+        foreach($component in $Components)
+        {
+            foreach($index in $component.Indices)
+            {
+                $x=$index%$Candidate.Width;$y=[int][Math]::Floor($index/$Candidate.Width)
+                $fill=$FillField[$x,$y];$original=$proxy.GetPixel($x,$y)
+                $proxy.SetPixel($x,$y,[Drawing.Color]::FromArgb($original.A,$fill.R,$fill.G,$fill.B))
+            }
+        }
+        return $proxy
+    }
+    catch{$proxy.Dispose();throw}
 }
 
 function Get-Median([double[]]$Values)
@@ -524,6 +646,7 @@ function Invoke-SyntheticFillAndRasterContract
 
         $independentKeys=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
         foreach($seed in $independentSeeds){$null=$independentKeys.Add("$($seed.X),$($seed.Y)")}
+        $eligibleOutputChanged=0
         for($y=0;$y-lt25;$y++)
         {
             for($x=0;$x-lt25;$x++)
@@ -531,24 +654,23 @@ function Invoke-SyntheticFillAndRasterContract
                 if($finalMask.GetPixel($x,$y).R-ne255){continue}
                 $actual=$fillField[$x,$y]
                 $key="$x,$y"
-                if($independentKeys.Contains($key))
-                { Assert-ColorEqual $source.GetPixel($x,$y) $actual "Eligible seed RGB changed at ($x,$y)." }
-                else
-                {
-                    $expected=Get-IndependentInterpolatedColor $x $y $independentSeeds
-                    Assert-ColorEqual $expected $actual "Reconstructed fill differs at ($x,$y)."
-                    Assert-Equal 255 $actual.A "Writable non-seed was not reconstructed at ($x,$y)."
-                }
+                $expected=Get-IndependentInterpolatedColor $x $y $independentSeeds
+                Assert-ColorEqual $expected $actual "All-pixel smooth fill differs at ($x,$y)."
+                Assert-Equal 255 $actual.A "Writable pixel was not reconstructed at ($x,$y)."
+                if($independentKeys.Contains($key)-and
+                    $source.GetPixel($x,$y).ToArgb()-ne$actual.ToArgb()){$eligibleOutputChanged++}
                 $sourcePixel=$source.GetPixel($x,$y)
                 if($sourcePixel.R-lt225-or$sourcePixel.G-lt225-or$sourcePixel.B-lt225)
                 { Assert-True (-not $independentKeys.Contains($key)) "Dark source pixel seeded at ($x,$y)." }
             }
         }
         Assert-True (-not $independentKeys.Contains('12,12')) 'Newly owned pixel became an eligible seed.'
+        Assert-True ($eligibleOutputChanged-gt0) `
+            'All eligible sample coordinates retained exact source RGB instead of using the smooth field.'
         $targetExpected=Get-IndependentInterpolatedColor 12 12 $independentSeeds
         Assert-ColorEqual $targetExpected $fillField[12,12] `
             'Eight-nearest ordering, inverse-distance weights, or ties-to-even rounding changed.'
-        Write-Output "SYNTHETIC FILL PASS eligibleSeeds=$($fillField.EligibleSeedCount) targetArgb=$($targetExpected.ToArgb()) ordering=distance,Y,X weight=1/(1+d^2) rounding=ToEven"
+        Write-Output "SYNTHETIC FILL PASS eligibleSeeds=$($fillField.EligibleSeedCount) eligibleOutputsChanged=$eligibleOutputChanged targetArgb=$($targetExpected.ToArgb()) ordering=distance,Y,X weight=1/(1+d^2) rounding=ToEven"
 
         $coverageContour=[pscustomobject]@{Segments=@(
             (New-Segment 'E' 2.0 11.5 2.0 12.5),
@@ -561,20 +683,24 @@ function Invoke-SyntheticFillAndRasterContract
             for($x=0;$x-lt25;$x++)
             {
                 if($finalMask.GetPixel($x,$y).R-ne255){continue}
-                $expectedDistances=@(Get-IndependentSampleDistances $x $y $coverageContour)
+                $expectedE=@(Get-IndependentKindSampleDistances $x $y $coverageContour 'E')
+                $expectedC=@(Get-IndependentKindSampleDistances $x $y $coverageContour 'C')
                 for($sampleIndex=0;$sampleIndex-lt64;$sampleIndex++)
                 {
                     $flat=((($y*25)+$x)*64)+$sampleIndex
-                    Assert-True ([Math]::Abs($expectedDistances[$sampleIndex]-$distanceMap.Distances[$flat])-le1e-12) `
-                        "Independent/production sample distance differs at ($x,$y) sample $sampleIndex."
+                    Assert-True ([Math]::Abs($expectedE[$sampleIndex]-$distanceMap.ExposedDistances[$flat])-le1e-12) `
+                        "Independent/production E sample distance differs at ($x,$y) sample $sampleIndex."
+                    Assert-True ([Math]::Abs($expectedC[$sampleIndex]-$distanceMap.ContinuationDistances[$flat])-le1e-12) `
+                        "Independent/production C sample distance differs at ($x,$y) sample $sampleIndex."
                 }
             }
         }
-        $expectedCoverage=Get-IndependentCoverage `
-            ([double[]](Get-IndependentSampleDistances 12 12 $coverageContour)) 0.16
-        Assert-Equal 0.25 $expectedCoverage 'Independent 8x8 coverage fixture changed.'
+        $expectedCoverage=Get-IndependentFCoverage `
+            ([double[]](Get-IndependentKindSampleDistances 12 12 $coverageContour 'E')) `
+            ([double[]](Get-IndependentKindSampleDistances 12 12 $coverageContour 'C')) 0.16
+        Assert-Equal 0.03125 $expectedCoverage 'Independent F coverage fixture changed.'
         Assert-Equal $expectedCoverage (Get-DororongOutlineCoverage $distanceMap 12 12 0.16) `
-            'Production 8x8 coverage differs from the independent implementation.'
+            'Production F coverage differs from independent max(clamp(E*2.5),clamp(C*0.125)).'
 
         # Production bug caught: removing continuation side scaling, or giving C
         # multiplier 1 instead of 2, makes the centered continuation twice as thick.
@@ -582,10 +708,10 @@ function Invoke-SyntheticFillAndRasterContract
             (New-Segment 'E' 1.5 11.5 1.5 12.5),
             (New-Segment 'C' 12.0 11.5 12.0 12.5))}
         $sideCoverageMap=New-DororongSubpixelDistanceMap $finalMask $sideCoverageContour 8
-        Assert-Equal 0.25 (Get-DororongOutlineCoverage $sideCoverageMap 2 12 0.25) `
-            'Exposed E did not cover inward to the full radius W.'
-        Assert-Equal 0.25 (Get-DororongOutlineCoverage $sideCoverageMap 12 12 0.25) `
-            'Continuation C did not produce total visible thickness W with radius W/2 on both sides.'
+        Assert-Equal 0.625 (Get-DororongOutlineCoverage $sideCoverageMap 2 12 0.25) `
+            'Exposed E support or fixed 2.5 optical multiplier changed.'
+        Assert-Equal 0.03125 (Get-DororongOutlineCoverage $sideCoverageMap 12 12 0.25) `
+            'Continuation C support or fixed 0.125 optical multiplier changed.'
 
         $omittedContinuation=Get-IndependentCoverage ([double[]](
             Get-IndependentSampleDistances 12 12 $sideCoverageContour -ExposedOnly)) 0.25
@@ -615,6 +741,24 @@ function Invoke-SyntheticFillAndRasterContract
         } 'Exposed half-radius mutation lost the required inward full thickness W' `
             'E multiplier 2 mutation'
         Write-Output "MUTATION PASS label=exposed-half-radius-W-over-2 failure=$failure"
+
+        $eRaw=Get-IndependentCoverage `
+            ([double[]](Get-IndependentKindSampleDistances 2 12 $sideCoverageContour 'E')) 0.25
+        $eGainOne=[Math]::Clamp($eRaw*1.0,0.0,1.0)
+        Assert-True ($eGainOne-ne0.625) 'E multiplier 2.5 to 1.0 mutation survived.'
+        Write-Output 'MUTATION PASS label=e-multiplier-2.5-to-1.0 failure=F-coverage'
+        $cRaw=Get-IndependentCoverage `
+            ([double[]](Get-IndependentKindSampleDistances 12 12 $sideCoverageContour 'C')) 0.125
+        $cGainOne=[Math]::Clamp($cRaw*1.0,0.0,1.0)
+        Assert-True ($cGainOne-ne0.03125) 'C multiplier 0.125 to 1.0 mutation survived.'
+        Write-Output 'MUTATION PASS label=c-multiplier-0.125-to-1.0 failure=F-coverage'
+
+        $retainedSeed=$fillField[10,12]
+        $expectedSeed=Get-IndependentInterpolatedColor 10 12 $independentSeeds
+        Assert-ColorEqual $expectedSeed $retainedSeed 'Eligible sample coordinate did not use smooth fill.'
+        Assert-True ($source.GetPixel(10,12).ToArgb()-ne$expectedSeed.ToArgb()) `
+            'Retain-seed mutation fixture does not distinguish source RGB from smooth output.'
+        Write-Output 'MUTATION PASS label=retain-seed-output failure=eligible-sample-smooth-RGB'
 
         $factorFour=Get-IndependentCoverage `
             ([double[]](Get-IndependentSampleDistances 12 12 $coverageContour 4)) 0.16
@@ -663,23 +807,24 @@ function Invoke-SyntheticFillAndRasterContract
             for($tieY=1;$tieY-le23;$tieY++)
             {for($tieX=1;$tieX-le23;$tieX++)
                 {$tieFill[$tieX,$tieY]=[Drawing.Color]::FromArgb(255,10,20,30)}}
-            $tieCoverage=Get-IndependentCoverage `
-                ([double[]](Get-IndependentSampleDistances 12 12 $coverageContour)) 0.375
-            Assert-Equal 0.5 $tieCoverage 'Exact-half blend coverage fixture changed.'
-            $tieOutline=[Drawing.Color]::FromArgb(255,11,21,31)
+            $tieCoverage=Get-IndependentFCoverage `
+                ([double[]](Get-IndependentKindSampleDistances 2 12 $sideCoverageContour 'E')) `
+                ([double[]](Get-IndependentKindSampleDistances 2 12 $sideCoverageContour 'C')) 0.25
+            Assert-Equal 0.625 $tieCoverage 'Exact-half F blend coverage fixture changed.'
+            $tieOutline=[Drawing.Color]::FromArgb(255,14,24,34)
             $tieCandidate=Invoke-DororongSubpixelOutline `
-                $source $finalMask $tieFill $distanceMap $tieOutline 0.375
+                $source $finalMask $tieFill $sideCoverageMap $tieOutline 0.25
             try
             {
-                $toEvenLiteral=[Drawing.Color]::FromArgb(255,10,20,30)
-                Assert-ColorEqual $toEvenLiteral $tieCandidate.GetPixel(12,12) `
+                $toEvenLiteral=[Drawing.Color]::FromArgb(255,12,22,32)
+                Assert-ColorEqual $toEvenLiteral $tieCandidate.GetPixel(2,12) `
                     'Exact-half writable blend did not round ties to even.'
                 $awayRounded=$tieCandidate.Clone()
                 try
                 {
-                    $awayRounded.SetPixel(12,12,[Drawing.Color]::FromArgb(255,11,21,31))
+                    $awayRounded.SetPixel(2,12,[Drawing.Color]::FromArgb(255,13,23,33))
                     $failure=Assert-ThrowsLike {
-                        Assert-ColorEqual $toEvenLiteral $awayRounded.GetPixel(12,12) `
+                        Assert-ColorEqual $toEvenLiteral $awayRounded.GetPixel(2,12) `
                             'Exact-half writable blend changed from ToEven to AwayFromZero.'
                     } 'Exact-half writable blend changed from ToEven to AwayFromZero' `
                         'Away-from-zero blend-rounding mutation'
@@ -712,7 +857,7 @@ function Invoke-SyntheticFillAndRasterContract
             finally{$alphaMutation.Dispose()}
         }
         finally{$candidate.Dispose()}
-        Write-Output 'SYNTHETIC RASTER PASS samples=64 coordinates=x-0.5+(i+0.5)/8 contour=E-union-C maskZero=byte-identical alpha=preserved'
+        Write-Output 'SYNTHETIC RASTER PASS samples=64 coordinates=x-0.5+(i+0.5)/8 supports=E-W,C-W/2 transfer=max(clamp(E*2.5),clamp(C*0.125)) maskZero=byte-identical alpha=preserved'
     }
     finally{$finalMask.Dispose();$seedMask.Dispose();$source.Dispose()}
 }
@@ -766,6 +911,14 @@ function Invoke-TerminalSourceGate(
     Assert-Equal 0.015625 $constants.WidthSweepStep 'Terminal width step changed.'
     Assert-Equal 2.20898670201159 ([double]$constants.Width) 'Fixed visible Width changed.'
     Assert-Equal 1.104493351005795 ([double]$constants.Width/2.0) 'Fixed continuation radius W/2 changed.'
+    Assert-Equal 2.5 ([double]$constants.ExposedCoverageMultiplier) 'Fixed E optical multiplier changed.'
+    Assert-Equal 0.125 ([double]$constants.ContinuationCoverageMultiplier) 'Fixed C optical multiplier changed.'
+    Assert-Equal 7 ([int]$constants.ProxyMaximumSize) 'Resize-proxy size limit changed.'
+    Assert-Equal 8 ([int]$constants.ProxyMaximumChroma) 'Resize-proxy chroma limit changed.'
+    Assert-Equal 6 ([int]$constants.ExpectedProxyComponentCount) 'Resize-proxy component count changed.'
+    Assert-Equal 12 ([int]$constants.ExpectedProxyPixelCount) 'Resize-proxy pixel count changed.'
+    Assert-Equal '2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54' `
+        $constants.ExpectedProxyMembershipSha256 'Resize-proxy membership identity changed.'
     $authority=Import-PowerShellDataFile -LiteralPath $AuthorityPath
     Assert-Equal 6 @($authority.HairAnchors).Count 'Terminal hair anchor count changed.'
     Assert-Equal 15 @($authority.BodyNormals).Count 'Terminal body normal count changed.'
@@ -797,26 +950,39 @@ function Invoke-TerminalSourceGate(
 
         $candidate=Invoke-DororongSubpixelOutline `
             $processedSource $mask $fillField $distanceMap $outlineColor ([double]$constants.Width)
-        $nativeCandidate=$null
+        $proxyCandidate=$null;$nativeCandidate=$null
         try
         {
             $sourceCandidateHash=Get-BytesSha256 (Get-BitmapPngBytes $candidate)
-            Assert-Equal '8302307105F76A99C531AA8FD61908B58FF1C15537B703F6B6EFC20E895DCBE3' `
+            Assert-Equal 'AB5E0F0990980F0393CF02FFDCDC15329EE7BC8F770D70D3DD68FCB775AD5A5A' `
                 $sourceCandidateHash 'Fixed source225 candidate PNG changed.'
-            $nativeCandidate=Resize-DororongPremultiplied96 $candidate
+            $proxyComponents=@(Get-IndependentResizeProxyComponents `
+                $mask $processedSource ([int]$constants.ProxyMaximumSize) ([int]$constants.ProxyMaximumChroma))
+            $proxyPixels=(@($proxyComponents|ForEach-Object Size)|Measure-Object -Sum).Sum
+            Assert-Equal 6 $proxyComponents.Count 'Independent resize-proxy component count changed.'
+            Assert-Equal 12 $proxyPixels 'Independent resize-proxy pixel count changed.'
+            $membership=Get-IndependentResizeProxyMembership $proxyComponents $mask.Width
+            Assert-Equal '2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54' `
+                $membership.Hash 'Independent resize-proxy membership changed.'
+            $grayIsland=@($proxyComponents|Where-Object{
+                $_.Size-eq7-and$_.MinX-eq144-and$_.MinY-eq159-and$_.MaxX-eq147-and$_.MaxY-eq160})
+            Assert-Equal 1 $grayIsland.Count 'Diagnosed seven-pixel gray resize-proxy island changed.'
+            $proxyCandidate=New-IndependentResizeProxy $candidate $fillField $proxyComponents
+            $nativeCandidate=Resize-DororongPremultiplied96 $proxyCandidate
             $nativeCandidateHash=Get-BytesSha256 (Get-BitmapPngBytes $nativeCandidate)
-            Assert-Equal '4329C62523C9E9BC0D3223037506E06160DB32B31F5876B7EBC68C95BE4F560B' `
+            Assert-Equal 'F4C9B2CCE253522345F12D29F6CC634ACD0DE1C3151D7C923460E3D5EBA73B9A' `
                 $nativeCandidateHash 'Fixed native96 candidate PNG changed.'
             $endpointText=@($constants.LegalEndpoints|ForEach-Object{"$($_.X),$($_.Y)"})-join '|'
             $widthText=([double]$constants.Width).ToString('R',[Globalization.CultureInfo]::InvariantCulture)
             $halfWidthText=([double]$constants.Width/2.0).ToString('R',[Globalization.CultureInfo]::InvariantCulture)
             Write-Output "FIXED CANDIDATE INPUT moduleHash=$moduleHash testHash=$executingTestHash constantsHash=$constantsHash sourceHash=$($preHashes.Source) seedHash=$($preHashes.Seed) maskHash=$($preHashes.Mask) authorityHash=$($preHashes.Authority)"
-            Write-Output "FIXED CANDIDATE GEOMETRY width=$widthText halfWidth=$halfWidthText outlineRgb=$($outlineColor.R),$($outlineColor.G),$($outlineColor.B) factor=$($constants.SubpixelFactor) contourRecords=$(@($contour.Segments).Count) exposed=$($contour.ExposedSegmentCount) continuations=$($contour.ContinuationSegmentCount) contourHash=$contourHash endpoints=$endpointText eligibleFillSeeds=$($fillField.EligibleSeedCount) fillHash=$fillHash"
+            Write-Output "FIXED CANDIDATE GEOMETRY width=$widthText halfWidth=$halfWidthText eMultiplier=$($constants.ExposedCoverageMultiplier) cMultiplier=$($constants.ContinuationCoverageMultiplier) outlineRgb=$($outlineColor.R),$($outlineColor.G),$($outlineColor.B) factor=$($constants.SubpixelFactor) contourRecords=$(@($contour.Segments).Count) exposed=$($contour.ExposedSegmentCount) continuations=$($contour.ContinuationSegmentCount) contourHash=$contourHash endpoints=$endpointText eligibleFillSeeds=$($fillField.EligibleSeedCount) fillHash=$fillHash proxyComponents=$($proxyComponents.Count) proxyPixels=$proxyPixels proxyHash=$($membership.Hash)"
             Write-Output "FIXED CANDIDATE PASS source225Hash=$sourceCandidateHash native96Hash=$nativeCandidateHash generatedSourceCandidates=1 nativeResizes=1"
         }
         finally
         {
             if($null-ne$nativeCandidate){$nativeCandidate.Dispose()}
+            if($null-ne$proxyCandidate){$proxyCandidate.Dispose()}
             $candidate.Dispose()
         }
 
@@ -862,6 +1028,33 @@ $outlineModulePath=Join-Path $repositoryRoot 'tools/Dororong.SubpixelOutline.psm
 $constantsPath=Join-Path $repositoryRoot 'tools/Dororong.SubpixelOutline.Constants.psd1'
 $evidenceDirectory=Join-Path $repositoryRoot '.superpowers/sdd/2026-08-27-dororong-complete-body-ownership-outline/contour-evidence'
 $legalEndpoints=[Drawing.PointF[]]@([Drawing.PointF]::new(118,151),[Drawing.PointF]::new(161,116))
+$expectedModuleExports=@(
+    'Import-DororongBodyMask','New-DororongVisibleContour',
+    'Get-DororongCanonicalContourRecords','Get-DororongCanonicalContourHash',
+    'Get-DororongResizeProxyComponents','Get-DororongResizeProxyMembership',
+    'New-DororongResizeProxy','New-DororongFillField','New-DororongSubpixelDistanceMap',
+    'Get-DororongOutlineCoverage','Invoke-DororongSubpixelOutline')
+
+if($ReloadOnly)
+{
+    Add-Type -AssemblyName System.Drawing
+    Import-Module $outlineModulePath -Force
+    $firstExports=@(Get-Command -Module Dororong.SubpixelOutline|ForEach-Object Name|Sort-Object)
+    Assert-Equal (($expectedModuleExports|Sort-Object)-join '|') ($firstExports-join '|') `
+        'Initial reload-check module export identity changed.'
+    Assert-True ($null-ne('DororongSubpixelKernelV2' -as [type])) `
+        'Initial import did not publish the versioned CLR kernel V2.'
+
+    Import-Module $outlineModulePath -Force
+    $secondExports=@(Get-Command -Module Dororong.SubpixelOutline|ForEach-Object Name|Sort-Object)
+    Assert-Equal (($expectedModuleExports|Sort-Object)-join '|') ($secondExports-join '|') `
+        'Forced reimport module export identity changed.'
+    Assert-True ($null-ne('DororongSubpixelKernelV2' -as [type])) `
+        'Forced reimport lost the versioned CLR kernel V2.'
+    Invoke-SyntheticFillAndRasterContract
+    Write-Output "RELOAD PASS imports=2 kernel=DororongSubpixelKernelV2 exports=$($secondExports.Count) behavior=synthetic-fill-raster"
+    return
+}
 
 if(-not $GeometryOnly)
 {
@@ -908,10 +1101,7 @@ try
     Write-Output "INDEPENDENT CONTOUR hash=$independentRealHash exposed=$independentExposedCount continuations=2 records=$($independentRealRecords.Count)"
 
     Import-Module $outlineModulePath -Force
-    $requiredCommands=@('Import-DororongBodyMask','New-DororongVisibleContour',
-        'Get-DororongCanonicalContourRecords','Get-DororongCanonicalContourHash',
-        'New-DororongFillField','New-DororongSubpixelDistanceMap',
-        'Get-DororongOutlineCoverage','Invoke-DororongSubpixelOutline')
+    $requiredCommands=$expectedModuleExports
     foreach($command in $requiredCommands)
     {
         Assert-True ($null -ne (Get-Command $command -ErrorAction SilentlyContinue)) `
@@ -923,7 +1113,10 @@ try
 
     $constants=Import-PowerShellDataFile -LiteralPath $constantsPath
     $expectedKeys=@('SubpixelFactor','FillDistance','FillFloor','MaximumChroma','FillNeighborCount','Width',
-        'WidthSweepMinimum','WidthSweepMaximum','WidthSweepStep','LegalEndpoints','OutlineSamples')|Sort-Object
+        'WidthSweepMinimum','WidthSweepMaximum','WidthSweepStep','LegalEndpoints','OutlineSamples',
+        'ExposedCoverageMultiplier','ContinuationCoverageMultiplier','ProxyMaximumSize',
+        'ProxyMaximumChroma','ExpectedProxyComponentCount','ExpectedProxyPixelCount',
+        'ExpectedProxyMembershipSha256')|Sort-Object
     Assert-Equal ($expectedKeys-join '|') (@($constants.Keys|Sort-Object)-join '|') `
         'Geometry constants contain missing or extra fields.'
     Assert-Equal 2.20898670201159 ([double]$constants.Width) 'Fixed visible Width changed.'
@@ -935,6 +1128,14 @@ try
     Assert-Equal 0.25 $constants.WidthSweepMinimum 'Width sweep minimum changed.'
     Assert-Equal 4.00 $constants.WidthSweepMaximum 'Width sweep maximum changed.'
     Assert-Equal 0.015625 $constants.WidthSweepStep 'Width sweep step changed.'
+    Assert-Equal 2.5 ([double]$constants.ExposedCoverageMultiplier) 'E optical multiplier changed.'
+    Assert-Equal 0.125 ([double]$constants.ContinuationCoverageMultiplier) 'C optical multiplier changed.'
+    Assert-Equal 7 ([int]$constants.ProxyMaximumSize) 'Proxy maximum size changed.'
+    Assert-Equal 8 ([int]$constants.ProxyMaximumChroma) 'Proxy maximum chroma changed.'
+    Assert-Equal 6 ([int]$constants.ExpectedProxyComponentCount) 'Expected proxy component count changed.'
+    Assert-Equal 12 ([int]$constants.ExpectedProxyPixelCount) 'Expected proxy pixel count changed.'
+    Assert-Equal '2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54' `
+        $constants.ExpectedProxyMembershipSha256 'Expected proxy membership changed.'
     Assert-Equal '118,151|161,116' `
         (@($constants.LegalEndpoints|ForEach-Object{"$($_.X),$($_.Y)"})-join '|') 'Legal endpoints changed.'
     Assert-Equal '20,125|104,131|24,95|109,64|54,62|24,143' `

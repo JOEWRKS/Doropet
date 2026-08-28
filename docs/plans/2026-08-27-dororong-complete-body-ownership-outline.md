@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox syntax for tracking.
 
-**Goal:** Reconstruct every visible body-owned outline pixel and render one globally uniform inward body stroke whose optical weight is tied to the unchanged head/hair reference.
+**Goal:** Reconstruct every visible body-owned outline pixel and render one silhouette-faithful inward body stroke whose frozen geometric support and calibrated optical coverage are tied to the unchanged head/hair reference.
 
-**Architecture:** Preserve the current reviewed body mask as an immutable seed, expand it by deterministic component ownership, and freeze the reviewed final mask before deriving geometry. Production and independent tests then canonicalize the same exposed contour and two legal continuations; a fresh test-only authority fixes perpendicular body normals before any width sweep. The fill field, 8x8 raster coverage, one global width, runtime frames, and Windows artifact are admitted in that order.
+**Architecture:** Preserve the current reviewed body mask as an immutable seed, expand it by deterministic component ownership, and freeze the reviewed final mask before deriving geometry. Production and independent tests then canonicalize the same exposed contour and two legal continuations; a fresh test-only authority fixes perpendicular body normals before the one completed historical sweep. The all-pixel smooth fill, fixed 8x8 E/C support, controller-selected F optical transfer, deterministic resize-only proxy, runtime frames, and Windows artifact are admitted in that order.
 
 **Tech Stack:** PowerShell 7, .NET System.Drawing, C# / .NET 8 / WPF, executable PowerShell tests without Pester, Git.
 
@@ -25,14 +25,15 @@
 - The selected expansion is exactly 82 components and 167 pixels. Every selected pixel has channel spread at most 8. The final mask is the cleaned visible seed union those complete components.
 - The 18 protected anchors, no-tail exterior, head, hair, face, mouth, eyes, rose, bow, ribbons, and both occlusion sides stay outside body reconstruction. The old endpoint markers (112,151) and (157,116) are removed from authority.
 - The only legal continuation endpoints are front hair (118,151) and rear ribbon (161,116).
-- Source alpha never changes. RGB changes only inside the reviewed final mask; all final mask-zero processed-source pixels remain byte-identical before the single final resize.
-- Every non-seed body pixel is reconstructed. Fill seeds require processed alpha 255, cleaned seed 255, distance greater than 8.0 from the final E-union-C contour, all RGB channels at least 225, and channel spread at most 8.
-- The outline color and optical target come from the unchanged clean head/hair authority. Body reconstruction uses one intended full rendered thickness `W = 2.20898670201159`: one-sided exposed `E` uses inward radius `W`, while two-sided internal continuation `C` uses centered radius `W/2 = 1.104493351005795`. This side-count correction is not a segment-specific visual width. Segment-specific visual widths, local strokes, coordinate patches, tolerance relaxation, post-resize body edits, and candidate-derived targets are forbidden.
-- Every final mask-255 pixel evaluates exactly 64 samples at (x-0.5+(i+0.5)/8, y-0.5+(j+0.5)/8), i,j in 0..7. Each sample independently evaluates its actual nearest canonical `E` distance and actual nearest canonical `C` distance; it is covered if and only if the `E` distance is at most `W` or the `C` distance is at most `W/2`.
+- Source alpha never changes. Delivered source-225 evidence changes RGB only inside the reviewed final mask; every mask-zero pixel remains byte-identical in that evidence. The sole exception is an unsaved, pre-resize proxy clone defined below; it is not a source-evidence or post-resize edit.
+- Eligible fill samples require processed alpha 255, cleaned seed 255, ordinary unweighted distance greater than 8.0 from the final E-union-C contour, all RGB channels at least 225, and channel spread at most 8. They contribute exact source RGB samples, but every final-mask pixel—including eligible-sample coordinates—is assigned the nearest-eight `1/(1+d^2)` smooth interpolation with ordinal Y,X ties and ties-to-even. No retain-seed output exception exists.
+- The frozen support and outline color come from unchanged authority: one-sided exposed `E` support uses `W = 2.20898670201159`, centered continuation `C` support uses `W/2 = 1.104493351005795`, and outline RGB is `(26,2,10)`. Segment-specific support widths, moved support, local strokes, per-coordinate patches, post-resize body edits, and candidate-derived targets are forbidden.
+- Every final mask-255 pixel evaluates exactly 64 samples at (x-0.5+(i+0.5)/8, y-0.5+(j+0.5)/8), i,j in 0..7. `Ecoverage` is the fraction with actual nearest canonical-E distance at most `W`; `Ccoverage` is the fraction with actual nearest canonical-C distance at most `W/2`. Candidate F uses `finalCoverage = max(clamp(Ecoverage * 2.5, 0, 1), clamp(Ccoverage * 0.125, 0, 1))`; this transfer never expands or moves geometric support.
 - Body normal authoring may read only the pinned source, frozen seed/final masks, frozen contour, existing named regions, and reference overlays. It may not read candidate pixels, passing intervals, sweep scores, or the failed Task 2 report.
 - The completed 0.25-through-4.00 source feasibility sweep and its definitive empty fifteen-normal 10% intersection remain diagnostic evidence. The source intersection is not an automated release requirement, does not forbid the user-directed recovery, and must not be rerun.
-- Native acceptance keeps every body normal within 0.35 equivalent opaque pixel of the frozen native hair median and body maximum-minus-minimum at most 0.50.
-- Open and closed frames share identical reconstructed body pixels and source alpha. Both pass through one premultiplied high-quality 225-to-96 resize.
+- The completed native `0.35` hair-match and `0.50` body-spread checks contradicted the exact visually selected F candidate. They remain printed diagnostics, not release gates; exact hashes, invariant checks, visual inspection, runtime observation, and user acceptance cannot be silently replaced by those metrics.
+- Immediately before the single resize only, an unsaved clone reconstructs every enclosed four-connected mask-zero neutral component that does not touch the frame, has size at most 7, and chroma at most 8 from the same smooth field. Canonical proxy membership sorts pixels within each selected component ordinally by `(Y,X)`, encodes each record as `C|count|Y,X;...`, sorts records by their first `(Y,X)`, joins them with LF and no trailing LF, and hashes the UTF-8 bytes. The pinned input yields exactly 6 proxy components and 12 pixels, membership SHA-256 `2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54`, and the 7-pixel gray island at bounds (144,159)-(147,160). Selection is topology/color based and coordinate-independent; the proxy never changes alpha and is not saved or applied after resize.
+- Open and closed frames share identical reconstructed body pixels, source alpha, and resize-proxy inputs outside the eye regions. Both pass through one premultiplied high-quality 225-to-96 resize.
 - Existing untracked manual acceptance attempts 2 through 6 are user-owned evidence. No task may modify, stage, delete, or rename them.
 - The four untracked files from the rejected second sweep are task-owned failed work, not approved evidence. A task may replace their contents only when its brief names the file, and must capture its own RED before relying on the replacement.
 
@@ -294,7 +295,7 @@ Expected: exit 1 on the first missing fill or distance-map interface.
 
 - [ ] **Step 2: Implement fill reconstruction and all-pixel 8x8 coverage**
 
-Eligible fill seeds satisfy every Global Constraint and retain exact source RGB. Every other final-mask pixel receives interpolation from the nearest eight eligible seeds; there is no far-interior preserve-original branch. Build 64 distances for every final mask-255 pixel, not a band subset. Coverage is count(distance <= Width) / 64.0. The rasterizer blends one fill field and one outline RGB, preserves source alpha, and leaves final mask-zero pixels byte-identical.
+At the historical Task 4 gate, eligible fill seeds satisfied every then-active Global Constraint and retained exact source RGB in output; non-seed final-mask pixels received interpolation from the nearest eight eligible seeds, with no far-interior preserve-original branch. It built 64 distances for every final mask-255 pixel, not a band subset, and used `count(distance <= Width) / 64.0` coverage. The rasterizer blended one fill field and one outline RGB, preserved source alpha, and left final mask-zero pixels byte-identical. Task 5A supersedes only the retain-seed output exception and optical transfer while preserving this record of the completed gate.
 
 - [ ] **Step 3: Turn synthetic tests GREEN and prove mutations**
 
@@ -364,40 +365,55 @@ Add the literal `Width = 2.20898670201159` to the reviewed constants. Keep the c
 
 - [ ] **Step 3: Bind the implementation to frozen candidate evidence**
 
-Require the deterministic source-open and native-open candidate checks to reproduce the approved attempt-2 representative evidence before any runtime write:
+For the historical Task 4B gate, require deterministic source-open and native-open candidate checks to reproduce the then-approved attempt-2 representative evidence before any runtime write:
 
 - full rendered thickness `2.20898670201159`;
 - median outline RGB `(26,2,10)`;
 - source-225 SHA-256 `8302307105F76A99C531AA8FD61908B58FF1C15537B703F6B6EFC20E895DCBE3`;
 - native-96 SHA-256 `4329C62523C9E9BC0D3223037506E06160DB32B31F5876B7EBC68C95BE4F560B`.
 
-The candidate hashes are representative exact-art evidence, not runtime-fix or live-acceptance evidence. If deterministic integration cannot reproduce them, report the exact mismatch and stop; do not relax a rule or run a second feasibility sweep.
+Those Task 4B candidate hashes are preserved representative evidence, not runtime-fix or live-acceptance evidence. At that gate, a deterministic mismatch required an exact report and stop without rule relaxation or a second feasibility sweep. Task 5A now withdraws their visual PASS and supersedes them as active integration targets without erasing this history.
 
 - [ ] **Step 4: Run focused GREEN and commit Task 4B**
 
 Run the geometry, authority, full subpixel, and candidate-binding checks. Require every new mutation to fail causally and the unmutated implementation to pass. Output exact module/test/constants hashes, `Width`, `Width/2`, outline RGB, contour counts, endpoints, source/native candidate hashes, and the preserved Task 4 diagnostic intervals. Commit only the three listed Task 4B files after independent review.
 
-Task 5 is blocked until independent review approves production/test independence, both side-count mutations, exact candidate reproduction, and the unchanged authority boundaries.
+Task 5A's independent production/test reviews approved the required independence, mutations, exact candidate reproduction, and unchanged authority boundaries. The 2026-08-28 Task 5A decision below supersedes the attempt-2 hashes as active targets while retaining them as Task 4B history; its automated integration gate is complete, while Task 6, whole-branch review, and live Windows acceptance remain pending.
 
 ---
 
-### Task 5 (revised): Integrate the compensated single-visible-width reconstruction into exact runtime art
+### Task 5A: Integrate controller-selected F refinement into exact runtime art
 
 **Files:**
+- Modify: tools/Dororong.SubpixelOutline.psm1
+- Modify: tools/Dororong.SubpixelOutline.Constants.psd1
+- Modify: tests/Dororong.App.SubpixelOutline.Tests.ps1
 - Modify: tools/Generate-CanonicalArt.ps1
 - Modify: tests/Dororong.App.ExactArt.Tests.ps1
+- Modify: tests/Dororong.App.ContinuousAuthority.Tests.ps1
+- Modify: tools/New-ContinuousOutlineAuthority.ps1
 - Modify: src/Dororong.App/Assets/dororong-canonical.png
 - Modify: src/Dororong.App/Assets/dororong-closed-eyes.png
 
 **Interfaces:**
-- Consumes: Tasks 1 through 4B frozen source, seed, final mask, contour, fill, normals, median outline RGB, fixed `Width`, side-count coverage, and representative candidate hashes.
-- Produces: six evidence frames, exact committed 96px open/closed frames, and exact-art optical/invariant evidence.
+- Consumes: Tasks 1 through 4B frozen source, seed, final mask, contour/kinds, endpoints, alpha, silhouette, protected art, support radii, outline RGB, and historical evidence; controller-selected F calibration; reviewed eye and resize boundaries.
+- Produces: all-pixel smooth fill, fixed-support F coverage transfer, deterministic resize-only proxy, six evidence frames, exact committed 96px open/closed frames, and exact-art invariant/visual evidence.
+- Supersedes: the attempt-2 source/native candidate binding and its withdrawn visual PASS. The old hashes remain historical Task 4B evidence and are not active Task 5A targets.
 
-- [ ] **Step 1: Replace the exact-art contract before generator edits**
+- [x] **Step 1: Write the F refinement RED before production edits**
 
-Keep source identity, 96x96 dimensions/pixel format, alpha-zero RGB hygiene, presenter 96-DPI arrangement, native alpha hit testing, state mapping, eye confinement, mouth preservation, open/closed alpha equality, and exact open/closed source-body equality.
+Keep source identity, ownership/mask, contour records and kinds, endpoints, support `W = 2.20898670201159` / `W/2 = 1.104493351005795`, factor and sample locations, outline RGB `(26,2,10)`, source alpha, silhouette, protected delivered-source art, 96x96 dimensions/pixel format, alpha-zero RGB hygiene, presenter 96-DPI arrangement, native alpha hit testing, state mapping, eye confinement, mouth preservation, open/closed alpha equality, and one shared resize.
 
-Remove assertions for native coordinate lightening, partial-alpha freezing, protection bands, and the rejected subtractive correction. Invoke the real generator through its required SourcePath, BodyMaskPath, OutputDirectory, and EvidenceDirectory interface. Independently invoke the reviewed body rasterizer inside the test and require the generated source-open candidate to match that direct result at every pixel. Independently resize that source candidate once through the reviewed resize boundary and require the native-open candidate to match at every pixel; this behavioral equality forbids any extra native correction without scanning source text. Require the real generator to emit:
+Before production edits, extend independent synthetic and exact-art tests to require all of the following behavior rather than source-text patterns:
+
+- every final-mask pixel, including eligible-sample coordinates, equals an independently calculated nearest-eight `1/(1+d^2)` interpolation with ordinal Y,X ties and ties-to-even;
+- independent raw `Ecoverage` and `Ccoverage` over the unchanged supports combine as `max(clamp(Ecoverage * 2.5, 0, 1), clamp(Ccoverage * 0.125, 0, 1))`;
+- delivered source-225 alpha is unchanged and mask-zero RGB remains byte-identical;
+- an independent four-connected component oracle selects exactly 6 enclosed neutral resize-proxy components and 12 pixels, including the diagnosed 7-pixel component with bounds `(144,159)-(147,160)`, with no coordinate allow-list, and independently applies the canonical encoding to require membership SHA-256 `2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54`;
+- the proxy exists only on an unsaved resize-input clone, is identical for open/closed outside eye regions, and each frame is resized once; and
+- direct and generator pipelines reproduce source-225 F SHA-256 `AB5E0F0990980F0393CF02FFDCDC15329EE7BC8F770D70D3DD68FCB775AD5A5A` and native-96 F SHA-256 `F4C9B2CCE253522345F12D29F6CC634ACD0DE1C3151D7C923460E3D5EBA73B9A`.
+
+Invoke the real generator through its required `SourcePath`, `BodyMaskPath`, `OutputDirectory`, and `EvidenceDirectory` interface. Require it to emit:
 
     source-open-baseline.png
     source-open-candidate.png
@@ -409,45 +425,56 @@ Remove assertions for native coordinate lightening, partial-alpha freezing, prot
 Run:
 
     dotnet build src/Dororong.App/Dororong.App.csproj --configuration Release
-    pwsh -NoProfile -File tests/Dororong.App.ExactArt.Tests.ps1 -Configuration Release
+    pwsh -NoProfile -File tests/Dororong.App.SubpixelOutline.Tests.ps1
 
-Expected: build exit 0; exact-art exit 1 because the current generator does not accept the required BodyMaskPath parameter. Record the PowerShell parameter-binding failure as the causal RED.
+Observed causal RED: build exited `0`; the independent smooth-fill test exited `1` at `(11,11)`, expected `-1907739` and observed `-1973275`, because the old production path retained an eligible seed instead of assigning the required nearest-eight smooth result. This was the accepted F-specific behavioral RED, not a syntax, parameter-binding, process, pinned-input, or diagnostic-native-metric failure.
 
-- [ ] **Step 2: Replace the generator body pipeline**
+- [x] **Step 2: Implement the smooth field, F transfer, and resize proxy**
 
-Require SourcePath, BodyMaskPath, OutputDirectory, and optional EvidenceDirectory. Import the reviewed source-raster and subpixel modules. After boundary background removal, reconstruct the open source frame once using the frozen final mask/fill/contour, median outline RGB, and compensated `E -> W` / `C -> W/2` coverage. Derive closed eyes from that reconstructed source frame using the existing reviewed eye stencils, then prove the body-owned source pixels are exactly equal between open and closed candidates. Resize open and closed exactly once through the shared premultiplied high-quality 225-to-96 function.
+Require `SourcePath`, `BodyMaskPath`, `OutputDirectory`, and optional `EvidenceDirectory`. Import the reviewed source-raster and subpixel modules. Add exact constants for E multiplier `2.5`, C multiplier `0.125`, proxy maximum size `7`, proxy maximum chroma `8`, expected proxy component count `6`, expected proxy pixel count `12`, and expected proxy membership SHA-256 `2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54`. Change fill output so eligible seeds remain exact source RGB inputs but no longer bypass interpolation; assign the nearest-eight smooth field to every final-mask pixel. Keep ordinary unweighted center distance to `E union C` for sample eligibility.
 
-Save six evidence images only when requested and save only native candidates to OutputDirectory. Print source, seed, mask, component, contour, authority, constants, open, closed hashes, factor, Width, outline RGB, segment count, fill-seed count, and legal endpoints.
+Retain the exact E/C distance support, calculate separate raw coverage fractions, and apply the fixed F multipliers `E=2.5` and `C=0.125` before the max/0..1 clamp. Do not change support, geometry, endpoints, mask, alpha, or outline RGB. After boundary background removal, reconstruct delivered open and closed source frames from that field and prove source alpha, mask-zero delivered RGB, body equality outside eye regions, and exact source F identity.
 
-- [ ] **Step 3: Prove exact-art contracts and mutations**
+For each source frame, create one unsaved resize-input clone. On that clone only, find four-connected mask-zero components and reject frame-touching, size-over-7, or chroma-over-8 components. Within each selected component sort pixels ordinally by `(Y,X)` and encode `C|count|Y,X;...`; sort component records by their first `(Y,X)`, join with LF and no trailing LF, and hash the UTF-8 bytes. Require exact pinned identity `6 components / 12 pixels` and membership SHA-256 `2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54`, then replace each selected pixel with the same smooth field. Apply the identical proxy set to open and closed, resize each clone exactly once through the shared premultiplied high-quality 225-to-96 function, and dispose it. Do not save the proxy clone or apply any native/post-resize correction.
 
-Assert source alpha equality, final mask-zero source RGB equality, no dark/newly-owned seed preservation, exact source/native candidate reproduction, generated/committed hash equality, open/closed source-body equality, open/closed native-body equality, native `0.35` hair match, and native body spread at most `0.50`. The original fifteen-normal 10% source feasibility assertion is removed from release checks; retain its measurements and empty intervals as diagnostics only.
+Save six evidence images only when requested and save only native candidates to `OutputDirectory`. Print source, seed, mask, ownership, contour, authority, constants, module/test/generator, delivered open/closed source, proxy-input open/closed, and native open/closed hashes; factor; `W`; `W/2`; F multipliers; outline RGB; segment counts; eligible sample count; proxy component/pixel counts and canonical membership hash, which must equal `2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54`; resize counts; and legal endpoints.
 
-The native hair-match and spread assertions, full visual checks, exact-art invariants, and live user acceptance remain required unless a causal RED proves that one contradicts the approved exact attempt-2 candidate. Any such contradiction must be reported with the exact failing observable and evidence; it must not be silently relaxed, deleted, or retargeted from candidate output.
+Completed output: the generator emits exactly the six contract evidence PNGs, reproduces source-open F SHA-256 `AB5E0F0990980F0393CF02FFDCDC15329EE7BC8F770D70D3DD68FCB775AD5A5A`, runtime-open SHA-256 `F4C9B2CCE253522345F12D29F6CC634ACD0DE1C3151D7C923460E3D5EBA73B9A`, and runtime-closed SHA-256 `9B5411E88C031CA7D6542F6A1B3FD8E8C080BC061D96D4246B82011B9BF5A0BA`. Independent proxy evidence is exactly 6 components/12 pixels with membership SHA-256 `2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54`; reviewed eye/lid membership is independently 945 coordinates, and each eye state performs exactly one resize from its unsaved proxy clone.
 
-Unique temporary mutations must reach named semantic failures for Width plus 1/64, factor 4, fill floor 224, final mask boundary bit, protected candidate RGB, candidate alpha, and closed-frame body RGB. A process or pinned-input failure is not accepted.
+- [x] **Step 3: Prove exact-art contracts and mutations**
 
-- [ ] **Step 4: Generate assets and inspect every visual surface**
+Assert source alpha equality, delivered final-mask-zero source RGB equality, no dark/newly-owned sample admission, no retain-seed output branch, exact all-pixel smooth interpolation, frozen support/geometry, exact F coverage transfer, exact proxy selection and confinement, exact independently encoded proxy membership SHA-256 `2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54`, exact source/native F reproduction, generated/committed hash equality, open/closed source-body equality, open/closed proxy equality outside eye regions, open/closed native-body equality, and one resize per frame. Report the fifteen-normal source measurements, native `0.35` hair-match, and native `0.50` spread only as diagnostics; none may fail or pass the release gate.
 
-Run the generator into a temporary candidate directory first. Require the exact source/native open candidate hashes from Task 4B and exact open/closed source-body equality before visual review. Inspect source baseline/candidate, native baseline/candidate, source/native closed candidate, nearest-neighbor 4x versions, and white/dark composites. Cover full frame, front outer/foot/inner, both valleys/undersides, center outer/foot/inner, rear outer/foot/inner, upper/lower rear rim, and both continuation junctions.
+The main-controller F visual PASS now applies to the exact integrated repository assets after deterministic generator/direct-pipeline equality and invariant checks passed. Its calibration provenance remains admissible only when all bindings match: evidence root `.superpowers/sdd/2026-08-27-dororong-complete-body-ownership-outline/task-5a-visual-calibration/second-set`, manifest SHA-256 `95FC6C493C371563D0BA24C97B443A456275C2745C7C3F4121FD3A296D03BE36`, source-225 SHA-256 `AB5E0F0990980F0393CF02FFDCDC15329EE7BC8F770D70D3DD68FCB775AD5A5A`, runtime-open SHA-256 `F4C9B2CCE253522345F12D29F6CC634ACD0DE1C3151D7C923460E3D5EBA73B9A`, and runtime-closed SHA-256 `9B5411E88C031CA7D6542F6A1B3FD8E8C080BC061D96D4246B82011B9BF5A0BA`. Live WPF inspection and user acceptance remain `UNVERIFIED`; a mismatch is never silently promoted through a diagnostic measurement or substituted evidence set, manifest, hash, or automated result.
 
-Fail on any new branch, protruding antialias support, displaced silhouette, missing span, broken valley, flattened foot, protected-part change, opaque light fringe, or body segment visibly heavier/lighter than the unchanged hair references. Confirm the body is identical between open and closed frames and the eyes/mouth remain correct. Only after the exact source/native checks and every visual surface pass may the generator update `src/Dororong.App/Assets`; until then, the attempt-2 candidate remains representative evidence only.
+Unique temporary mutations must reach named semantic failures for: `W + 1/64`; factor 4; E multiplier `2.5 -> 1.0`; C multiplier `0.125 -> 1.0`; reintroducing exact retain-seed output; fill floor `225 -> 224`; final-mask boundary bit; eight-connected proxy discovery; proxy size limit `7 -> 6`; changing one selected proxy pixel's chroma to `9`; omitting one proxy component; changing one proxy membership record while preserving counts; admitting one frame-touching component; proxying only one eye state; delivered protected RGB; candidate alpha; a second resize; and closed-frame body RGB. Each mutation must fail its named behavioral/hash invariant, not a process, pinned-input, or source-text check.
 
-- [ ] **Step 5: Run focused GREEN and commit**
+Three test-only repairs kept those failures causal without changing production art authority: the fill-floor mutation uses an independently eligible in-memory clone at `(158,124)` to prove the `225 -> 224` admission; the continuous-authority test keeps literal frozen body `NativeFill`, normals, provenance, opacity, and bounds rather than reselecting targets from the candidate, while hair selection remains authoritative and body brightest reselection is diagnostic only; and the authority test/tool current-native identity was refreshed to the exact F runtime-open hash without changing the frozen fixture, contour, endpoints, normals, or mutations.
+
+- [x] **Step 4: Generate assets and inspect every visual surface**
+
+Run the generator into a temporary candidate directory first. Require exact source-open F hash `AB5E0F0990980F0393CF02FFDCDC15329EE7BC8F770D70D3DD68FCB775AD5A5A`, exact native-open F hash `F4C9B2CCE253522345F12D29F6CC634ACD0DE1C3151D7C923460E3D5EBA73B9A`, exact native-closed F hash `9B5411E88C031CA7D6542F6A1B3FD8E8C080BC061D96D4246B82011B9BF5A0BA`, exact proxy membership SHA-256 `2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54`, and exact open/closed body/proxy equality before visual review. Bind the controller verdict to evidence root `.superpowers/sdd/2026-08-27-dororong-complete-body-ownership-outline/task-5a-visual-calibration/second-set` and manifest SHA-256 `95FC6C493C371563D0BA24C97B443A456275C2745C7C3F4121FD3A296D03BE36` together with those exact F hashes. Inspect source baseline/candidate, native baseline/candidate, source/native closed candidate, nearest-neighbor 4x versions, and white/dark composites. Cover the full frame, front outer/foot/inner, both valleys/undersides, center outer/foot/inner, rear outer/foot/inner, upper/lower rear rim, both continuation junctions, and all six proxy-component locations.
+
+Fail on any new branch, expanded or displaced support, protruding antialias support, missing span, broken valley, flattened foot, pale outer body line, over-dark continuation, gray body speckle, protected-part change, opaque light fringe, or body segment visibly heavier/lighter than the unchanged hair reference. Confirm the body and proxy input are identical between open and closed frames outside eye regions and the eyes/mouth remain correct. Completed inspection: after exact reproduction and asset integration, the main controller passed the exact repository open/closed hashes at native 96px and nearest-neighbor 4x on white and RGB `(18,20,28)` backgrounds; none of these failure conditions was observed. The generator-updated runtime assets are the exact hashes recorded above.
+
+- [x] **Step 5: Run focused GREEN and complete the automated integration gate**
 
 Run:
 
+    dotnet build src/Dororong.App/Dororong.App.csproj --configuration Release
     pwsh -NoProfile -File tests/Dororong.App.BodyMask.Tests.ps1
     pwsh -NoProfile -File tests/Dororong.App.ContinuousAuthority.Tests.ps1
+    pwsh -NoProfile -File tests/Dororong.App.SubpixelOutline.Tests.ps1 -SyntheticOnly
     pwsh -NoProfile -File tests/Dororong.App.SubpixelOutline.Tests.ps1
+    pwsh -NoProfile -File tests/Dororong.App.SubpixelOutline.Tests.ps1 -GeometryOnly
+    pwsh -NoProfile -File tests/Dororong.App.SubpixelOutline.Tests.ps1 -ReloadOnly
     pwsh -NoProfile -File tests/Dororong.App.ExactArt.Tests.ps1 -Configuration Release
 
-Expected: all exit 0 with exact optical measurements and asset hashes. Commit only:
+Observed final state: build, BodyMask, ContinuousAuthority, Subpixel SyntheticOnly/full/GeometryOnly/ReloadOnly, and full ExactArt each exited `0`; ExactArt reported `EXACT ART PASS`, and the final automated suite passed. It reproduced the exact F source/open/closed hashes, proxy 6/12 membership SHA-256 `2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54`, reviewed eye membership 945, and one open plus one closed resize. Retained diagnostic metrics are source hair median `2.20898670201159`, native hair median `2.00980392156863`, native body minimum `1.07473031908363`, maximum `1.45131698364633`, and spread `0.376586664562707`; they do not replace hashes or visual acceptance. The invocation-bound ignored report is `.superpowers/sdd/2026-08-27-dororong-complete-body-ownership-outline/task-5-runtime-integration/report.md`, SHA-256 `446B5BEEFDAAAD70FA7DB8AB77D98D5B8F371564989844F7AAD9EE0EA83E2061`. The tested file identities were `tests/Dororong.App.ExactArt.Tests.ps1` SHA-256 `22413D2D7FF5A9D4C605DBFE5EDEC4DE309370A0E1C76330DF130DD8B8498B59` and `tests/Dororong.App.ContinuousAuthority.Tests.ps1` SHA-256 `70640382D0C650FF53ABC9F2BB48D3D4AB70EC814D07873D5C3BC20B03BA1D8B`; every listed final command exited `0`.
 
-    git add -- tools/Generate-CanonicalArt.ps1 tests/Dororong.App.ExactArt.Tests.ps1 src/Dororong.App/Assets/dororong-canonical.png src/Dororong.App/Assets/dororong-closed-eyes.png
-    git commit -m "fix: redraw Dororong body at one hair weight"
+The completed Task 5A implementation set awaiting whole-branch review is limited to `tools/Dororong.SubpixelOutline.psm1`, `tools/Dororong.SubpixelOutline.Constants.psd1`, `tests/Dororong.App.SubpixelOutline.Tests.ps1`, `tools/Generate-CanonicalArt.ps1`, `tests/Dororong.App.ExactArt.Tests.ps1`, `tests/Dororong.App.ContinuousAuthority.Tests.ps1`, `tools/New-ContinuousOutlineAuthority.ps1`, `src/Dororong.App/Assets/dororong-canonical.png`, and `src/Dororong.App/Assets/dororong-closed-eyes.png`.
 
-Task 6 is blocked until independent review approves code/test independence, mutations, exact optical evidence, and all visual surfaces.
+Task 5A's automated integration gate is complete. Task 6 and whole-branch review remain pending, and actual live Windows/WPF rendering and user acceptance remain `UNVERIFIED`.
 
 ---
 
@@ -458,12 +485,12 @@ Task 6 is blocked until independent review approves code/test independence, muta
 - Modify: TASKS.md
 
 **Interfaces:**
-- Consumes: reviewed Task 5 commit and exact asset/authority hashes.
+- Consumes: the reviewed Task 5A implementation set and exact asset/authority hashes.
 - Produces: full automated evidence, publish identity, and accurate handoff with actual-Windows items still UNVERIFIED.
 
 - [ ] **Step 1: Update documentation without promoting live status**
 
-README explains the immutable seed, complete ownership mask, canonical E-union-C contour, all-pixel 8x8 inward coverage, source-derived fill, one hair-derived Width/color, one final resize, 96-DPI baseline, and exact commands. TASKS records attempts 5 and 6 as failures, both prior sweep mechanisms as rejected, Tasks 1 through 5 by exact evidence, and attempt 7 as UNVERIFIED.
+README explains the immutable seed, complete ownership mask, canonical E-union-C contour, all-pixel smooth fill with no retain-seed exception, fixed 8x8 E/C support, F optical transfer, deterministic resize-only proxy, one final resize, 96-DPI baseline, and exact commands. TASKS records attempts 5 and 6 as failures, both prior sweep mechanisms and attempt-2 candidate binding as superseded evidence, Tasks 1 through 5A by exact evidence, and the next live attempt as UNVERIFIED.
 
 - [ ] **Step 2: Run fresh full verification and publish**
 
@@ -484,7 +511,7 @@ Every command must exit 0. Record test count, failures/skips, build warnings/err
 
 - [ ] **Step 3: Bind the publish to reviewed inputs**
 
-Record SHA-256 for publish EXE/App DLL/Core DLL, source, immutable seed, final mask, constants, open frame, and closed frame. Prove the published App DLL embeds the exact current open/closed PNG bytes and reports the reviewed Task 5 source commit. Any identity mismatch fails before documentation is committed.
+Record SHA-256 for publish EXE/App DLL/Core DLL, source, immutable seed, final mask, constants, subpixel module, generator, open frame, and closed frame. Prove the published App DLL embeds the exact current open/closed PNG bytes and reports the reviewed Task 5A source commit. Any identity mismatch fails before documentation is committed.
 
 - [ ] **Step 4: Commit truthful handoff**
 
@@ -510,4 +537,4 @@ This phase is not dispatched to an implementation subagent because the direct ob
 
 ## Completion boundary
 
-The outline implementation is complete only when Tasks 1 through 5 pass task-level specification and quality reviews, Task 6 passes the whole-branch review, every automated command exits 0, and the exact published artifact is identity-bound. Milestone 1 remains incomplete until the user directly accepts the live open body and then the closed-eye integration on the current Windows 96-DPI environment. Every unobserved behavior remains UNVERIFIED rather than inferred.
+The outline implementation is complete only when Tasks 1 through 5A pass task-level specification and quality reviews, Task 6 passes the whole-branch review, every automated command exits 0, and the exact published artifact is identity-bound. The controller's pre-production F visual PASS does not satisfy this boundary. Milestone 1 remains incomplete until the user directly accepts the live open body and then the closed-eye integration on the current Windows 96-DPI environment. Every unobserved behavior remains UNVERIFIED rather than inferred.

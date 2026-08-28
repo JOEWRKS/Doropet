@@ -6,19 +6,19 @@ Add-Type -AssemblyName System.Drawing
 $script:OutlineConstants = Import-PowerShellDataFile -LiteralPath (
     Join-Path $PSScriptRoot 'Dororong.SubpixelOutline.Constants.psd1')
 
-if (-not ('DororongSubpixelKernel' -as [type]))
+if (-not ('DororongSubpixelKernelV2' -as [type]))
 {
     Add-Type -TypeDefinition @'
 using System;
 using System.Collections.Generic;
 
-public sealed class DororongFillKernelResult
+public sealed class DororongFillKernelResultV2
 {
     public int[] Argb;
     public int[] EligibleIndices;
 }
 
-public static class DororongSubpixelKernel
+public static class DororongSubpixelKernelV2
 {
     private static double DistanceSquaredToSegment(
         double x, double y, double x1, double y1, double x2, double y2)
@@ -114,15 +114,16 @@ public static class DororongSubpixelKernel
             (distanceSquared == otherDistanceSquared && index < otherIndex);
     }
 
-    public static DororongFillKernelResult BuildFill(
-        int width, int height, int[] sourceArgb, byte[] seedMask, byte[] finalMask,
+    public static DororongFillKernelResultV2 BuildFill(
+        int width, int height, int[] sourceArgb, byte[] seedMask,
+        byte[] eligibilityMask, byte[] writableMask,
         double[] centerDistances, int floor, int maximumChroma,
         double minimumDistance, int neighborCount)
     {
         var eligible = new List<int>();
         for (int index = 0; index < sourceArgb.Length; index++)
         {
-            if (finalMask[index] != 255 || seedMask[index] != 255 ||
+            if (eligibilityMask[index] != 255 || seedMask[index] != 255 ||
                 Double.IsNaN(centerDistances[index]) || centerDistances[index] <= minimumDistance)
                 continue;
             int argb = sourceArgb[index];
@@ -144,12 +145,7 @@ public static class DororongSubpixelKernel
         int[] result = new int[sourceArgb.Length];
         for (int index = 0; index < sourceArgb.Length; index++)
         {
-            if (finalMask[index] != 255) continue;
-            if (eligible.BinarySearch(index) >= 0)
-            {
-                result[index] = sourceArgb[index];
-                continue;
-            }
+            if (writableMask[index] != 255) continue;
             int x = index % width;
             int y = index / width;
             double[] nearestDistances = new double[neighborCount];
@@ -203,15 +199,16 @@ public static class DororongSubpixelKernel
             int blue = (int)Math.Round(blueTotal / weightTotal, MidpointRounding.ToEven);
             result[index] = unchecked((int)0xFF000000) | (red << 16) | (green << 8) | blue;
         }
-        return new DororongFillKernelResult {
+        return new DororongFillKernelResultV2 {
             Argb = result,
             EligibleIndices = eligible.ToArray()
         };
     }
 
     public static int[] BuildRasterColors(
-        int[] fillArgb, byte[] finalMask, double[] distances,
-        int samplesPerPixel, int outlineArgb, double width)
+        int[] fillArgb, byte[] finalMask, double[] exposedDistances,
+        double[] continuationDistances, int samplesPerPixel, int outlineArgb,
+        double width, double exposedGain, double continuationGain)
     {
         int[] result = new int[fillArgb.Length];
         int outlineRed = (outlineArgb >> 16) & 255;
@@ -220,11 +217,20 @@ public static class DororongSubpixelKernel
         for (int pixelIndex = 0; pixelIndex < fillArgb.Length; pixelIndex++)
         {
             if (finalMask[pixelIndex] != 255) continue;
-            int count = 0;
+            int exposedCount = 0;
+            int continuationCount = 0;
             int offset = pixelIndex * samplesPerPixel;
             for (int sample = 0; sample < samplesPerPixel; sample++)
-                if (distances[offset + sample] <= width) count++;
-            double coverage = (double)count / samplesPerPixel;
+            {
+                if (exposedDistances[offset + sample] <= width) exposedCount++;
+                if (continuationDistances[offset + sample] <= (width / 2.0))
+                    continuationCount++;
+            }
+            double exposedCoverage = Math.Min(
+                1.0, ((double)exposedCount / samplesPerPixel) * exposedGain);
+            double continuationCoverage = Math.Min(
+                1.0, ((double)continuationCount / samplesPerPixel) * continuationGain);
+            double coverage = Math.Max(exposedCoverage, continuationCoverage);
             int fill = fillArgb[pixelIndex];
             int fillRed = (fill >> 16) & 255;
             int fillGreen = (fill >> 8) & 255;
@@ -539,11 +545,15 @@ function Get-DororongMaskBytes([Drawing.Bitmap]$Mask,[string]$Label)
     return $bytes
 }
 
-function Get-DororongContourCoordinateArrays([object]$Contour)
+function Get-DororongContourCoordinateArrays(
+    [object]$Contour,
+    [ValidateSet('E','C')][string]$Kind)
 {
     $null=@(Get-DororongCanonicalContourRecords $Contour)
-    $segments=@($Contour.Segments)
-    if($segments.Count-eq0){throw 'Contour must contain at least one segment.'}
+    $allSegments=@($Contour.Segments)
+    if($allSegments.Count-eq0){throw 'Contour must contain at least one segment.'}
+    $segments=if([string]::IsNullOrEmpty($Kind))
+    {@($allSegments)}else{@($allSegments|Where-Object Kind -eq $Kind)}
     $x1=[double[]]::new($segments.Count);$y1=[double[]]::new($segments.Count)
     $x2=[double[]]::new($segments.Count);$y2=[double[]]::new($segments.Count)
     $distanceMultipliers=[double[]]::new($segments.Count)
@@ -551,11 +561,114 @@ function Get-DororongContourCoordinateArrays([object]$Contour)
     {
         $x1[$index]=[double]$segments[$index].X1;$y1[$index]=[double]$segments[$index].Y1
         $x2[$index]=[double]$segments[$index].X2;$y2[$index]=[double]$segments[$index].Y2
-        $distanceMultipliers[$index]=if([string]$segments[$index].Kind-eq'C'){2.0}else{1.0}
+        $distanceMultipliers[$index]=1.0
     }
     return [pscustomobject]@{
         X1=$x1;Y1=$y1;X2=$x2;Y2=$y2;DistanceMultipliers=$distanceMultipliers
     }
+}
+
+function Get-DororongResizeProxyComponents(
+    [Drawing.Bitmap]$Mask,
+    [Drawing.Bitmap]$Source,
+    [int]$MaximumSize=[int]$script:OutlineConstants.ProxyMaximumSize,
+    [int]$MaximumChroma=[int]$script:OutlineConstants.ProxyMaximumChroma)
+{
+    Assert-DororongContourBitmapPair $Source $Mask
+    if($MaximumSize-lt1-or$MaximumChroma-lt0)
+    {throw 'Resize-proxy limits are invalid.'}
+    $visited=[bool[]]::new($Mask.Width*$Mask.Height)
+    $accepted=[Collections.Generic.List[object]]::new()
+    foreach($startY in 0..($Mask.Height-1))
+    {
+        foreach($startX in 0..($Mask.Width-1))
+        {
+            $startIndex=($startY*$Mask.Width)+$startX
+            if($visited[$startIndex]-or$Mask.GetPixel($startX,$startY).R-ne0){continue}
+            $queue=[Collections.Generic.Queue[int]]::new();$queue.Enqueue($startIndex)
+            $visited[$startIndex]=$true
+            $indices=[Collections.Generic.List[int]]::new();$touchesFrame=$false
+            $maximumObservedChroma=0;$minX=$startX;$maxX=$startX;$minY=$startY;$maxY=$startY
+            while($queue.Count-gt0)
+            {
+                $index=$queue.Dequeue();$indices.Add($index)
+                $x=$index%$Mask.Width;$y=[int][Math]::Floor($index/$Mask.Width)
+                $minX=[Math]::Min($minX,$x);$maxX=[Math]::Max($maxX,$x)
+                $minY=[Math]::Min($minY,$y);$maxY=[Math]::Max($maxY,$y)
+                if($x-eq0-or$y-eq0-or$x-eq($Mask.Width-1)-or$y-eq($Mask.Height-1))
+                {$touchesFrame=$true}
+                $pixel=$Source.GetPixel($x,$y)
+                $chroma=[Math]::Max($pixel.R,[Math]::Max($pixel.G,$pixel.B))-`
+                    [Math]::Min($pixel.R,[Math]::Min($pixel.G,$pixel.B))
+                $maximumObservedChroma=[Math]::Max($maximumObservedChroma,$chroma)
+                foreach($offset in @(@(-1,0),@(1,0),@(0,-1),@(0,1)))
+                {
+                    $nx=$x+$offset[0];$ny=$y+$offset[1]
+                    if($nx-lt0-or$ny-lt0-or$nx-ge$Mask.Width-or$ny-ge$Mask.Height){continue}
+                    $neighborIndex=($ny*$Mask.Width)+$nx
+                    if(-not$visited[$neighborIndex]-and$Mask.GetPixel($nx,$ny).R-eq0)
+                    {$visited[$neighborIndex]=$true;$queue.Enqueue($neighborIndex)}
+                }
+            }
+            if(-not$touchesFrame-and$indices.Count-le$MaximumSize-and
+                $maximumObservedChroma-le$MaximumChroma)
+            {
+                $accepted.Add([pscustomobject]@{
+                    Indices=[int[]]$indices.ToArray();Size=$indices.Count;TouchesFrame=$touchesFrame
+                    MinX=$minX;MinY=$minY;MaxX=$maxX;MaxY=$maxY
+                    MaximumChroma=$maximumObservedChroma
+                })
+            }
+        }
+    }
+    return @($accepted)
+}
+
+function Get-DororongResizeProxyMembership([object[]]$Components,[int]$Width)
+{
+    if($Width-le0){throw 'Resize-proxy width must be positive.'}
+    $records=@($Components|ForEach-Object{
+        $coordinates=@($_.Indices|ForEach-Object{
+            [pscustomobject]@{X=[int]($_%$Width);Y=[int][Math]::Floor($_/$Width)}
+        }|Sort-Object Y,X)
+        if($coordinates.Count-eq0){throw 'Resize-proxy component is empty.'}
+        [pscustomobject]@{
+            FirstY=$coordinates[0].Y;FirstX=$coordinates[0].X
+            Record="C|$($coordinates.Count)|$(@($coordinates|ForEach-Object{"$($_.Y),$($_.X)"})-join ';')"
+        }
+    }|Sort-Object FirstY,FirstX|ForEach-Object Record)
+    $bytes=[Text.Encoding]::UTF8.GetBytes($records-join"`n")
+    return [pscustomobject]@{
+        Records=$records
+        Hash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))
+    }
+}
+
+function New-DororongResizeProxy(
+    [Drawing.Bitmap]$Candidate,
+    [Drawing.Color[,]]$FillField,
+    [object[]]$Components)
+{
+    if($null-eq$Candidate-or$null-eq$FillField-or$null-eq$Components)
+    {throw 'Resize-proxy candidate, fill field, and components are required.'}
+    $proxy=$Candidate.Clone(
+        [Drawing.Rectangle]::new(0,0,$Candidate.Width,$Candidate.Height),
+        [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    try
+    {
+        foreach($component in $Components)
+        {
+            foreach($index in $component.Indices)
+            {
+                $x=$index%$Candidate.Width;$y=[int][Math]::Floor($index/$Candidate.Width)
+                $fill=$FillField[$x,$y];$original=$proxy.GetPixel($x,$y)
+                $proxy.SetPixel($x,$y,[Drawing.Color]::FromArgb(
+                    $original.A,$fill.R,$fill.G,$fill.B))
+            }
+        }
+        return $proxy
+    }
+    catch{$proxy.Dispose();throw}
 }
 
 function New-DororongFillField(
@@ -571,6 +684,10 @@ function New-DororongFillField(
     {throw 'Fill bitmap dimensions differ.'}
     $seedBytes=Get-DororongMaskBytes $SeedMask 'Cleaned predecessor seed'
     $finalBytes=Get-DororongMaskBytes $FinalMask 'Final mask'
+    $writableBytes=[byte[]]$finalBytes.Clone()
+    $proxyComponents=@(Get-DororongResizeProxyComponents $FinalMask $Source)
+    foreach($component in $proxyComponents)
+    {foreach($index in $component.Indices){$writableBytes[$index]=255}}
     $sourceArgb=[int[]]::new($Source.Width*$Source.Height)
     for($y=0;$y-lt$Source.Height;$y++)
     {
@@ -583,11 +700,11 @@ function New-DororongFillField(
         }
     }
     $coordinates=Get-DororongContourCoordinateArrays $Contour
-    $centerDistances=[DororongSubpixelKernel]::BuildCenterDistances(
-        $Source.Width,$Source.Height,$finalBytes,
+    $centerDistances=[DororongSubpixelKernelV2]::BuildCenterDistances(
+        $Source.Width,$Source.Height,$writableBytes,
         $coordinates.X1,$coordinates.Y1,$coordinates.X2,$coordinates.Y2)
-    $kernel=[DororongSubpixelKernel]::BuildFill(
-        $Source.Width,$Source.Height,$sourceArgb,$seedBytes,$finalBytes,$centerDistances,
+    $kernel=[DororongSubpixelKernelV2]::BuildFill(
+        $Source.Width,$Source.Height,$sourceArgb,$seedBytes,$finalBytes,$writableBytes,$centerDistances,
         [int]$script:OutlineConstants.FillFloor,[int]$script:OutlineConstants.MaximumChroma,
         [double]$script:OutlineConstants.FillDistance,[int]$script:OutlineConstants.FillNeighborCount)
     $colors=[Drawing.Color[,]]::new($Source.Width,$Source.Height)
@@ -596,7 +713,7 @@ function New-DororongFillField(
         for($x=0;$x-lt$Source.Width;$x++)
         {
             $index=($y*$Source.Width)+$x
-            if($finalBytes[$index]-eq255)
+            if($writableBytes[$index]-eq255)
             {$colors[$x,$y]=[Drawing.Color]::FromArgb($kernel.Argb[$index])}
         }
     }
@@ -607,6 +724,8 @@ function New-DororongFillField(
         -NotePropertyValue $eligibleSeeds
     Add-Member -InputObject $colors -NotePropertyName EligibleSeedCount `
         -NotePropertyValue $eligibleSeeds.Count
+    Add-Member -InputObject $colors -NotePropertyName ResizeProxyComponents `
+        -NotePropertyValue $proxyComponents
     return ,$colors
 }
 
@@ -615,14 +734,24 @@ function New-DororongSubpixelDistanceMap(
 {
     if($Factor-le0){throw 'Subpixel factor must be positive.'}
     $maskBytes=Get-DororongMaskBytes $Mask 'Final mask'
-    $coordinates=Get-DororongContourCoordinateArrays $Contour
-    $distances=[DororongSubpixelKernel]::BuildSampleDistances(
+    $exposedCoordinates=Get-DororongContourCoordinateArrays $Contour 'E'
+    $continuationCoordinates=Get-DororongContourCoordinateArrays $Contour 'C'
+    $exposedDistances=[DororongSubpixelKernelV2]::BuildSampleDistances(
         $Mask.Width,$Mask.Height,$maskBytes,$Factor,
-        $coordinates.X1,$coordinates.Y1,$coordinates.X2,$coordinates.Y2,
-        $coordinates.DistanceMultipliers)
+        $exposedCoordinates.X1,$exposedCoordinates.Y1,$exposedCoordinates.X2,$exposedCoordinates.Y2,
+        $exposedCoordinates.DistanceMultipliers)
+    $continuationDistances=[DororongSubpixelKernelV2]::BuildSampleDistances(
+        $Mask.Width,$Mask.Height,$maskBytes,$Factor,
+        $continuationCoordinates.X1,$continuationCoordinates.Y1,
+        $continuationCoordinates.X2,$continuationCoordinates.Y2,
+        $continuationCoordinates.DistanceMultipliers)
+    $distances=[double[]]::new($exposedDistances.Length)
+    for($index=0;$index-lt$distances.Length;$index++)
+    {$distances[$index]=[Math]::Min($exposedDistances[$index],2.0*$continuationDistances[$index])}
     return [pscustomobject]@{
         Width=$Mask.Width;Height=$Mask.Height;Factor=$Factor
         SamplesPerPixel=$Factor*$Factor;Mask=$maskBytes;Distances=$distances
+        ExposedDistances=$exposedDistances;ContinuationDistances=$continuationDistances
     }
 }
 
@@ -637,10 +766,20 @@ function Get-DororongOutlineCoverage(
     $pixelIndex=($Y*$DistanceMap.Width)+$X
     if($DistanceMap.Mask[$pixelIndex]-ne255)
     {throw "Coverage coordinate ($X,$Y) is outside the final mask."}
-    $count=0;$offset=$pixelIndex*$DistanceMap.SamplesPerPixel
+    $exposedCount=0;$continuationCount=0;$offset=$pixelIndex*$DistanceMap.SamplesPerPixel
     for($index=0;$index-lt$DistanceMap.SamplesPerPixel;$index++)
-    {if($DistanceMap.Distances[$offset+$index]-le$Width){$count++}}
-    return [double]$count/[double]$DistanceMap.SamplesPerPixel
+    {
+        if($DistanceMap.ExposedDistances[$offset+$index]-le$Width){$exposedCount++}
+        if($DistanceMap.ContinuationDistances[$offset+$index]-le($Width/2.0))
+        {$continuationCount++}
+    }
+    $e=[Math]::Min(1.0,
+        ([double]$exposedCount/[double]$DistanceMap.SamplesPerPixel)*
+        [double]$script:OutlineConstants.ExposedCoverageMultiplier)
+    $c=[Math]::Min(1.0,
+        ([double]$continuationCount/[double]$DistanceMap.SamplesPerPixel)*
+        [double]$script:OutlineConstants.ContinuationCoverageMultiplier)
+    return [Math]::Max($e,$c)
 }
 
 function Invoke-DororongSubpixelOutline(
@@ -658,9 +797,12 @@ function Invoke-DororongSubpixelOutline(
     $fillArgb=[int[]]::new($Source.Width*$Source.Height)
     for($y=0;$y-lt$Source.Height;$y++)
     {for($x=0;$x-lt$Source.Width;$x++){$fillArgb[($y*$Source.Width)+$x]=$FillField[$x,$y].ToArgb()}}
-    $rasterArgb=[DororongSubpixelKernel]::BuildRasterColors(
-        $fillArgb,$DistanceMap.Mask,$DistanceMap.Distances,
-        $DistanceMap.SamplesPerPixel,$OutlineColor.ToArgb(),$Width)
+    $rasterArgb=[DororongSubpixelKernelV2]::BuildRasterColors(
+        $fillArgb,$DistanceMap.Mask,$DistanceMap.ExposedDistances,
+        $DistanceMap.ContinuationDistances,$DistanceMap.SamplesPerPixel,
+        $OutlineColor.ToArgb(),$Width,
+        [double]$script:OutlineConstants.ExposedCoverageMultiplier,
+        [double]$script:OutlineConstants.ContinuationCoverageMultiplier)
     $result=$Source.Clone(
         [Drawing.Rectangle]::new(0,0,$Source.Width,$Source.Height),
         [Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -687,6 +829,9 @@ Export-ModuleMember -Function `
     New-DororongVisibleContour, `
     Get-DororongCanonicalContourRecords, `
     Get-DororongCanonicalContourHash, `
+    Get-DororongResizeProxyComponents, `
+    Get-DororongResizeProxyMembership, `
+    New-DororongResizeProxy, `
     New-DororongFillField, `
     New-DororongSubpixelDistanceMap, `
     Get-DororongOutlineCoverage, `

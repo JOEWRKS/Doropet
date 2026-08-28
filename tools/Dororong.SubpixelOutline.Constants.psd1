@@ -5,6 +5,13 @@
     MaximumChroma = 8
     FillNeighborCount = 8
     Width = 2.20898670201159
+    ExposedCoverageMultiplier = 2.5
+    ContinuationCoverageMultiplier = 0.125
+    ProxyMaximumSize = 7
+    ProxyMaximumChroma = 8
+    ExpectedProxyComponentCount = 6
+    ExpectedProxyPixelCount = 12
+    ExpectedProxyMembershipSha256 = '2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54'
     WidthSweepMinimum = 0.25
     WidthSweepMaximum = 4.00
     WidthSweepStep = 0.015625

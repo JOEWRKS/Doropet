@@ -1,5 +1,14 @@
-param([string]$Configuration = 'Debug')
+param(
+    [string]$Configuration = 'Debug',
+    [string]$EyeOnlyOpenPath,
+    [string]$EyeOnlyClosedPath,
+    [string]$EyeOnlyNativeOpenPath,
+    [string]$EyeOnlyNativeClosedPath,
+    [string]$EvidenceOnlyDirectory,
+    [switch]$FillFloorMutationOnly,
+    [switch]$OracleOnly)
 
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Assert-Equal([object]$Expected, [object]$Actual, [string]$Message)
@@ -15,9 +24,7 @@ function Assert-True([bool]$Condition, [string]$Message)
 function Assert-Near([double]$Expected, [double]$Actual, [double]$Tolerance, [string]$Message)
 {
     if ([Math]::Abs($Expected - $Actual) -gt $Tolerance)
-    {
-        throw "$Message Expected '$Expected' +/- '$Tolerance', observed '$Actual'."
-    }
+    { throw "$Message Expected '$Expected' +/- '$Tolerance', observed '$Actual'." }
 }
 
 function Assert-Frame([System.Windows.Controls.Image]$Image, [string]$ExpectedFileName, [string]$State)
@@ -26,310 +33,1116 @@ function Assert-Frame([System.Windows.Controls.Image]$Image, [string]$ExpectedFi
         "$State did not use $ExpectedFileName."
 }
 
-function Test-InBodyProtectionBand([int]$X, [int]$Y)
+function Assert-BitmapEqual([Drawing.Bitmap]$Expected,[Drawing.Bitmap]$Actual,[string]$Message)
 {
-    # Independent and deliberately broader than the generator's hand-owned band.
-    return ($X -ge 16 -and $X -le 30 -and $Y -ge 68 -and $Y -le 83) -or
-        ($X -ge 23 -and $X -le 40 -and $Y -ge 70 -and $Y -le 82) -or
-        ($X -ge 32 -and $X -le 51 -and $Y -ge 73 -and $Y -le 88) -or
-        ($X -ge 46 -and $X -le 64 -and $Y -ge 67 -and $Y -le 81) -or
-        ($X -ge 57 -and $X -le 72 -and $Y -ge 70 -and $Y -le 87) -or
-        ($X -ge 65 -and $X -le 78 -and $Y -ge 57 -and $Y -le 84)
+    Assert-Equal $Expected.Width $Actual.Width "$Message Width differs."
+    Assert-Equal $Expected.Height $Actual.Height "$Message Height differs."
+    for ($y = 0; $y -lt $Expected.Height; $y++)
+    {
+        for ($x = 0; $x -lt $Expected.Width; $x++)
+        {
+            Assert-Equal $Expected.GetPixel($x,$y).ToArgb() $Actual.GetPixel($x,$y).ToArgb() `
+                "$Message Pixel differs at ($x,$y)."
+        }
+    }
 }
 
-function Get-OpticalInk([System.Drawing.Color]$Pixel)
+function Copy-Bitmap32([Drawing.Bitmap]$Bitmap)
+{
+    return $Bitmap.Clone(
+        [Drawing.Rectangle]::new(0,0,$Bitmap.Width,$Bitmap.Height),
+        [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+}
+
+function Get-Median([int[]]$Values)
+{
+    $sorted = @($Values | Sort-Object)
+    $middle = [int]($sorted.Count / 2)
+    if (($sorted.Count % 2) -eq 0)
+    {
+        return [int][Math]::Round(
+            ([double]$sorted[$middle - 1] + [double]$sorted[$middle]) / 2.0,
+            0,[MidpointRounding]::ToEven)
+    }
+    return [int]$sorted[$middle]
+}
+
+function Get-OutlineMedianColor([Drawing.Bitmap]$Bitmap,[object[]]$Samples)
+{
+    $red = [Collections.Generic.List[int]]::new()
+    $green = [Collections.Generic.List[int]]::new()
+    $blue = [Collections.Generic.List[int]]::new()
+    foreach ($sample in $Samples)
+    {
+        $pixel = $Bitmap.GetPixel([int]$sample[0],[int]$sample[1])
+        $red.Add($pixel.R); $green.Add($pixel.G); $blue.Add($pixel.B)
+    }
+    return [Drawing.Color]::FromArgb(
+        255,(Get-Median $red.ToArray()),(Get-Median $green.ToArray()),(Get-Median $blue.ToArray()))
+}
+
+function New-DirectCandidate(
+    [Drawing.Bitmap]$Source,[Drawing.Bitmap]$Seed,[Drawing.Bitmap]$Mask,
+    [hashtable]$Constants,[int]$Factor,[double]$Width)
+{
+    $endpoints = [Drawing.PointF[]]@($Constants.LegalEndpoints | ForEach-Object {
+        [Drawing.PointF]::new([single]$_.X,[single]$_.Y)
+    })
+    $contour = New-DororongVisibleContour $Source $Mask $endpoints
+    $fillField = New-DororongFillField $Source $Seed $Mask $contour
+    $distanceMap = New-DororongSubpixelDistanceMap $Mask $contour $Factor
+    $outlineColor = Get-OutlineMedianColor $Source @($Constants.OutlineSamples)
+    $candidate = Invoke-DororongSubpixelOutline `
+        $Source $Mask $fillField $distanceMap $outlineColor $Width
+    return [pscustomobject]@{
+        Candidate=$candidate; Contour=$contour; FillField=$fillField
+        DistanceMap=$distanceMap; OutlineColor=$outlineColor
+    }
+}
+
+function Assert-SourceCandidateContract(
+    [Drawing.Bitmap]$Source,[Drawing.Bitmap]$Mask,[Drawing.Bitmap]$Candidate,[string]$Label,
+    [switch]$AllowEyeChanges)
+{
+    Assert-Equal 225 $Candidate.Width "$Label width changed."
+    Assert-Equal 225 $Candidate.Height "$Label height changed."
+    for ($y = 0; $y -lt 225; $y++)
+    {
+        for ($x = 0; $x -lt 225; $x++)
+        {
+            $sourcePixel = $Source.GetPixel($x,$y)
+            $candidatePixel = $Candidate.GetPixel($x,$y)
+            Assert-Equal $sourcePixel.A $candidatePixel.A "$Label source alpha changed at ($x,$y)."
+            if ($candidatePixel.A -eq 0)
+            {
+                Assert-Equal 0 ($candidatePixel.R + $candidatePixel.G + $candidatePixel.B) `
+                    "$Label alpha-zero RGB hygiene failed at ($x,$y)."
+            }
+            if ($Mask.GetPixel($x,$y).R -eq 0 -and
+                (-not $AllowEyeChanges -or -not (Test-InSourceEyeRegion $x $y)))
+            {
+                Assert-Equal $sourcePixel.ToArgb() $candidatePixel.ToArgb() `
+                    "$Label protected mask-zero artwork changed at ($x,$y)."
+            }
+        }
+    }
+}
+
+function Assert-AlphaZeroRgb([Drawing.Bitmap]$Bitmap,[string]$Label)
+{
+    for ($y = 0; $y -lt $Bitmap.Height; $y++)
+    {
+        for ($x = 0; $x -lt $Bitmap.Width; $x++)
+        {
+            $pixel = $Bitmap.GetPixel($x,$y)
+            if ($pixel.A -eq 0)
+            {
+                Assert-Equal 0 ($pixel.R + $pixel.G + $pixel.B) `
+                    "$Label alpha-zero RGB hygiene failed at ($x,$y)."
+            }
+        }
+    }
+}
+
+function Assert-FillSeedContract(
+    [Drawing.Bitmap]$Source,[Drawing.Bitmap]$Seed,[Drawing.Color[,]]$FillField,[string]$Label)
+{
+    Assert-True ($FillField.EligibleSeedCount -ge 8) "$Label has fewer than eight eligible fill seeds."
+    foreach ($coordinate in @($FillField.EligibleSeeds))
+    {
+        $pixel = $Source.GetPixel([int]$coordinate.X,[int]$coordinate.Y)
+        Assert-Equal 255 $Seed.GetPixel([int]$coordinate.X,[int]$coordinate.Y).R `
+            "$Label admitted newly owned fill seed at ($($coordinate.X),$($coordinate.Y))."
+        Assert-Equal 255 $pixel.A "$Label admitted non-opaque fill seed at ($($coordinate.X),$($coordinate.Y))."
+        Assert-True ($pixel.R -ge 225 -and $pixel.G -ge 225 -and $pixel.B -ge 225) `
+            "$Label admitted dark fill seed at ($($coordinate.X),$($coordinate.Y)) RGB=$($pixel.R),$($pixel.G),$($pixel.B)."
+        $minimum = [Math]::Min($pixel.R,[Math]::Min($pixel.G,$pixel.B))
+        $maximum = [Math]::Max($pixel.R,[Math]::Max($pixel.G,$pixel.B))
+        Assert-True (($maximum - $minimum) -le 8) `
+            "$Label admitted chromatic fill seed at ($($coordinate.X),$($coordinate.Y))."
+    }
+}
+
+function Get-IndependentPointSegmentDistanceSquared(
+    [double]$X,[double]$Y,[object]$Segment)
+{
+    $dx=[double]$Segment.X2-[double]$Segment.X1
+    $dy=[double]$Segment.Y2-[double]$Segment.Y1
+    $lengthSquared=($dx*$dx)+($dy*$dy)
+    if($lengthSquared-eq0.0)
+    {
+        $pointDx=$X-[double]$Segment.X1;$pointDy=$Y-[double]$Segment.Y1
+        return ($pointDx*$pointDx)+($pointDy*$pointDy)
+    }
+    $t=((($X-[double]$Segment.X1)*$dx)+(($Y-[double]$Segment.Y1)*$dy))/$lengthSquared
+    $t=[Math]::Clamp($t,0.0,1.0)
+    $nearestX=[double]$Segment.X1+($t*$dx)
+    $nearestY=[double]$Segment.Y1+($t*$dy)
+    $resultX=$X-$nearestX;$resultY=$Y-$nearestY
+    return ($resultX*$resultX)+($resultY*$resultY)
+}
+
+function Get-IndependentEligibleFillSamples(
+    [Drawing.Bitmap]$Source,[Drawing.Bitmap]$Seed,[Drawing.Bitmap]$Mask,[object]$Contour)
+{
+    $segments=@($Contour.Segments)
+    Assert-True ($segments.Count-gt0) 'Independent fill eligibility has no frozen E-union-C contour.'
+    $samples=[Collections.Generic.List[object]]::new()
+    for($y=0;$y-lt$Mask.Height;$y++)
+    {
+        for($x=0;$x-lt$Mask.Width;$x++)
+        {
+            if($Mask.GetPixel($x,$y).R-ne255-or$Seed.GetPixel($x,$y).R-ne255){continue}
+            $pixel=$Source.GetPixel($x,$y)
+            if($pixel.A-ne255-or$pixel.R-lt225-or$pixel.G-lt225-or$pixel.B-lt225){continue}
+            $minimum=[Math]::Min($pixel.R,[Math]::Min($pixel.G,$pixel.B))
+            $maximum=[Math]::Max($pixel.R,[Math]::Max($pixel.G,$pixel.B))
+            if(($maximum-$minimum)-gt8){continue}
+            $minimumDistanceSquared=[double]::PositiveInfinity
+            foreach($segment in $segments)
+            {
+                $distanceSquared=Get-IndependentPointSegmentDistanceSquared $x $y $segment
+                if($distanceSquared-lt$minimumDistanceSquared)
+                {$minimumDistanceSquared=$distanceSquared}
+            }
+            if([Math]::Sqrt($minimumDistanceSquared)-le8.0){continue}
+            $samples.Add([pscustomobject]@{X=$x;Y=$y;Color=$pixel})
+        }
+    }
+    return @($samples)
+}
+
+function Get-BitmapPngHash([Drawing.Bitmap]$Bitmap)
+{
+    $stream=[IO.MemoryStream]::new()
+    try
+    {
+        $Bitmap.Save($stream,[Drawing.Imaging.ImageFormat]::Png)
+        return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($stream.ToArray()))
+    }
+    finally{$stream.Dispose()}
+}
+
+function Get-IndependentSmoothColor([int]$X,[int]$Y,[object[]]$Samples)
+{
+    $nearest=@($Samples|Sort-Object `
+        @{Expression={($_.X-$X)*($_.X-$X)+($_.Y-$Y)*($_.Y-$Y)}},Y,X|Select-Object -First 8)
+    Assert-Equal 8 $nearest.Count "Independent smooth fill at ($X,$Y) did not select eight samples."
+    $weightTotal=0.0;$red=0.0;$green=0.0;$blue=0.0
+    foreach($sample in $nearest)
+    {
+        $d2=($sample.X-$X)*($sample.X-$X)+($sample.Y-$Y)*($sample.Y-$Y)
+        $weight=1.0/(1.0+$d2);$weightTotal+=$weight
+        $red+=$weight*$sample.Color.R;$green+=$weight*$sample.Color.G;$blue+=$weight*$sample.Color.B
+    }
+    return [Drawing.Color]::FromArgb(255,
+        [int][Math]::Round($red/$weightTotal,0,[MidpointRounding]::ToEven),
+        [int][Math]::Round($green/$weightTotal,0,[MidpointRounding]::ToEven),
+        [int][Math]::Round($blue/$weightTotal,0,[MidpointRounding]::ToEven))
+}
+
+function Assert-AllPixelSmoothFill(
+    [Drawing.Bitmap]$Source,[Drawing.Bitmap]$Seed,[Drawing.Bitmap]$Mask,
+    [object]$Contour,[Drawing.Color[,]]$FillField)
+{
+    $samples=@(Get-IndependentEligibleFillSamples $Source $Seed $Mask $Contour)
+    Assert-Equal $samples.Count $FillField.EligibleSeedCount `
+        'Independent/production eligible sample count changed.'
+    Assert-Equal (@($samples|ForEach-Object{"$($_.X),$($_.Y)"})-join'|') `
+        (@($FillField.EligibleSeeds|Sort-Object Y,X|ForEach-Object{"$($_.X),$($_.Y)"})-join'|') `
+        'Independent/production eligible sample membership changed.'
+    $sampleKeys=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach($sample in $samples){$null=$sampleKeys.Add("$($sample.X),$($sample.Y)")}
+    $changedSampleOutputs=0
+    for($y=0;$y-lt$Mask.Height;$y++)
+    {
+        for($x=0;$x-lt$Mask.Width;$x++)
+        {
+            if($Mask.GetPixel($x,$y).R-ne255){continue}
+            $expected=Get-IndependentSmoothColor $x $y $samples
+            Assert-Equal $expected.ToArgb() $FillField[$x,$y].ToArgb() `
+                "All-pixel nearest-eight smooth fill differs at ($x,$y)."
+            if($sampleKeys.Contains("$x,$y")-and
+                $Source.GetPixel($x,$y).ToArgb()-ne$FillField[$x,$y].ToArgb()){$changedSampleOutputs++}
+        }
+    }
+    Assert-True ($changedSampleOutputs-gt0) `
+        'Eligible sample coordinates retained exact source RGB instead of using the all-pixel smooth field.'
+}
+
+function Assert-ExactGeneratorEvidenceSet([string]$Directory,[Collections.IDictionary]$Hashes)
+{
+    $contracts=@(
+        [pscustomobject]@{Name='native-closed-candidate.png';Width=96;Height=96;Hash=$Hashes.NativeClosed},
+        [pscustomobject]@{Name='native-open-baseline.png';Width=96;Height=96;Hash=$Hashes.NativeOpenBaseline},
+        [pscustomobject]@{Name='native-open-candidate.png';Width=96;Height=96;Hash=$Hashes.NativeOpen},
+        [pscustomobject]@{Name='source-closed-candidate.png';Width=225;Height=225;Hash=$Hashes.SourceClosed},
+        [pscustomobject]@{Name='source-open-baseline.png';Width=225;Height=225;Hash=$Hashes.SourceOpenBaseline},
+        [pscustomobject]@{Name='source-open-candidate.png';Width=225;Height=225;Hash=$Hashes.SourceOpen})
+    $expected=@($contracts|ForEach-Object Name|Sort-Object)
+    Assert-True (Test-Path -LiteralPath $Directory -PathType Container) `
+        "Generator evidence directory is missing: $Directory"
+    $observed=@(Get-ChildItem -LiteralPath $Directory -File|Sort-Object Name|ForEach-Object Name)
+    Assert-Equal ($expected-join'|') ($observed-join'|') `
+        'Generator evidence surface is not exactly the six contract PNGs.'
+    foreach($contract in $contracts)
+    {
+        $path=Join-Path $Directory $contract.Name
+        $bitmap=$null
+        try
+        {
+            $bitmap=[Drawing.Bitmap]::new($path)
+            Assert-Equal ([Drawing.Imaging.ImageFormat]::Png.Guid) $bitmap.RawFormat.Guid `
+                "Generator evidence '$($contract.Name)' is not a decodable PNG."
+            Assert-Equal $contract.Width $bitmap.Width `
+                "Generator evidence '$($contract.Name)' width changed."
+            Assert-Equal $contract.Height $bitmap.Height `
+                "Generator evidence '$($contract.Name)' height changed."
+        }
+        finally{if($null-ne$bitmap){$bitmap.Dispose()}}
+        Assert-Equal $contract.Hash (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash `
+            "Generator evidence '$($contract.Name)' identity changed."
+    }
+}
+
+function Get-IndependentProxyComponents(
+    [Drawing.Bitmap]$Mask,[Drawing.Bitmap]$Source,[int]$MaximumSize=7,
+    [int]$MaximumChroma=8,[switch]$EightConnected)
+{
+    $visited=[bool[]]::new($Mask.Width*$Mask.Height)
+    $accepted=[Collections.Generic.List[object]]::new()
+    $offsets=if($EightConnected){
+        @(@(-1,-1),@(0,-1),@(1,-1),@(-1,0),@(1,0),@(-1,1),@(0,1),@(1,1))
+    }else{@(@(-1,0),@(1,0),@(0,-1),@(0,1))}
+    for($startY=0;$startY-lt$Mask.Height;$startY++)
+    {
+        for($startX=0;$startX-lt$Mask.Width;$startX++)
+        {
+            $startIndex=($startY*$Mask.Width)+$startX
+            if($visited[$startIndex]-or$Mask.GetPixel($startX,$startY).R-ne0){continue}
+            $queue=[Collections.Generic.Queue[int]]::new();$queue.Enqueue($startIndex)
+            $visited[$startIndex]=$true;$indices=[Collections.Generic.List[int]]::new()
+            $touchesFrame=$false;$maximumObservedChroma=0
+            $minX=$startX;$maxX=$startX;$minY=$startY;$maxY=$startY
+            while($queue.Count-gt0)
+            {
+                $index=$queue.Dequeue();$indices.Add($index)
+                $x=$index%$Mask.Width;$y=[int][Math]::Floor($index/$Mask.Width)
+                $minX=[Math]::Min($minX,$x);$maxX=[Math]::Max($maxX,$x)
+                $minY=[Math]::Min($minY,$y);$maxY=[Math]::Max($maxY,$y)
+                if($x-eq0-or$y-eq0-or$x-eq($Mask.Width-1)-or$y-eq($Mask.Height-1)){$touchesFrame=$true}
+                $pixel=$Source.GetPixel($x,$y)
+                $chroma=[Math]::Max($pixel.R,[Math]::Max($pixel.G,$pixel.B))-
+                    [Math]::Min($pixel.R,[Math]::Min($pixel.G,$pixel.B))
+                $maximumObservedChroma=[Math]::Max($maximumObservedChroma,$chroma)
+                foreach($offset in $offsets)
+                {
+                    $nx=$x+$offset[0];$ny=$y+$offset[1]
+                    if($nx-lt0-or$ny-lt0-or$nx-ge$Mask.Width-or$ny-ge$Mask.Height){continue}
+                    $neighborIndex=($ny*$Mask.Width)+$nx
+                    if(-not$visited[$neighborIndex]-and$Mask.GetPixel($nx,$ny).R-eq0)
+                    {$visited[$neighborIndex]=$true;$queue.Enqueue($neighborIndex)}
+                }
+            }
+            if(-not$touchesFrame-and$indices.Count-le$MaximumSize-and
+                $maximumObservedChroma-le$MaximumChroma)
+            {
+                $accepted.Add([pscustomobject]@{
+                    Indices=[int[]]$indices.ToArray();Size=$indices.Count;TouchesFrame=$touchesFrame
+                    MinX=$minX;MinY=$minY;MaxX=$maxX;MaxY=$maxY
+                    MaximumChroma=$maximumObservedChroma
+                })
+            }
+        }
+    }
+    return @($accepted)
+}
+
+function Get-IndependentProxyMembership([object[]]$Components,[int]$Width)
+{
+    $records=@($Components|ForEach-Object{
+        $coordinates=@($_.Indices|ForEach-Object{
+            [pscustomobject]@{X=[int]($_%$Width);Y=[int][Math]::Floor($_/$Width)}
+        }|Sort-Object Y,X)
+        [pscustomobject]@{
+            FirstY=$coordinates[0].Y;FirstX=$coordinates[0].X
+            Record="C|$($coordinates.Count)|$(@($coordinates|ForEach-Object{"$($_.Y),$($_.X)"})-join ';')"
+        }
+    }|Sort-Object FirstY,FirstX|ForEach-Object Record)
+    $bytes=[Text.Encoding]::UTF8.GetBytes($records-join"`n")
+    return [pscustomobject]@{
+        Records=$records
+        Hash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))
+    }
+}
+
+function New-IndependentResizeProxy(
+    [Drawing.Bitmap]$Candidate,[Drawing.Color[,]]$FillField,[object[]]$Components)
+{
+    $proxy=Copy-Bitmap32 $Candidate
+    try
+    {
+        foreach($component in $Components)
+        {
+            foreach($index in $component.Indices)
+            {
+                $x=$index%$Candidate.Width;$y=[int][Math]::Floor($index/$Candidate.Width)
+                $fill=$FillField[$x,$y];$original=$proxy.GetPixel($x,$y)
+                $proxy.SetPixel($x,$y,[Drawing.Color]::FromArgb($original.A,$fill.R,$fill.G,$fill.B))
+            }
+        }
+        return $proxy
+    }
+    catch{$proxy.Dispose();throw}
+}
+
+function Assert-ProxyMembership(
+    [object[]]$Components,[int]$Width,[string]$Label)
+{
+    Assert-Equal 0 @($Components|Where-Object TouchesFrame).Count `
+        "$Label admitted a frame-touching component."
+    Assert-Equal 6 $Components.Count "$Label component count changed."
+    $pixelCount=(@($Components|ForEach-Object Size)|Measure-Object -Sum).Sum
+    Assert-Equal 12 $pixelCount "$Label pixel count changed."
+    $membership=Get-IndependentProxyMembership $Components $Width
+    Assert-Equal '2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54' `
+        $membership.Hash "$Label canonical membership changed."
+    Assert-Equal 1 @($Components|Where-Object{
+        $_.Size-eq7-and$_.MinX-eq144-and$_.MinY-eq159-and$_.MaxX-eq147-and$_.MaxY-eq160}).Count `
+        "$Label diagnosed seven-pixel gray island changed."
+    return $membership
+}
+
+function Assert-SourceBodyEquality(
+    [Drawing.Bitmap]$Open,[Drawing.Bitmap]$Closed,[Drawing.Bitmap]$Mask,[string]$Label)
+{
+    for ($y = 0; $y -lt 225; $y++)
+    {
+        for ($x = 0; $x -lt 225; $x++)
+        {
+            if ($Mask.GetPixel($x,$y).R -eq 255)
+            {
+                Assert-Equal $Open.GetPixel($x,$y).ToArgb() $Closed.GetPixel($x,$y).ToArgb() `
+                    "$Label open/closed body RGB changed at ($x,$y)."
+            }
+        }
+    }
+}
+
+$script:ReviewedSourceEyeChangeKeys=[Collections.Generic.HashSet[string]]::new(
+    [StringComparer]::Ordinal)
+foreach($encodedRun in @(
+    '114:43-59','115:44-60','116:44-62','117:43-63','118:43-64','119:43-64',
+    '120:43-65','121:43-64','122:43-64','123:43-64','124:43-64','125:43-64',
+    '126:43-64','127:43-64','128:43-64','129:43-64','130:43-64','131:44-63',
+    '132:45-62','133:46-61','134:48-59','135:51-57',
+    '114:92-100','115:89-103','116:86-105','117:86-106','118:86-106','119:86-106',
+    '120:86-106','121:86-106','122:86-106','123:86-106','124:86-106','125:86-106',
+    '126:86-106','127:86-106','128:86-106','129:86-106','130:86-106','131:86-106',
+    '132:86-106','133:87-105','134:88-104','135:90-103','136:93-103','137:86-103',
+    '138:86-102','139:88-102','140:89-101','141:99-101','142:99-100','143:99-100',
+    '121:50-58','122:48-60','123:47-49','123:59-61','124:46-48','124:60-62',
+    '125:46-47','125:61-62','121:92-100','122:90-102','123:89-91','123:101-103',
+    '124:88-90','124:102-104','125:88-89','125:103-104'))
+{
+    $parts=$encodedRun.Split(':');$y=[int]$parts[0];$bounds=$parts[1].Split('-')
+    foreach($x in ([int]$bounds[0])..([int]$bounds[1]))
+    {$null=$script:ReviewedSourceEyeChangeKeys.Add("$x,$y")}
+}
+
+function Test-InSourceEyeRegion([int]$X,[int]$Y)
+{return $script:ReviewedSourceEyeChangeKeys.Contains("$X,$Y")}
+
+function Test-InNativeEyeFilterSupport([int]$X,[int]$Y)
+{
+    return ($X -ge 16 -and $X -le 30 -and $Y -ge 46 -and $Y -le 61) -or
+        ($X -ge 34 -and $X -le 48 -and $Y -ge 46 -and $Y -le 63)
+}
+
+function Assert-ProxyInputEqualityOutsideEyes(
+    [Drawing.Bitmap]$Open,[Drawing.Bitmap]$Closed,[string]$Label)
+{
+    for($y=0;$y-lt$Open.Height;$y++)
+    {
+        for($x=0;$x-lt$Open.Width;$x++)
+        {
+            if(Test-InSourceEyeRegion $x $y){continue}
+            Assert-Equal $Open.GetPixel($x,$y).ToArgb() $Closed.GetPixel($x,$y).ToArgb() `
+                "$Label open/closed resize-proxy input differs outside eye regions at ($x,$y)."
+        }
+    }
+}
+
+function Get-OpticalInk([Drawing.Color]$Pixel)
 {
     $alpha = $Pixel.A / 255.0
-    $sourceLuminance = (0.2126 * $Pixel.R) + (0.7152 * $Pixel.G) + (0.0722 * $Pixel.B)
-    return [Math]::Max(0.0, $alpha * (255.0 - $sourceLuminance) / 255.0)
+    $luminance = (0.2126 * $Pixel.R) + (0.7152 * $Pixel.G) + (0.0722 * $Pixel.B)
+    return [Math]::Max(0.0,$alpha * (255.0 - $luminance) / 255.0)
 }
 
-function Get-Profile([System.Drawing.Bitmap]$Bitmap, [hashtable]$Definition)
+function Assert-SourceEyeChangeContract(
+    [Drawing.Bitmap]$SourceOpen,[Drawing.Bitmap]$SourceClosed)
 {
-    $samples = @()
-    foreach ($coordinate in $Definition.Samples)
+    $observedChanges=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    for($y=0;$y-lt$SourceOpen.Height;$y++)
     {
-        $samples += Get-OpticalInk ($Bitmap.GetPixel([int]$coordinate[0], [int]$coordinate[1]))
+        for($x=0;$x-lt$SourceOpen.Width;$x++)
+        {
+            $openPixel=$SourceOpen.GetPixel($x,$y)
+            $closedPixel=$SourceClosed.GetPixel($x,$y)
+            Assert-Equal $openPixel.A $closedPixel.A "Source open/closed alpha differs at ($x,$y)."
+            if($openPixel.ToArgb()-ne$closedPixel.ToArgb())
+            {
+                Assert-True (Test-InSourceEyeRegion $x $y) `
+                    "Closed-eye source change escaped exact reviewed source eye stencil/lid membership at ($x,$y)."
+                $null=$observedChanges.Add("$x,$y")
+            }
+            Assert-True ($closedPixel.R-ne250-or$closedPixel.G-ne220-or$closedPixel.B-ne224) `
+                "Detached forbidden #FADCE0 eye patch exists at source ($x,$y)."
+        }
     }
-    $support = @($samples | Where-Object { $_ -ge 0.10 }).Count
-    $runs = 0
-    $inRun = $false
-    foreach ($sample in $samples)
+    Assert-Equal 945 $script:ReviewedSourceEyeChangeKeys.Count `
+        'Independent reviewed eye/lid membership count changed.'
+    Assert-Equal 945 $observedChanges.Count `
+        'Observed source open/closed eye/lid change count changed.'
+    Assert-True $script:ReviewedSourceEyeChangeKeys.SetEquals($observedChanges) `
+        'Observed source open/closed changes do not equal the independent reviewed eye/lid membership.'
+    for($y=136;$y-le153;$y++)
     {
-        if ($sample -ge 0.10 -and -not $inRun) { $runs++; $inRun = $true }
-        elseif ($sample -lt 0.10) { $inRun = $false }
+        for($x=55;$x-le82;$x++)
+        {
+            Assert-Equal $SourceOpen.GetPixel($x,$y).ToArgb() $SourceClosed.GetPixel($x,$y).ToArgb() `
+                "Source mouth changed at ($x,$y)."
+        }
     }
-    return [pscustomobject]@{
-        Name = $Definition.Name
-        Peak = ($samples | Measure-Object -Maximum).Maximum
-        Width = ($samples | Measure-Object -Sum).Sum
-        Support = $support
-        Runs = $runs
-        Joint = [bool]$Definition.Joint
+    return $observedChanges.Count
+}
+
+function Assert-EyeAndMouthContract(
+    [Drawing.Bitmap]$SourceOpen,[Drawing.Bitmap]$SourceClosed,
+    [Drawing.Bitmap]$NativeOpen,[Drawing.Bitmap]$NativeClosed)
+{
+    $sourceChanges=Assert-SourceEyeChangeContract $SourceOpen $SourceClosed
+
+    $nativeChanges = 0
+    for ($y = 0; $y -lt 96; $y++)
+    {
+        for ($x = 0; $x -lt 96; $x++)
+        {
+            $openPixel = $NativeOpen.GetPixel($x,$y)
+            $closedPixel = $NativeClosed.GetPixel($x,$y)
+            Assert-Equal $openPixel.A $closedPixel.A "Native open/closed alpha differs at ($x,$y)."
+            if ($openPixel.ToArgb() -ne $closedPixel.ToArgb())
+            {
+                Assert-True (Test-InNativeEyeFilterSupport $x $y) `
+                    "Closed-eye native change escaped scaled filter support at ($x,$y)."
+                $nativeChanges++
+            }
+        }
+    }
+    Assert-True ($nativeChanges -ge 80) 'Both native eyes did not visibly close.'
+
+    foreach ($eye in @(
+        @{ Name='left'; StartX=18; EndX=29; LidY=52; Lower=@('20,55','22,56','25,55') },
+        @{ Name='right'; StartX=35; EndX=47; LidY=52; Lower=@('42,56','43,58','42,60') }))
+    {
+        $lidInk = 0
+        for ($x = $eye.StartX; $x -le $eye.EndX; $x++)
+        {
+            if ((Get-OpticalInk $NativeClosed.GetPixel($x,$eye.LidY)) -ge 0.30) { $lidInk++ }
+        }
+        Assert-True ($lidInk -ge 4) "$($eye.Name) closed lid is not visible."
+        foreach ($probe in $eye.Lower)
+        {
+            $parts = $probe.Split(',')
+            $openInk = Get-OpticalInk $NativeOpen.GetPixel([int]$parts[0],[int]$parts[1])
+            $closedInk = Get-OpticalInk $NativeClosed.GetPixel([int]$parts[0],[int]$parts[1])
+            Assert-True ($closedInk -le 0.30 -and ($openInk - $closedInk) -ge 0.12) `
+                "$($eye.Name) lower open-eye oval/underline survived at $probe (open=$openInk, closed=$closedInk)."
+        }
+    }
+    for ($y = 61; $y -le 66; $y++)
+    {
+        for ($x = 24; $x -le 33; $x++)
+        {
+            Assert-Equal $NativeOpen.GetPixel($x,$y).ToArgb() $NativeClosed.GetPixel($x,$y).ToArgb() `
+                "Native mouth changed at ($x,$y)."
+        }
+    }
+}
+
+function Measure-NativeBodyMetrics(
+    [Drawing.Bitmap]$NativeOpen,[hashtable]$Authority,[Drawing.Color]$OutlineColor)
+{
+    $frozenHairMedian = 2.009803921568627
+    $values = [Collections.Generic.List[double]]::new()
+    $records = [Collections.Generic.List[string]]::new()
+    foreach ($normal in @($Authority.BodyNormals))
+    {
+        $fill = $NativeOpen.GetPixel([int]$normal.NativeFill[0],[int]$normal.NativeFill[1])
+        $value = Measure-DororongContinuousCoverage `
+            $NativeOpen $normal.NativeNormal $fill $OutlineColor
+        $delta = [Math]::Abs($value - $frozenHairMedian)
+        $values.Add($value)
+        $records.Add("$($normal.Name)=$([string]::Format([Globalization.CultureInfo]::InvariantCulture,'{0:R}',$value));delta=$([string]::Format([Globalization.CultureInfo]::InvariantCulture,'{0:R}',$delta))")
+    }
+    $minimum = ($values | Measure-Object -Minimum).Minimum
+    $maximum = ($values | Measure-Object -Maximum).Maximum
+    $spread = $maximum - $minimum
+    [Console]::WriteLine("NATIVE BODY METRICS diagnosticOnly=true hairMedian=$frozenHairMedian tolerance=0.35 spreadLimit=0.50 minimum=$minimum maximum=$maximum spread=$spread values=$($records -join '|')")
+    return [pscustomobject]@{ HairMedian=$frozenHairMedian; Minimum=$minimum; Maximum=$maximum; Spread=$spread }
+}
+
+function Assert-MutationRejected([string]$Label,[string]$ExpectedSemantic,[scriptblock]$Mutation)
+{
+    try { $null = & $Mutation }
+    catch
+    {
+        Assert-True $_.Exception.Message.Contains($ExpectedSemantic,[StringComparison]::Ordinal) `
+            "Mutation '$Label' failed for the wrong semantic: $($_.Exception.Message)"
+        Write-Output "MUTATION PASS label=$Label semantic=$ExpectedSemantic failure=$($_.Exception.Message)"
+        return
+    }
+    throw "Mutation '$Label' survived the exact-art contract."
+}
+
+function Invoke-FillFloorMutationContract(
+    [Drawing.Bitmap]$Source,[Drawing.Bitmap]$Seed,[Drawing.Bitmap]$Mask,
+    [object]$Contour,[Collections.IDictionary]$Constants)
+{
+    $targetX=158;$targetY=124;$targetKey="$targetX,$targetY"
+    $baseline=$Source.GetPixel($targetX,$targetY)
+    Assert-Equal '227,228,232' "$($baseline.R),$($baseline.G),$($baseline.B)" `
+        'Fill-floor mutation baseline RGB changed.'
+    Assert-Equal 255 $baseline.A 'Fill-floor mutation baseline alpha changed.'
+    Assert-Equal 255 $Mask.GetPixel($targetX,$targetY).R `
+        'Fill-floor mutation target left the final mask.'
+    Assert-Equal 255 $Seed.GetPixel($targetX,$targetY).R `
+        'Fill-floor mutation target left the seed mask.'
+    $minimum=[Math]::Min($baseline.R,[Math]::Min($baseline.G,$baseline.B))
+    $maximum=[Math]::Max($baseline.R,[Math]::Max($baseline.G,$baseline.B))
+    Assert-True ($minimum-ge225-and($maximum-$minimum)-le8) `
+        'Fill-floor mutation target is not independently floor/chroma eligible at baseline.'
+    $minimumDistanceSquared=[double]::PositiveInfinity
+    foreach($segment in @($Contour.Segments))
+    {
+        $distanceSquared=Get-IndependentPointSegmentDistanceSquared $targetX $targetY $segment
+        if($distanceSquared-lt$minimumDistanceSquared){$minimumDistanceSquared=$distanceSquared}
+    }
+    $independentDistance=[Math]::Sqrt($minimumDistanceSquared)
+    Assert-True ($independentDistance-gt8.0) `
+        'Fill-floor mutation target is not independently contour-distance eligible.'
+    Assert-Equal 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65' `
+        (Get-DororongCanonicalContourHash $Contour) `
+        'Fill-floor mutation baseline contour changed.'
+
+    $mutatedSource=$null;$floor225Fill=$null;$floor224Fill=$null
+    $module=Get-Module Dororong.SubpixelOutline
+    try
+    {
+        $mutatedSource=Copy-Bitmap32 $Source
+        $mutatedSource.SetPixel($targetX,$targetY,
+            [Drawing.Color]::FromArgb($baseline.A,224,224,224))
+        Assert-Equal $baseline.A $mutatedSource.GetPixel($targetX,$targetY).A `
+            'Fill-floor mutation changed source alpha.'
+        Assert-Equal '227,228,232' `
+            "$($Source.GetPixel($targetX,$targetY).R),$($Source.GetPixel($targetX,$targetY).G),$($Source.GetPixel($targetX,$targetY).B)" `
+            'Fill-floor mutation changed the protected processed source.'
+
+        $endpoints=[Drawing.PointF[]]@($Constants.LegalEndpoints|ForEach-Object{
+            [Drawing.PointF]::new([single]$_.X,[single]$_.Y)})
+        $mutatedContour=New-DororongVisibleContour $mutatedSource $Mask $endpoints
+        Assert-Equal (Get-DororongCanonicalContourHash $Contour) `
+            (Get-DororongCanonicalContourHash $mutatedContour) `
+            'Fill-floor mutation changed canonical contour geometry.'
+
+        & $module {$script:OutlineConstants.FillFloor=225}
+        $floor225Fill=New-DororongFillField $mutatedSource $Seed $Mask $mutatedContour
+        Assert-Equal 2769 $floor225Fill.EligibleSeedCount `
+            'Floor-225 source-clone eligible sample count changed.'
+        Assert-Equal 0 @($floor225Fill.EligibleSeeds|Where-Object{
+            "$($_.X),$($_.Y)"-eq$targetKey}).Count `
+            'Floor 225 admitted the RGB-224 mutation target.'
+
+        & $module {$script:OutlineConstants.FillFloor=224}
+        $floor224Fill=New-DororongFillField $mutatedSource $Seed $Mask $mutatedContour
+        Assert-Equal 2770 $floor224Fill.EligibleSeedCount `
+            'Floor-224 source-clone eligible sample count changed.'
+        Assert-Equal 1 @($floor224Fill.EligibleSeeds|Where-Object{
+            "$($_.X),$($_.Y)"-eq$targetKey}).Count `
+            'Floor 224 did not admit the RGB-224 mutation target.'
+        Assert-MutationRejected 'fill-floor-225-to-224' `
+            'admitted dark fill seed at (158,124)' {
+            Assert-FillSeedContract $mutatedSource $Seed $floor224Fill 'Fill-floor mutation'
+        }
+        Write-Output "FILL-FLOOR MUTATION PASS coordinate=$targetKey baselineRgb=227,228,232 mutatedRgb=224,224,224 floor225Seeds=$($floor225Fill.EligibleSeedCount) floor224Seeds=$($floor224Fill.EligibleSeedCount) independentDistance=$independentDistance"
+    }
+    finally
+    {
+        & $module {$script:OutlineConstants.FillFloor=225}
+        if($floor224Fill-is[IDisposable]){$floor224Fill.Dispose()}
+        if($floor225Fill-is[IDisposable]){$floor225Fill.Dispose()}
+        if($null-ne$mutatedSource){$mutatedSource.Dispose()}
     }
 }
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$sourcePath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical-source.png'
-$repositoryOpenPath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical.png'
-$repositoryClosedPath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-closed-eyes.png'
-$generatorPath = Join-Path $repositoryRoot 'tools/Generate-CanonicalArt.ps1'
-Assert-Equal 'F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504' `
-    (Get-FileHash -Algorithm SHA256 -LiteralPath $sourcePath).Hash `
-    'The exact approved 225px source changed.'
+$paths = [ordered]@{
+    Source = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical-source.png'
+    Seed = Join-Path $repositoryRoot 'tests/fixtures/dororong-body-region-seed.png'
+    Mask = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-body-region-mask.png'
+    Authority = Join-Path $repositoryRoot 'tests/fixtures/dororong-body-outline-authority.psd1'
+    Constants = Join-Path $repositoryRoot 'tools/Dororong.SubpixelOutline.Constants.psd1'
+    SourceRasterModule = Join-Path $repositoryRoot 'tools/Dororong.SourceRaster.psm1'
+    SubpixelModule = Join-Path $repositoryRoot 'tools/Dororong.SubpixelOutline.psm1'
+    Generator = Join-Path $repositoryRoot 'tools/Generate-CanonicalArt.ps1'
+}
+$expectedHashes = [ordered]@{
+    Source = 'F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504'
+    Seed = 'E256F3DC28929A49624C6308F77C994F061240CB7D2C9E80780AAD4A300C0779'
+    Mask = 'D08B3A941C662F1CBC55C486C13FD4C6CD8901DA9CD5CF8512509698219FE46F'
+    Authority = 'DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
+    SourceOpen = 'AB5E0F0990980F0393CF02FFDCDC15329EE7BC8F770D70D3DD68FCB775AD5A5A'
+    SourceOpenBaseline = '8F542A4F1B2671789BD7CD4980D890BF96CFCC9DADBC9D4E61963CCE2D384CCB'
+    SourceClosed = '96B3F661B36E6871047D7C5FC03DA7A4A9A53408EDB3E7E2E7C4229336C920AC'
+    NativeOpen = 'F4C9B2CCE253522345F12D29F6CC634ACD0DE1C3151D7C923460E3D5EBA73B9A'
+    NativeOpenBaseline = '3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59'
+    NativeClosed = '9B5411E88C031CA7D6542F6A1B3FD8E8C080BC061D96D4246B82011B9BF5A0BA'
+    Contour = 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65'
+}
+foreach ($name in @('Source','Seed','Mask','Authority'))
+{
+    Assert-Equal $expectedHashes[$name] (Get-FileHash -Algorithm SHA256 -LiteralPath $paths[$name]).Hash `
+        "Pinned $name identity changed."
+}
 
 Add-Type -AssemblyName System.Drawing
-$generatedDirectory = Join-Path ([IO.Path]::GetTempPath()) "dororong-native96-$([Guid]::NewGuid().ToString('N'))"
-$baselineDirectory = Join-Path ([IO.Path]::GetTempPath()) "dororong-native96-baseline-$([Guid]::NewGuid().ToString('N'))"
-try
+if(-not[string]::IsNullOrWhiteSpace($EvidenceOnlyDirectory))
 {
-    $generatorOutput = & pwsh -NoProfile -File $generatorPath -SourcePath $sourcePath `
-        -OutputDirectory $generatedDirectory -BaselineOutputDirectory $baselineDirectory 2>&1
-    Assert-Equal 0 $LASTEXITCODE "The real generator failed: $($generatorOutput -join [Environment]::NewLine)"
-
-    $generatedOpenPath = Join-Path $generatedDirectory 'dororong-canonical.png'
-    $generatedClosedPath = Join-Path $generatedDirectory 'dororong-closed-eyes.png'
-    $baselineOpenPath = Join-Path $baselineDirectory 'dororong-canonical.png'
-    $baselineClosedPath = Join-Path $baselineDirectory 'dororong-closed-eyes.png'
-    Assert-Equal (Get-FileHash -Algorithm SHA256 -LiteralPath $repositoryOpenPath).Hash `
-        (Get-FileHash -Algorithm SHA256 -LiteralPath $generatedOpenPath).Hash 'The committed open frame is stale.'
-    Assert-Equal (Get-FileHash -Algorithm SHA256 -LiteralPath $repositoryClosedPath).Hash `
-        (Get-FileHash -Algorithm SHA256 -LiteralPath $generatedClosedPath).Hash 'The committed closed frame is stale.'
-
-    $source = [System.Drawing.Bitmap]::new($sourcePath)
-    $open = [System.Drawing.Bitmap]::new($generatedOpenPath)
-    $closed = [System.Drawing.Bitmap]::new($generatedClosedPath)
-    $baselineOpen = [System.Drawing.Bitmap]::new($baselineOpenPath)
-    $baselineClosed = [System.Drawing.Bitmap]::new($baselineClosedPath)
+    Assert-ExactGeneratorEvidenceSet ([IO.Path]::GetFullPath($EvidenceOnlyDirectory)) $expectedHashes
+    Write-Output 'EVIDENCE-ONLY PASS files=6 decoded=6 sourceDimensions=225x225 nativeDimensions=96x96 hashes=reviewed-exact contract=exact'
+    return
+}
+if(-not[string]::IsNullOrWhiteSpace($EyeOnlyOpenPath)-or
+    -not[string]::IsNullOrWhiteSpace($EyeOnlyClosedPath))
+{
+    Assert-True (-not[string]::IsNullOrWhiteSpace($EyeOnlyOpenPath)-and
+        -not[string]::IsNullOrWhiteSpace($EyeOnlyClosedPath)-and
+        -not[string]::IsNullOrWhiteSpace($EyeOnlyNativeOpenPath)-and
+        -not[string]::IsNullOrWhiteSpace($EyeOnlyNativeClosedPath)) `
+        'Eye-only mode requires open/closed source and native candidate paths.'
+    $eyeOpen=$null;$eyeClosed=$null;$eyeNativeOpen=$null;$eyeNativeClosed=$null
+    $eyeRaw=$null;$eyeSource=$null;$eyeSeed=$null;$eyeMask=$null
+    $eyeOpenProxy=$null;$eyeClosedProxy=$null;$eyeDirectNativeOpen=$null;$eyeDirectNativeClosed=$null
     try
     {
-        Assert-Equal 225 $source.Width 'The source width changed.'
-        Assert-Equal 225 $source.Height 'The source height changed.'
-        foreach ($frame in @($open, $closed, $baselineOpen, $baselineClosed))
-        {
-            Assert-Equal 96 $frame.Width 'A runtime frame is not native 96px wide.'
-            Assert-Equal 96 $frame.Height 'A runtime frame is not native 96px high.'
-            Assert-Equal ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb) $frame.PixelFormat 'A runtime frame is not 32bpp ARGB.'
-        }
-
-        # Validate the causal subtractive invariant across the full frame before accepting any correction coordinates.
-        for ($x = 0; $x -lt 96; $x++)
-        {
-            for ($y = 0; $y -lt 96; $y++)
+        $eyeOpen=[Drawing.Bitmap]::new([IO.Path]::GetFullPath($EyeOnlyOpenPath))
+        $eyeClosed=[Drawing.Bitmap]::new([IO.Path]::GetFullPath($EyeOnlyClosedPath))
+        $eyeNativeOpen=[Drawing.Bitmap]::new([IO.Path]::GetFullPath($EyeOnlyNativeOpenPath))
+        $eyeNativeClosed=[Drawing.Bitmap]::new([IO.Path]::GetFullPath($EyeOnlyNativeClosedPath))
+        Assert-True (Test-InSourceEyeRegion 65 120) `
+            'Reviewed left-eye stencil boundary (65,120) is missing from exact membership.'
+        Assert-True ($eyeOpen.GetPixel(65,120).ToArgb()-ne$eyeClosed.GetPixel(65,120).ToArgb()) `
+            'Eye-only fixture does not exercise reviewed left-eye stencil boundary (65,120).'
+        $sourceChanges=Assert-SourceEyeChangeContract $eyeOpen $eyeClosed
+        Assert-AlphaZeroRgb $eyeNativeOpen 'Eye-only native-open candidate'
+        Assert-AlphaZeroRgb $eyeNativeClosed 'Eye-only native-closed candidate'
+        Assert-EyeAndMouthContract $eyeOpen $eyeClosed $eyeNativeOpen $eyeNativeClosed
+        Assert-MutationRejected 'source-eye-outside-membership' `
+            'escaped exact reviewed source eye stencil/lid membership' {
+            $mutated=Copy-Bitmap32 $eyeClosed
+            try
             {
-                $openPixel = $open.GetPixel($x, $y)
-                $closedPixel = $closed.GetPixel($x, $y)
-                $openBasePixel = $baselineOpen.GetPixel($x, $y)
-                $closedBasePixel = $baselineClosed.GetPixel($x, $y)
-                if ($openPixel.ToArgb() -ne $openBasePixel.ToArgb())
-                {
-                    Assert-True ($openPixel.R -ge $openBasePixel.R -and
-                        $openPixel.G -ge $openBasePixel.G -and
-                        $openPixel.B -ge $openBasePixel.B) `
-                        "Open body correction darkened a baseline channel at ($x,$y)."
-                }
-                if ($closedPixel.ToArgb() -ne $closedBasePixel.ToArgb())
-                {
-                    Assert-True ($closedPixel.R -ge $closedBasePixel.R -and
-                        $closedPixel.G -ge $closedBasePixel.G -and
-                        $closedPixel.B -ge $closedBasePixel.B) `
-                        "Closed body correction darkened a baseline channel at ($x,$y)."
-                }
+                $pixel=$mutated.GetPixel(42,114)
+                $mutated.SetPixel(42,114,[Drawing.Color]::FromArgb(
+                    $pixel.A,($pixel.R-bxor1),$pixel.G,$pixel.B))
+                $null=Assert-SourceEyeChangeContract $eyeOpen $mutated
             }
+            finally{$mutated.Dispose()}
         }
 
-        $openCorrection = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-        $closedCorrection = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-        $eyeChanges = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-        $bounds = @{ MinX = 96; MinY = 96; MaxX = -1; MaxY = -1 }
-        for ($x = 0; $x -lt 96; $x++)
-        {
-            for ($y = 0; $y -lt 96; $y++)
-            {
-                $coordinate = "$x,$y"
-                $openPixel = $open.GetPixel($x, $y)
-                $closedPixel = $closed.GetPixel($x, $y)
-                $openBasePixel = $baselineOpen.GetPixel($x, $y)
-                $closedBasePixel = $baselineClosed.GetPixel($x, $y)
-                Assert-Equal $openBasePixel.A $openPixel.A "Open alpha changed at ($x,$y)."
-                Assert-Equal $closedBasePixel.A $closedPixel.A "Closed alpha changed at ($x,$y)."
-                Assert-Equal $openPixel.A $closedPixel.A "Open/closed alpha differs at ($x,$y)."
-                if ($openPixel.A -eq 0)
-                {
-                    Assert-Equal 0 ($openPixel.R + $openPixel.G + $openPixel.B) "Alpha-zero open RGB contamination exists at ($x,$y)."
-                    Assert-Equal 0 ($closedPixel.R + $closedPixel.G + $closedPixel.B) "Alpha-zero closed RGB contamination exists at ($x,$y)."
-                }
-                if ($openPixel.ToArgb() -ne $openBasePixel.ToArgb())
-                {
-                    Assert-True (Test-InBodyProtectionBand $x $y) `
-                        "Open RGB changed outside the body protection band at ($x,$y)."
-                    Assert-Equal 255 $openBasePixel.A `
-                        "Open body correction touched a non-opaque baseline pixel at ($x,$y)."
-                    [void]$openCorrection.Add($coordinate)
-                    $bounds.MinX = [Math]::Min($bounds.MinX, $x); $bounds.MinY = [Math]::Min($bounds.MinY, $y)
-                    $bounds.MaxX = [Math]::Max($bounds.MaxX, $x); $bounds.MaxY = [Math]::Max($bounds.MaxY, $y)
-                }
-                if ($closedPixel.ToArgb() -ne $closedBasePixel.ToArgb())
-                {
-                    Assert-True (Test-InBodyProtectionBand $x $y) `
-                        "Closed RGB changed outside the body protection band at ($x,$y)."
-                    Assert-Equal 255 $closedBasePixel.A `
-                        "Closed body correction touched a non-opaque baseline pixel at ($x,$y)."
-                    [void]$closedCorrection.Add($coordinate)
-                }
-                if ($openBasePixel.A -gt 0 -and $openBasePixel.A -lt 255)
-                {
-                    Assert-Equal $openBasePixel.ToArgb() $openPixel.ToArgb() `
-                        "Open partial-alpha baseline pixel changed at ($x,$y)."
-                }
-                if ($closedBasePixel.A -gt 0 -and $closedBasePixel.A -lt 255)
-                {
-                    Assert-Equal $closedBasePixel.ToArgb() $closedPixel.ToArgb() `
-                        "Closed partial-alpha baseline pixel changed at ($x,$y)."
-                }
-                if ($openPixel.ToArgb() -ne $closedPixel.ToArgb())
-                {
-                    Assert-True (($x -ge 16 -and $x -le 30 -and $y -ge 46 -and $y -le 61) -or
-                        ($x -ge 34 -and $x -le 48 -and $y -ge 46 -and $y -le 63)) `
-                        "Closed-eye change escaped the scaled eye regions at ($x,$y)."
-                    [void]$eyeChanges.Add($coordinate)
-                }
-                Assert-True ($closedPixel.R -ne 250 -or $closedPixel.G -ne 220 -or $closedPixel.B -ne 224) `
-                    "Forbidden #FADCE0 remains at ($x,$y)."
-            }
-        }
-        Assert-Equal 58 $openCorrection.Count 'The reviewed subtractive native body correction count changed.'
-        Assert-Equal $openCorrection.Count $closedCorrection.Count 'Open/closed body correction mask sizes differ.'
-        foreach ($coordinate in $openCorrection)
-        {
-            Assert-True $closedCorrection.Contains($coordinate) "Closed correction omitted $coordinate."
-            $parts = $coordinate.Split(',')
-            $openCorrectedPixel = $open.GetPixel([int]$parts[0], [int]$parts[1])
-            $closedCorrectedPixel = $closed.GetPixel([int]$parts[0], [int]$parts[1])
-            Assert-Equal $openCorrectedPixel.R $closedCorrectedPixel.R "Body correction red differs by eye state at $coordinate."
-            Assert-Equal $openCorrectedPixel.G $closedCorrectedPixel.G "Body correction green differs by eye state at $coordinate."
-            Assert-Equal $openCorrectedPixel.B $closedCorrectedPixel.B "Body correction blue differs by eye state at $coordinate."
-        }
-
-        $orderedCorrectionCoordinates = [string[]]@($openCorrection)
-        [Array]::Sort($orderedCorrectionCoordinates, [StringComparer]::Ordinal)
-        $correctionCoordinateBytes = [Text.Encoding]::UTF8.GetBytes($orderedCorrectionCoordinates -join "`n")
-        $correctionCoordinateHash = [Convert]::ToHexString(
-            [Security.Cryptography.SHA256]::HashData($correctionCoordinateBytes))
-        Assert-Equal 'B52663439383D7B9E52D0664F0248E8A084EC21D041F1B7D565D2D4FA2EF11EB' `
-            $correctionCoordinateHash 'The reviewed subtractive native body correction mask changed.'
-
-        # Literal probes sample every reviewed corrected segment without deriving expectations from the generator.
-        $reviewedCorrectionSegments = @(
-            @{ Name='front-outer'; Coordinate='19,75' },
-            @{ Name='front-inner'; Coordinate='25,77' },
-            @{ Name='front-foot'; Coordinate='23,80' },
-            @{ Name='first-valley'; Coordinate='28,74' },
-            @{ Name='first-underside'; Coordinate='31,75' },
-            @{ Name='center-outer'; Coordinate='36,79' },
-            @{ Name='center-foot'; Coordinate='43,85' },
-            @{ Name='center-inner'; Coordinate='46,84' },
-            @{ Name='second-valley'; Coordinate='52,75' },
-            @{ Name='second-underside'; Coordinate='60,75' },
-            @{ Name='rear-outer'; Coordinate='62,79' },
-            @{ Name='rear-foot'; Coordinate='66,82' },
-            @{ Name='rear-inner'; Coordinate='69,79' },
-            @{ Name='lower-rear-rim'; Coordinate='69,72' }
-        )
-        foreach ($segment in $reviewedCorrectionSegments)
-        {
-            Assert-True $openCorrection.Contains($segment.Coordinate) `
-                "Reviewed open correction omitted $($segment.Name) probe $($segment.Coordinate)."
-            Assert-True $closedCorrection.Contains($segment.Coordinate) `
-                "Reviewed closed correction omitted $($segment.Name) probe $($segment.Coordinate)."
-        }
-
-        # Literal source-derived outer supports and legal occlusion endpoints must remain baseline-identical.
-        $frozenOuterSupports = @(
-            @{ Name='front-outer'; X=17; Y=72 },
-            @{ Name='front-inner'; X=26; Y=77 },
-            @{ Name='front-foot'; X=22; Y=80 },
-            @{ Name='first-valley'; X=28; Y=75 },
-            @{ Name='first-underside'; X=32; Y=76 },
-            @{ Name='center-outer'; X=35; Y=79 },
-            @{ Name='center-foot'; X=46; Y=85 },
-            @{ Name='center-inner'; X=47; Y=83 },
-            @{ Name='second-valley'; X=52; Y=76 },
-            @{ Name='second-underside'; X=59; Y=75 },
-            @{ Name='rear-outer'; X=61; Y=79 },
-            @{ Name='rear-foot'; X=66; Y=83 },
-            @{ Name='rear-inner'; X=70; Y=78 },
-            @{ Name='upper-rear-rim'; X=74; Y=62 },
-            @{ Name='lower-rear-rim'; X=70; Y=72 },
-            @{ Name='hair-neck-occlusion'; X=17; Y=69 },
-            @{ Name='ribbon-rear-rim-occlusion'; X=74; Y=57 }
-        )
-        foreach ($support in $frozenOuterSupports)
-        {
-            $supportCoordinate = "$($support.X),$($support.Y)"
-            Assert-Equal $baselineOpen.GetPixel($support.X, $support.Y).ToArgb() `
-                $open.GetPixel($support.X, $support.Y).ToArgb() `
-                "Open $($support.Name) outer support changed at $supportCoordinate."
-            Assert-Equal $baselineClosed.GetPixel($support.X, $support.Y).ToArgb() `
-                $closed.GetPixel($support.X, $support.Y).ToArgb() `
-                "Closed $($support.Name) outer support changed at $supportCoordinate."
-        }
-
-        Assert-True ($eyeChanges.Count -ge 80) 'Both eyes did not visibly close.'
-
-        # Literal native-96 lid/lower-eye probes preserve the reviewed eye semantics.
-        foreach ($eye in @(
-            @{ Name='left'; StartX=18; EndX=29; LidY=52; LowerProbes=@('20,55','22,56','25,55') },
-            @{ Name='right'; StartX=35; EndX=47; LidY=52; LowerProbes=@('42,56','43,58','42,60') }
-        ))
-        {
-            $lidInk = 0
-            for ($x = $eye.StartX; $x -le $eye.EndX; $x++)
-            {
-                if ((Get-OpticalInk ($closed.GetPixel($x, $eye.LidY))) -ge 0.30) { $lidInk++ }
-            }
-            Assert-True ($lidInk -ge 4) "$($eye.Name) lid is not visible."
-            foreach ($probe in $eye.LowerProbes)
-            {
-                $parts = $probe.Split(',')
-                $openInk = Get-OpticalInk ($open.GetPixel([int]$parts[0], [int]$parts[1]))
-                $closedInk = Get-OpticalInk ($closed.GetPixel([int]$parts[0], [int]$parts[1]))
-                Assert-True ($closedInk -le 0.30 -and ($openInk - $closedInk) -ge 0.12) `
-                    "$($eye.Name) lower open-eye oval/underline survived at $probe (open=$openInk, closed=$closedInk)."
-            }
-        }
-        for ($y = 61; $y -le 66; $y++)
-        {
-            for ($x = 24; $x -le 33; $x++)
-            {
-                Assert-Equal $open.GetPixel($x, $y).ToArgb() $closed.GetPixel($x, $y).ToArgb() "Mouth changed at ($x,$y)."
-            }
-        }
-
-        # Frozen after fixed clean-hair native profiles: peak >= .50, optical width .60..2.10.
-        $hairProfiles = @(
-            @{ Name='hair-top'; Samples=@(@(32,21),@(32,22),@(32,23),@(32,24),@(32,25),@(32,26),@(32,27)); Joint=$false },
-            @{ Name='hair-left'; Samples=@(@(13,30),@(14,30),@(15,30),@(16,30),@(17,30),@(18,30),@(19,30),@(20,30),@(21,30)); Joint=$false }
-        )
-        foreach ($definition in $hairProfiles)
-        {
-            $metric = Get-Profile $baselineOpen $definition
-            Assert-True ($metric.Peak -ge 0.50 -and $metric.Width -ge 0.60 -and $metric.Width -le 2.10) `
-                "Fixed hair reference $($metric.Name) contradicts frozen profile limits: peak=$($metric.Peak), width=$($metric.Width)."
-        }
-        Assert-Equal 0 $open.GetPixel(0,0).A 'Transparent margin was lost.'
-        Assert-True ($open.GetPixel(43,75).A -ge 240) 'Opaque body hit probe was lost.'
-        Write-Output "NATIVE96 PIXEL EVIDENCE: correction=$($openCorrection.Count), bounds=$($bounds.MinX),$($bounds.MinY)..$($bounds.MaxX),$($bounds.MaxY); mask=$correctionCoordinateHash."
+        Import-Module $paths.SourceRasterModule -Force
+        Import-Module $paths.SubpixelModule -Force
+        $eyeRaw=[Drawing.Bitmap]::new($paths.Source)
+        $eyeSource=Remove-DororongBoundaryBackground $eyeRaw
+        $eyeSeed=[Drawing.Bitmap]::new($paths.Seed)
+        $eyeMask=Import-DororongBodyMask $paths.Mask
+        Assert-SourceCandidateContract $eyeSource $eyeMask $eyeOpen 'Eye-only source-open candidate'
+        Assert-SourceCandidateContract $eyeSource $eyeMask $eyeClosed `
+            'Eye-only source-closed candidate' -AllowEyeChanges
+        Assert-SourceBodyEquality $eyeOpen $eyeClosed $eyeMask 'Eye-only source body'
+        $eyeConstants=Import-PowerShellDataFile -LiteralPath $paths.Constants
+        $eyeEndpoints=[Drawing.PointF[]]@($eyeConstants.LegalEndpoints|ForEach-Object{
+            [Drawing.PointF]::new([single]$_.X,[single]$_.Y)})
+        $eyeContour=New-DororongVisibleContour $eyeSource $eyeMask $eyeEndpoints
+        $eyeFill=New-DororongFillField $eyeSource $eyeSeed $eyeMask $eyeContour
+        $eyeComponents=@(Get-IndependentProxyComponents $eyeMask $eyeSource 7 8)
+        $null=Assert-ProxyMembership $eyeComponents $eyeMask.Width 'Eye-only independent proxy'
+        $eyeOpenProxy=New-IndependentResizeProxy $eyeOpen $eyeFill $eyeComponents
+        $eyeClosedProxy=New-IndependentResizeProxy $eyeClosed $eyeFill $eyeComponents
+        Assert-ProxyInputEqualityOutsideEyes $eyeOpenProxy $eyeClosedProxy 'Eye-only independent proxy'
+        $eyeDirectNativeOpen=Resize-DororongPremultiplied96 $eyeOpenProxy
+        $eyeDirectNativeClosed=Resize-DororongPremultiplied96 $eyeClosedProxy
+        Assert-BitmapEqual $eyeDirectNativeOpen $eyeNativeOpen `
+            'Eye-only native-open differs from one independent proxy resize.'
+        Assert-BitmapEqual $eyeDirectNativeClosed $eyeNativeClosed `
+            'Eye-only native-closed differs from one independent proxy resize.'
+        . (Join-Path $repositoryRoot 'tests/support/Dororong.ContinuousOptics.ps1')
+        $eyeAuthority=Import-PowerShellDataFile -LiteralPath $paths.Authority
+        $eyeOutline=Get-OutlineMedianColor $eyeSource @($eyeConstants.OutlineSamples)
+        $eyeMetrics=Measure-NativeBodyMetrics $eyeNativeOpen $eyeAuthority $eyeOutline
+        Write-Output "EYE-ONLY PASS permissibleCoordinates=$($script:ReviewedSourceEyeChangeKeys.Count) observedChanges=$sourceChanges boundary=65,120 proxyComponents=$($eyeComponents.Count) resizeOpen=1 resizeClosed=1 nativeMinimum=$($eyeMetrics.Minimum) nativeMaximum=$($eyeMetrics.Maximum) nativeSpread=$($eyeMetrics.Spread)"
+        return
     }
     finally
     {
-        $source.Dispose(); $open.Dispose(); $closed.Dispose(); $baselineOpen.Dispose(); $baselineClosed.Dispose()
+        foreach($bitmap in @($eyeDirectNativeClosed,$eyeDirectNativeOpen,$eyeClosedProxy,$eyeOpenProxy,
+            $eyeMask,$eyeSeed,$eyeSource,$eyeRaw,$eyeNativeClosed,$eyeNativeOpen,$eyeClosed,$eyeOpen))
+        {if($null-ne$bitmap){$bitmap.Dispose()}}
     }
+}
+if($FillFloorMutationOnly)
+{
+    Import-Module $paths.SourceRasterModule -Force
+    Import-Module $paths.SubpixelModule -Force
+    $floorConstants=Import-PowerShellDataFile -LiteralPath $paths.Constants
+    $floorRaw=$null;$floorSource=$null;$floorSeed=$null;$floorMask=$null
+    try
+    {
+        $floorRaw=[Drawing.Bitmap]::new($paths.Source)
+        $floorSource=Remove-DororongBoundaryBackground $floorRaw
+        $floorSeed=[Drawing.Bitmap]::new($paths.Seed)
+        $floorMask=Import-DororongBodyMask $paths.Mask
+        $floorEndpoints=[Drawing.PointF[]]@($floorConstants.LegalEndpoints|ForEach-Object{
+            [Drawing.PointF]::new([single]$_.X,[single]$_.Y)})
+        $floorContour=New-DororongVisibleContour $floorSource $floorMask $floorEndpoints
+        Invoke-FillFloorMutationContract `
+            $floorSource $floorSeed $floorMask $floorContour $floorConstants
+        Write-Output 'FILL-FLOOR-MUTATION-ONLY PASS'
+        return
+    }
+    finally
+    {
+        foreach($bitmap in @($floorMask,$floorSeed,$floorSource,$floorRaw))
+        {if($null-ne$bitmap){$bitmap.Dispose()}}
+    }
+}
+Import-Module $paths.SourceRasterModule -Force
+Import-Module $paths.SubpixelModule -Force
+. (Join-Path $repositoryRoot 'tests/support/Dororong.ContinuousOptics.ps1')
+$constants = Import-PowerShellDataFile -LiteralPath $paths.Constants
+$authority = Import-PowerShellDataFile -LiteralPath $paths.Authority
+Assert-Equal 8 ([int]$constants.SubpixelFactor) 'The exact raster factor changed.'
+Assert-Equal 2.20898670201159 ([double]$constants.Width) 'The exact outline width changed.'
+
+# Test-first direct behavioral gate. This runs before the real generator so the
+# pre-production RED is an F raster mismatch, never parameter binding.
+$preRaw=$null;$preSource=$null;$preSeed=$null;$preMask=$null;$preDirect=$null
+$preProxy=$null;$preNative=$null
+try
+{
+    $preRaw=[Drawing.Bitmap]::new($paths.Source)
+    $preSource=Remove-DororongBoundaryBackground $preRaw
+    $preSeed=[Drawing.Bitmap]::new($paths.Seed)
+    $preMask=Import-DororongBodyMask $paths.Mask
+    $preDirect=New-DirectCandidate $preSource $preSeed $preMask $constants `
+        ([int]$constants.SubpixelFactor) ([double]$constants.Width)
+    Assert-FillSeedContract $preSource $preSeed $preDirect.FillField 'Direct F fill samples'
+    Assert-Equal $expectedHashes.Contour (Get-DororongCanonicalContourHash $preDirect.Contour) `
+        'Oracle-only frozen E-union-C contour changed.'
+    Assert-AllPixelSmoothFill $preSource $preSeed $preMask $preDirect.Contour $preDirect.FillField
+    $preComponents=@(Get-IndependentProxyComponents $preMask $preSource 7 8)
+    $null=Assert-ProxyMembership $preComponents $preMask.Width 'Direct F resize proxy'
+    Assert-Equal $expectedHashes.SourceOpen (Get-BitmapPngHash $preDirect.Candidate) `
+        'Direct production pipeline did not reproduce exact source-225 candidate F.'
+    $preProxy=New-IndependentResizeProxy $preDirect.Candidate $preDirect.FillField $preComponents
+    $preNative=Resize-DororongPremultiplied96 $preProxy
+    Assert-Equal $expectedHashes.NativeOpen (Get-BitmapPngHash $preNative) `
+        'Direct production pipeline did not reproduce exact native-96 candidate F through one proxy resize.'
 }
 finally
 {
-    if ([IO.Directory]::Exists($generatedDirectory)) { [IO.Directory]::Delete($generatedDirectory, $true) }
-    if ([IO.Directory]::Exists($baselineDirectory)) { [IO.Directory]::Delete($baselineDirectory, $true) }
+    foreach($bitmap in @($preNative,$preProxy))
+    {if($null-ne$bitmap){$bitmap.Dispose()}}
+    if($null-ne$preDirect-and$null-ne$preDirect.Candidate){$preDirect.Candidate.Dispose()}
+    foreach($bitmap in @($preMask,$preSeed,$preSource,$preRaw))
+    {if($null-ne$bitmap){$bitmap.Dispose()}}
+}
+
+if($OracleOnly)
+{
+    Write-Output "ORACLE-ONLY PASS sourceOpen=$($expectedHashes.SourceOpen) nativeOpen=$($expectedHashes.NativeOpen) eligibility=independent-final-mask-seed-alpha-floor-chroma-unweighted-E-union-C-distance-gt-8"
+    return
+}
+
+Assert-Equal 2.5 ([double]$constants.ExposedCoverageMultiplier) 'The F E multiplier changed.'
+Assert-Equal 0.125 ([double]$constants.ContinuationCoverageMultiplier) 'The F C multiplier changed.'
+Assert-Equal 7 ([int]$constants.ProxyMaximumSize) 'The proxy maximum size changed.'
+Assert-Equal 8 ([int]$constants.ProxyMaximumChroma) 'The proxy maximum chroma changed.'
+Assert-Equal 6 ([int]$constants.ExpectedProxyComponentCount) 'The proxy component count changed.'
+Assert-Equal 12 ([int]$constants.ExpectedProxyPixelCount) 'The proxy pixel count changed.'
+Assert-Equal '2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54' `
+    $constants.ExpectedProxyMembershipSha256 'The proxy membership identity changed.'
+
+$candidateRoot = Join-Path $repositoryRoot '.superpowers/sdd/2026-08-27-dororong-complete-body-ownership-outline/task-5-runtime-integration/candidate'
+$runRoot = Join-Path $candidateRoot "exact-art-$([Guid]::NewGuid().ToString('N'))"
+$outputDirectory = Join-Path $runRoot 'output'
+$evidenceDirectory = Join-Path $runRoot 'evidence'
+New-Item -ItemType Directory -Force -Path $runRoot | Out-Null
+
+$generatorOutput = & pwsh -NoProfile -File $paths.Generator `
+    -SourcePath $paths.Source -BodyMaskPath $paths.Mask `
+    -OutputDirectory $outputDirectory -EvidenceDirectory $evidenceDirectory 2>&1
+Assert-Equal 0 $LASTEXITCODE "The real generator failed: $($generatorOutput -join [Environment]::NewLine)"
+$generatorText=$generatorOutput-join[Environment]::NewLine
+Assert-True $generatorText.Contains('proxyComponents=6',[StringComparison]::Ordinal) `
+    'Generator diagnostics did not report six resize-proxy components.'
+Assert-True $generatorText.Contains('proxyPixels=12',[StringComparison]::Ordinal) `
+    'Generator diagnostics did not report twelve resize-proxy pixels.'
+Assert-True $generatorText.Contains('proxyHash=2B9CB6D649884DA2DC826963E3258A23DAFAAE9A1B071335B168834746463A54',[StringComparison]::Ordinal) `
+    'Generator diagnostics did not report the canonical resize-proxy membership.'
+Assert-True $generatorText.Contains('resizeOpen=1',[StringComparison]::Ordinal) `
+    'Generator did not report exactly one open-frame resize.'
+Assert-True $generatorText.Contains('resizeClosed=1',[StringComparison]::Ordinal) `
+    'Generator did not report exactly one closed-frame resize.'
+
+$generatedOpenPath = Join-Path $outputDirectory 'dororong-canonical.png'
+$generatedClosedPath = Join-Path $outputDirectory 'dororong-closed-eyes.png'
+$evidencePaths = [ordered]@{
+    SourceOpenBaseline = Join-Path $evidenceDirectory 'source-open-baseline.png'
+    SourceOpenCandidate = Join-Path $evidenceDirectory 'source-open-candidate.png'
+    SourceClosedCandidate = Join-Path $evidenceDirectory 'source-closed-candidate.png'
+    NativeOpenBaseline = Join-Path $evidenceDirectory 'native-open-baseline.png'
+    NativeOpenCandidate = Join-Path $evidenceDirectory 'native-open-candidate.png'
+    NativeClosedCandidate = Join-Path $evidenceDirectory 'native-closed-candidate.png'
+}
+Assert-ExactGeneratorEvidenceSet $evidenceDirectory $expectedHashes
+foreach ($path in @($generatedOpenPath,$generatedClosedPath) + @($evidencePaths.Values))
+{ Assert-True (Test-Path -LiteralPath $path -PathType Leaf) "Generator output is missing: $path" }
+
+Assert-Equal $expectedHashes.SourceOpen `
+    (Get-FileHash -Algorithm SHA256 -LiteralPath $evidencePaths.SourceOpenCandidate).Hash `
+    'The representative source-open candidate changed.'
+Assert-Equal $expectedHashes.NativeOpen `
+    (Get-FileHash -Algorithm SHA256 -LiteralPath $generatedOpenPath).Hash `
+    'The representative native-open candidate changed.'
+Assert-Equal $expectedHashes.NativeOpen `
+    (Get-FileHash -Algorithm SHA256 -LiteralPath $evidencePaths.NativeOpenCandidate).Hash `
+    'The native-open evidence differs from the runtime output.'
+
+$raw=$null; $source=$null; $seed=$null; $mask=$null; $direct=$null
+$directProxy=$null; $directNative=$null; $baselineNative=$null; $sourceBaseline=$null
+$sourceOpen=$null; $sourceClosed=$null; $nativeBaseline=$null
+$sourceOpenProxy=$null; $sourceClosedProxy=$null
+$nativeOpen=$null; $nativeClosed=$null; $generatedOpen=$null; $generatedClosed=$null
+try
+{
+    $raw = [Drawing.Bitmap]::new($paths.Source)
+    $source = Remove-DororongBoundaryBackground $raw
+    $seed = [Drawing.Bitmap]::new($paths.Seed)
+    $mask = Import-DororongBodyMask $paths.Mask
+    $direct = New-DirectCandidate $source $seed $mask $constants `
+        ([int]$constants.SubpixelFactor) ([double]$constants.Width)
+    Assert-Equal $expectedHashes.Contour (Get-DororongCanonicalContourHash $direct.Contour) `
+        'The production contour geometry changed.'
+    Assert-Equal '26,2,10' "$($direct.OutlineColor.R),$($direct.OutlineColor.G),$($direct.OutlineColor.B)" `
+        'The median outline RGB changed.'
+
+    Assert-AllPixelSmoothFill $source $seed $mask $direct.Contour $direct.FillField
+    $proxyComponents=@(Get-IndependentProxyComponents $mask $source `
+        ([int]$constants.ProxyMaximumSize) ([int]$constants.ProxyMaximumChroma))
+    $null=Assert-ProxyMembership $proxyComponents $mask.Width 'Production resize proxy'
+    $directProxy=New-IndependentResizeProxy $direct.Candidate $direct.FillField $proxyComponents
+    $directNative = Resize-DororongPremultiplied96 $directProxy
+    $baselineNative = Resize-DororongPremultiplied96 $source
+    $sourceBaseline = [Drawing.Bitmap]::new($evidencePaths.SourceOpenBaseline)
+    $sourceOpen = [Drawing.Bitmap]::new($evidencePaths.SourceOpenCandidate)
+    $sourceClosed = [Drawing.Bitmap]::new($evidencePaths.SourceClosedCandidate)
+    $nativeBaseline = [Drawing.Bitmap]::new($evidencePaths.NativeOpenBaseline)
+    $nativeOpen = [Drawing.Bitmap]::new($evidencePaths.NativeOpenCandidate)
+    $nativeClosed = [Drawing.Bitmap]::new($evidencePaths.NativeClosedCandidate)
+    $generatedOpen = [Drawing.Bitmap]::new($generatedOpenPath)
+    $generatedClosed = [Drawing.Bitmap]::new($generatedClosedPath)
+
+    Assert-BitmapEqual $source $sourceBaseline 'Source-open baseline evidence differs from direct background removal.'
+    Assert-BitmapEqual $direct.Candidate $sourceOpen 'Generated source-open differs from one direct production-module raster.'
+    Assert-BitmapEqual $baselineNative $nativeBaseline 'Native-open baseline differs from one shared resize.'
+    Assert-BitmapEqual $directNative $nativeOpen 'Generated native-open differs from one direct shared resize.'
+    Assert-BitmapEqual $nativeOpen $generatedOpen 'Native-open output differs from its evidence file.'
+    Assert-BitmapEqual $nativeClosed $generatedClosed 'Native-closed output differs from its evidence file.'
+
+    Assert-SourceCandidateContract $source $mask $sourceOpen 'Source-open candidate'
+    Assert-SourceCandidateContract $source $mask $sourceClosed 'Source-closed candidate' -AllowEyeChanges
+    Assert-FillSeedContract $source $seed $direct.FillField 'Production fill field'
+    Assert-SourceBodyEquality $sourceOpen $sourceClosed $mask 'Source candidate'
+    $sourceOpenProxy=New-IndependentResizeProxy $sourceOpen $direct.FillField $proxyComponents
+    $sourceClosedProxy=New-IndependentResizeProxy $sourceClosed $direct.FillField $proxyComponents
+    Assert-ProxyInputEqualityOutsideEyes $sourceOpenProxy $sourceClosedProxy 'Canonical resize proxy'
+    Assert-BitmapEqual $directProxy $sourceOpenProxy 'Direct and generated source-open resize proxies differ.'
+    Assert-AlphaZeroRgb $nativeOpen 'Native-open candidate'
+    Assert-AlphaZeroRgb $nativeClosed 'Native-closed candidate'
+    Assert-EyeAndMouthContract $sourceOpen $sourceClosed $nativeOpen $nativeClosed
+    $metrics = Measure-NativeBodyMetrics $nativeOpen $authority $direct.OutlineColor
+
+    Assert-MutationRejected 'width-plus-1-over-64' 'Source-open fixed-width mutation' {
+        $mutated = Invoke-DororongSubpixelOutline $source $mask $direct.FillField $direct.DistanceMap `
+            $direct.OutlineColor ([double]$constants.Width + (1.0 / 64.0))
+        try { Assert-BitmapEqual $direct.Candidate $mutated 'Source-open fixed-width mutation' }
+        finally { $mutated.Dispose() }
+    }
+    Assert-MutationRejected 'factor-8-to-4' 'Source-open factor mutation' {
+        $factorFourMap = New-DororongSubpixelDistanceMap $mask $direct.Contour 4
+        $mutated = Invoke-DororongSubpixelOutline $source $mask $direct.FillField $factorFourMap `
+            $direct.OutlineColor ([double]$constants.Width)
+        try { Assert-BitmapEqual $direct.Candidate $mutated 'Source-open factor mutation' }
+        finally { $mutated.Dispose() }
+    }
+    Assert-MutationRejected 'exposed-gain-2.5-to-1' 'Source-open exposed-gain mutation' {
+        $module = Get-Module Dororong.SubpixelOutline
+        & $module { $script:OutlineConstants.ExposedCoverageMultiplier = 1.0 }
+        try
+        {
+            $mutated = Invoke-DororongSubpixelOutline $source $mask $direct.FillField `
+                $direct.DistanceMap $direct.OutlineColor ([double]$constants.Width)
+            try { Assert-BitmapEqual $direct.Candidate $mutated 'Source-open exposed-gain mutation' }
+            finally { $mutated.Dispose() }
+        }
+        finally { & $module { $script:OutlineConstants.ExposedCoverageMultiplier = 2.5 } }
+    }
+    Assert-MutationRejected 'continuation-gain-0.125-to-1' 'Source-open continuation-gain mutation' {
+        $module = Get-Module Dororong.SubpixelOutline
+        & $module { $script:OutlineConstants.ContinuationCoverageMultiplier = 1.0 }
+        try
+        {
+            $mutated = Invoke-DororongSubpixelOutline $source $mask $direct.FillField `
+                $direct.DistanceMap $direct.OutlineColor ([double]$constants.Width)
+            try { Assert-BitmapEqual $direct.Candidate $mutated 'Source-open continuation-gain mutation' }
+            finally { $mutated.Dispose() }
+        }
+        finally { & $module { $script:OutlineConstants.ContinuationCoverageMultiplier = 0.125 } }
+    }
+    Assert-MutationRejected 'retain-eligible-seed-rgb' 'Source-open retained-seed mutation' {
+        $retainedFill=[Drawing.Color[,]]$direct.FillField.Clone()
+        $coordinate=@($direct.FillField.EligibleSeeds)[0]
+        $retainedFill[[int]$coordinate.X,[int]$coordinate.Y]=
+            $source.GetPixel([int]$coordinate.X,[int]$coordinate.Y)
+        $mutated = Invoke-DororongSubpixelOutline $source $mask $retainedFill $direct.DistanceMap `
+            $direct.OutlineColor ([double]$constants.Width)
+        try { Assert-BitmapEqual $direct.Candidate $mutated 'Source-open retained-seed mutation' }
+        finally { $mutated.Dispose() }
+    }
+    Invoke-FillFloorMutationContract $source $seed $mask $direct.Contour $constants
+    Assert-MutationRejected 'final-mask-boundary-bit' 'Final-mask boundary mutation changed canonical contour geometry' {
+        $mutatedMask = Copy-Bitmap32 $mask
+        try
+        {
+            $mutatedMask.SetPixel(162,110,[Drawing.Color]::FromArgb(255,0,0,0))
+            $endpoints = [Drawing.PointF[]]@($constants.LegalEndpoints | ForEach-Object {
+                [Drawing.PointF]::new([single]$_.X,[single]$_.Y)
+            })
+            $mutatedContour = New-DororongVisibleContour $source $mutatedMask $endpoints
+            Assert-Equal $expectedHashes.Contour (Get-DororongCanonicalContourHash $mutatedContour) `
+                'Final-mask boundary mutation changed canonical contour geometry.'
+        }
+        finally { $mutatedMask.Dispose() }
+    }
+    Assert-MutationRejected 'proxy-eight-connected' 'component count changed' {
+        $mutatedComponents=@(Get-IndependentProxyComponents $mask $source 7 8 -EightConnected)
+        $null=Assert-ProxyMembership $mutatedComponents $mask.Width 'Eight-connected proxy mutation'
+    }
+    Assert-MutationRejected 'proxy-size-7-to-6' 'component count changed' {
+        $mutatedComponents=@(Get-IndependentProxyComponents $mask $source 6 8)
+        $null=Assert-ProxyMembership $mutatedComponents $mask.Width 'Size-six proxy mutation'
+    }
+    Assert-MutationRejected 'selected-proxy-pixel-chroma-to-9' 'component count changed' {
+        $mutatedSource=Copy-Bitmap32 $source
+        try
+        {
+            $index=[int]$proxyComponents[0].Indices[0]
+            $x=$index%$source.Width;$y=[int][Math]::Floor($index/$source.Width)
+            $alpha=$mutatedSource.GetPixel($x,$y).A
+            $mutatedSource.SetPixel($x,$y,[Drawing.Color]::FromArgb($alpha,100,100,109))
+            $mutatedComponents=@(Get-IndependentProxyComponents $mask $mutatedSource 7 8)
+            $null=Assert-ProxyMembership $mutatedComponents $mask.Width 'Chroma-nine proxy mutation'
+        }
+        finally{$mutatedSource.Dispose()}
+    }
+    Assert-MutationRejected 'proxy-omit-component' 'component count changed' {
+        $mutatedComponents=@($proxyComponents|Select-Object -Skip 1)
+        $null=Assert-ProxyMembership $mutatedComponents $mask.Width 'Omitted-component proxy mutation'
+    }
+    Assert-MutationRejected 'proxy-membership-record' 'canonical membership changed' {
+        $mutatedComponents=@($proxyComponents|ForEach-Object{
+            [pscustomobject]@{
+                Indices=[int[]]$_.Indices.Clone();Size=$_.Size;TouchesFrame=$_.TouchesFrame
+                MinX=$_.MinX;MinY=$_.MinY;MaxX=$_.MaxX;MaxY=$_.MaxY
+                MaximumChroma=$_.MaximumChroma
+            }
+        })
+        $mutatedComponents[0].Indices[0]++
+        $null=Assert-ProxyMembership $mutatedComponents $mask.Width 'Membership-record proxy mutation'
+    }
+    Assert-MutationRejected 'proxy-admit-frame-component' 'admitted a frame-touching component' {
+        $frameComponent=[pscustomobject]@{
+            Indices=[int[]]@(0);Size=1;TouchesFrame=$true
+            MinX=0;MinY=0;MaxX=0;MaxY=0;MaximumChroma=0
+        }
+        $mutatedComponents=@($proxyComponents)+@($frameComponent)
+        $null=Assert-ProxyMembership $mutatedComponents $mask.Width 'Frame-component proxy mutation'
+    }
+    Assert-MutationRejected 'proxy-only-open-eye-state' 'differs outside eye regions' {
+        Assert-ProxyInputEqualityOutsideEyes $sourceOpenProxy $sourceClosed `
+            'One-state-only proxy mutation'
+    }
+    Assert-MutationRejected 'second-native-resize' 'Second-resize mutation' {
+        $twice=Resize-DororongPremultiplied96 $nativeOpen
+        try { Assert-BitmapEqual $nativeOpen $twice 'Second-resize mutation' }
+        finally { $twice.Dispose() }
+    }
+    Assert-MutationRejected 'protected-candidate-rgb' 'protected mask-zero artwork changed' {
+        $mutated = Copy-Bitmap32 $sourceOpen
+        try
+        {
+            $pixel = $mutated.GetPixel(52,68)
+            $mutated.SetPixel(52,68,[Drawing.Color]::FromArgb($pixel.A,($pixel.R + 1),$pixel.G,$pixel.B))
+            Assert-SourceCandidateContract $source $mask $mutated 'Protected RGB mutation'
+        }
+        finally { $mutated.Dispose() }
+    }
+    Assert-MutationRejected 'candidate-alpha' 'source alpha changed' {
+        $mutated = Copy-Bitmap32 $sourceOpen
+        try
+        {
+            $pixel = $mutated.GetPixel(100,180)
+            $mutated.SetPixel(100,180,[Drawing.Color]::FromArgb(254,$pixel.R,$pixel.G,$pixel.B))
+            Assert-SourceCandidateContract $source $mask $mutated 'Candidate alpha mutation'
+        }
+        finally { $mutated.Dispose() }
+    }
+    Assert-MutationRejected 'closed-frame-body-rgb' 'open/closed body RGB changed' {
+        $mutated = Copy-Bitmap32 $sourceClosed
+        try
+        {
+            $pixel = $mutated.GetPixel(100,180)
+            $mutated.SetPixel(100,180,[Drawing.Color]::FromArgb($pixel.A,($pixel.R - 1),$pixel.G,$pixel.B))
+            Assert-SourceBodyEquality $sourceOpen $mutated $mask 'Closed-frame mutation'
+        }
+        finally { $mutated.Dispose() }
+    }
+
+    Assert-Equal 0 $nativeOpen.GetPixel(0,0).A 'Transparent native margin was lost.'
+    Assert-True ($nativeOpen.GetPixel(43,75).A -ge 240) 'Opaque native body hit probe was lost.'
+    Write-Output "EXACT ART CANDIDATE sourceOpen=$($expectedHashes.SourceOpen) nativeOpen=$($expectedHashes.NativeOpen) fillSeeds=$($direct.FillField.EligibleSeedCount) nativeSpread=$($metrics.Spread) runRoot=$runRoot"
+}
+finally
+{
+    foreach ($bitmap in @($generatedClosed,$generatedOpen,$nativeClosed,$nativeOpen,$nativeBaseline,
+        $sourceClosedProxy,$sourceOpenProxy,$sourceClosed,$sourceOpen,$sourceBaseline,$baselineNative,
+        $directNative,$directProxy))
+    { if ($null -ne $bitmap) { $bitmap.Dispose() } }
+    if ($null -ne $direct -and $null -ne $direct.Candidate) { $direct.Candidate.Dispose() }
+    foreach ($bitmap in @($mask,$seed,$source,$raw))
+    { if ($null -ne $bitmap) { $bitmap.Dispose() } }
 }
 
 $coreAssemblyPath = Join-Path $repositoryRoot "src/Dororong.Core/bin/$Configuration/net8.0/Dororong.Core.dll"
@@ -338,46 +1151,63 @@ Add-Type -AssemblyName PresentationFramework
 Add-Type -Path $coreAssemblyPath
 Add-Type -Path $appAssemblyPath
 $presenter = [Dororong.App.Controls.DororongPresenter]::new()
-$bodyGroup = [System.Windows.Controls.Canvas]$presenter.FindName('BodyGroup')
-$image = [System.Windows.Controls.Image]$presenter.FindName('DororongImage')
+$bodyGroup = [Windows.Controls.Canvas]$presenter.FindName('BodyGroup')
+$image = [Windows.Controls.Image]$presenter.FindName('DororongImage')
 Assert-Equal 108.0 $bodyGroup.Width 'BodyGroup width changed.'
 Assert-Equal 96.0 $bodyGroup.Height 'BodyGroup height changed.'
-Assert-Equal 18.0 ([System.Windows.Controls.Canvas]::GetLeft($bodyGroup)) 'BodyGroup placement changed.'
-Assert-Equal 24.0 ([System.Windows.Controls.Canvas]::GetTop($bodyGroup)) 'BodyGroup placement changed.'
+Assert-Equal 18.0 ([Windows.Controls.Canvas]::GetLeft($bodyGroup)) 'BodyGroup placement changed.'
+Assert-Equal 24.0 ([Windows.Controls.Canvas]::GetTop($bodyGroup)) 'BodyGroup placement changed.'
 Assert-Equal 96.0 $image.Width 'The presenter resamples the native bitmap horizontally.'
 Assert-Equal 96.0 $image.Height 'The presenter resamples the native bitmap vertically.'
-Assert-Equal 6.0 ([System.Windows.Controls.Canvas]::GetLeft($image)) 'The native bitmap is not centered in BodyGroup.'
+Assert-Equal 6.0 ([Windows.Controls.Canvas]::GetLeft($image)) 'The native bitmap is not centered in BodyGroup.'
 
-$window = [System.Windows.Window]::new()
-$window.Width = 144; $window.Height = 144; $window.Left = -10000; $window.Top = -10000
-$window.ShowActivated = $false; $window.ShowInTaskbar = $false; $window.WindowStyle = [System.Windows.WindowStyle]::None
-$window.Content = $presenter
+$window = [Windows.Window]::new()
+$window.Width=144; $window.Height=144; $window.Left=-10000; $window.Top=-10000
+$window.ShowActivated=$false; $window.ShowInTaskbar=$false
+$window.WindowStyle=[Windows.WindowStyle]::None; $window.Content=$presenter
 try
 {
     $window.Show(); $presenter.UpdateLayout()
-    $dpi = [System.Windows.Media.VisualTreeHelper]::GetDpi($image)
+    $dpi = [Windows.Media.VisualTreeHelper]::GetDpi($image)
     Assert-Near 1.0 $dpi.DpiScaleX 0.000001 'Presenter target is not 96 DPI.'
     Assert-Near 96.0 $image.ActualWidth 0.000001 'Bitmap is not arranged at 96 DIPs.'
     Assert-Near 96.0 $image.ActualHeight 0.000001 'Bitmap is not arranged at 96 DIPs.'
-    Assert-Equal 96 ([System.Windows.Media.Imaging.BitmapSource]$image.Source).PixelWidth 'Presented resource is not 96 pixels.'
-    $opaquePoint = $image.TranslatePoint([System.Windows.Point]::new(43.5,75.5), $presenter)
+    Assert-Equal 96 ([Windows.Media.Imaging.BitmapSource]$image.Source).PixelWidth `
+        'Presented resource is not 96 pixels.'
+    $opaquePoint = $image.TranslatePoint([Windows.Point]::new(43.5,75.5),$presenter)
     $hit = $presenter.InputHitTest($opaquePoint)
-    Assert-True ($null -ne $hit -and $bodyGroup.IsAncestorOf($hit)) 'Opaque native body point did not alpha-hit-test.'
-    $marginPoint = $image.TranslatePoint([System.Windows.Point]::new(0.25,0.25), $presenter)
-    Assert-True ($null -eq $presenter.InputHitTest($marginPoint)) 'Transparent native margin hit-tested as opaque.'
+    Assert-True ($null -ne $hit -and $bodyGroup.IsAncestorOf($hit)) `
+        'Opaque native body point did not alpha-hit-test.'
+    $marginPoint = $image.TranslatePoint([Windows.Point]::new(0.25,0.25),$presenter)
+    Assert-True ($null -eq $presenter.InputHitTest($marginPoint)) `
+        'Transparent native margin hit-tested as opaque.'
 }
 finally { $window.Close() }
 
 $stateType = [Dororong.Core.Behavior.PetState]
 $facing = [Dororong.Core.Behavior.FacingDirection]::Right
-foreach ($state in @($stateType::Idle,$stateType::Walk,$stateType::Curious,$stateType::Startled,$stateType::ClickReaction,$stateType::Dragged))
+foreach ($state in @($stateType::Idle,$stateType::Walk,$stateType::Curious,$stateType::Startled,
+    $stateType::ClickReaction,$stateType::Dragged))
 {
-    $presenter.Render([Dororong.Core.Behavior.PetSnapshot]::new($state,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,0.1,$false,$null))
+    $presenter.Render([Dororong.Core.Behavior.PetSnapshot]::new(
+        $state,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,0.1,$false,$null))
     Assert-Frame $image 'dororong-canonical.png' $state.ToString()
 }
-$presenter.Render([Dororong.Core.Behavior.PetSnapshot]::new($stateType::Sleep,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,0.1,$false,$null))
+$presenter.Render([Dororong.Core.Behavior.PetSnapshot]::new(
+    $stateType::Sleep,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,0.1,$false,$null))
 Assert-Frame $image 'dororong-closed-eyes.png' 'Sleep'
-$presenter.Render([Dororong.Core.Behavior.PetSnapshot]::new($stateType::Idle,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,0.68,$false,$null))
+$presenter.Render([Dororong.Core.Behavior.PetSnapshot]::new(
+    $stateType::Idle,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,0.68,$false,$null))
 Assert-Frame $image 'dororong-closed-eyes.png' 'Idle blink'
 
-Write-Output 'EXACT ART PASS: exact 225px authority, deterministic native-96 frames, pinned subtractive mask, frozen segment/outer-support fixtures, independent body protection, identical eye-state correction, alpha hygiene, clean-hair references, eye semantics, 96-DPI one-to-one presenter, native alpha hit testing, and state mapping passed.'
+$runtimeOpenPath=Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical.png'
+$runtimeClosedPath=Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-closed-eyes.png'
+$runtimeOpenHash=(Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeOpenPath).Hash
+$runtimeClosedHash=(Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeClosedPath).Hash
+$generatedClosedHash=(Get-FileHash -Algorithm SHA256 -LiteralPath $generatedClosedPath).Hash
+if($runtimeOpenHash-ne$expectedHashes.NativeOpen-or$runtimeClosedHash-ne$generatedClosedHash)
+{
+    throw "Committed runtime assets are stale after all F candidate, invariant, mutation, and presenter checks: expectedOpen=$($expectedHashes.NativeOpen) observedOpen=$runtimeOpenHash expectedClosed=$generatedClosedHash observedClosed=$runtimeClosedHash."
+}
+
+Write-Output 'EXACT ART PASS: representative source/native reconstruction, fill provenance, source/protected/alpha invariants, open/closed body equality, reviewed eye semantics, causal mutations, 96-DPI presentation, alpha hit testing, and state mapping passed; native body optical diagnostics were recorded and did not gate PASS.'

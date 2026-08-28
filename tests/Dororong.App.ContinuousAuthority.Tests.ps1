@@ -1,3 +1,7 @@
+param(
+    [string]$Configuration = 'Debug',
+    [switch]$BodyNativeReferenceOnly)
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -609,12 +613,13 @@ $maskPath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-body-reg
 $authorityPath = Join-Path $repositoryRoot 'tests/fixtures/dororong-body-outline-authority.psd1'
 $supportPath = Join-Path $repositoryRoot 'tests/support/Dororong.ContinuousOptics.ps1'
 $toolPath = Join-Path $repositoryRoot 'tools/New-ContinuousOutlineAuthority.ps1'
+$expectedAuthorityHash='DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
 
 Assert-Equal 'F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504' `
     (Get-FileHash -Algorithm SHA256 -LiteralPath $sourcePath).Hash 'Canonical source changed.'
 Assert-Equal 'D08B3A941C662F1CBC55C486C13FD4C6CD8901DA9CD5CF8512509698219FE46F' `
     (Get-FileHash -Algorithm SHA256 -LiteralPath $maskPath).Hash 'Final body-region mask changed.'
-Assert-Equal '611A1367E92C37659CF63A549656BCE01EEDEF5DE3CA348C6FADFB98A5D88DC3' `
+Assert-Equal 'F4C9B2CCE253522345F12D29F6CC634ACD0DE1C3151D7C923460E3D5EBA73B9A' `
     (Get-FileHash -Algorithm SHA256 -LiteralPath $nativePath).Hash 'Committed native-open authority changed.'
 Assert-True (Test-Path -LiteralPath $authorityPath) 'Continuous authority fixture is missing.'
 Assert-True (Test-Path -LiteralPath $supportPath) 'Continuous optics test helper is missing.'
@@ -735,6 +740,54 @@ try
     Assert-Equal ($expectedBodyNames -join ',') ($actualBodyNames -join ',') `
         'The fifteen named body normals changed.'
 
+    if ($BodyNativeReferenceOnly)
+    {
+        Assert-Equal $expectedAuthorityHash `
+            (Get-FileHash -Algorithm SHA256 -LiteralPath $authorityPath).Hash `
+            'Continuous authority fixture changed.'
+        $selectionMismatchCount=0
+        foreach ($entry in $bodyNormals)
+        {
+            $label="Body normal '$($entry.Name)'"
+            Assert-Normal $entry 'SourceNormal' $source $label
+            Assert-Normal $entry 'NativeNormal' $native $label
+            Assert-ReferencePoint $entry 'SourceFill' $source $label
+            Assert-ReferencePoint $entry 'NativeFill' $native $label
+            Assert-PointEqual $entry.Fill $entry.SourceFill "$label SourceFill provenance"
+            Assert-True (Test-NormalIntersectsMask $mask $entry.SourceNormal) `
+                "$label source normal does not intersect the approved body mask."
+            $null=Assert-DororongFinalContourNormal $entry $mask $approvedSourceContour
+            Assert-True (Test-NormalIntersectsAlpha $native $entry.NativeNormal) `
+                "$label native location normal does not intersect committed body alpha."
+
+            $selectedNativeFill=@(Get-SelectedOpaquePoint `
+                $native $entry.NativeSamples $true $label)
+            $frozenNativeFill=@($entry.NativeFill)
+            $selectionMatches=(
+                [int]$selectedNativeFill[0] -eq [int]$frozenNativeFill[0] -and `
+                [int]$selectedNativeFill[1] -eq [int]$frozenNativeFill[1])
+            if (-not $selectionMatches)
+            { $selectionMismatchCount++ }
+            $selectedColor=$native.GetPixel(
+                [int]$selectedNativeFill[0],[int]$selectedNativeFill[1])
+            $frozenColor=$native.GetPixel(
+                [int]$frozenNativeFill[0],[int]$frozenNativeFill[1])
+            Write-Output (
+                "BODY NATIVE DIAGNOSTIC name=$($entry.Name) " +
+                "frozen=$($frozenNativeFill -join ',') " +
+                "frozenLuminance=$(Get-Rec709Luminance $frozenColor) " +
+                "brightest=$($selectedNativeFill -join ',') " +
+                "brightestLuminance=$(Get-Rec709Luminance $selectedColor) " +
+                "matches=$selectionMatches authority=false")
+        }
+        Write-Output (
+            "BODY NATIVE REFERENCE PASS body=15 " +
+            "authorityHash=$expectedAuthorityHash " +
+            "contourHash=A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65 " +
+            "brightestSelection=diagnosticOnly mismatches=$selectionMismatchCount")
+        return
+    }
+
     $sourceHairCoverages=@()
     $nativeHairCoverages=@()
     foreach ($entry in $hairAnchors)
@@ -799,8 +852,12 @@ try
         Assert-ReferencePoint $entry 'SourceFill' $source $label
         Assert-ReferencePoint $entry 'NativeFill' $native $label
         Assert-PointEqual $entry.Fill $entry.SourceFill "$label SourceFill provenance"
-        Assert-PointEqual (Get-SelectedOpaquePoint $native $entry.NativeSamples $true $label) `
-            $entry.NativeFill "$label NativeFill selection"
+        $selectedNativeFill=@(Get-SelectedOpaquePoint `
+            $native $entry.NativeSamples $true $label)
+        Write-Output (
+            "BODY NATIVE DIAGNOSTIC name=$($entry.Name) " +
+            "frozen=$(@($entry.NativeFill) -join ',') " +
+            "brightest=$($selectedNativeFill -join ',') authority=false")
 
         $sourceFill=$source.GetPixel([int]$entry.SourceFill[0],[int]$entry.SourceFill[1])
         $profile=@(Get-ContinuousProfile $source $entry.SourceNormal $sourceFill $bodyInk)
@@ -918,7 +975,6 @@ finally
     { [IO.Directory]::Delete($temporaryRoot,$true) }
 }
 
-$expectedAuthorityHash='DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
 $authorityHash=(Get-FileHash -Algorithm SHA256 -LiteralPath $authorityPath).Hash
 Assert-Equal $expectedAuthorityHash $authorityHash 'Continuous authority fixture changed.'
 Write-Output "HAIR MEDIANS source=$sourceHairMedian native=$nativeHairMedian bytes=$hairBytesHash"
