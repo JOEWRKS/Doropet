@@ -525,18 +525,58 @@ function Assert-EyeAndMouthContract(
     $sourceChanges=Assert-SourceEyeChangeContract $SourceOpen $SourceClosed
 
     foreach($eye in @(
-        @{Name='left'; UpperCenter='54,124'; LowerEndpoints=@('47,127','61,127'); RejectedLowerCenter='54,127'},
-        @{Name='right'; UpperCenter='96,124'; LowerEndpoints=@('89,127','103,127'); RejectedLowerCenter='96,127'}))
+        @{Name='left'; UpperEndpoints=@('48,124','60,124'); LowerCenter='54,126';
+            ClearedCenters=@('54,124','54,127'); ClearedOuter=@('46,124','62,124');
+            NativeUpperEndpoints=@('20,53','25,53'); NativeCenterX=23},
+        @{Name='right'; UpperEndpoints=@('90,124','102,124'); LowerCenter='96,126';
+            ClearedCenters=@('96,124','96,127'); ClearedOuter=@('88,124','104,124');
+            NativeUpperEndpoints=@('38,53','43,53'); NativeCenterX=41}))
     {
-        foreach($probe in @($eye.UpperCenter) + $eye.LowerEndpoints)
+        foreach($probe in $eye.UpperEndpoints + @($eye.LowerCenter))
         {
             $parts=$probe.Split(',')
             Assert-True ((Get-OpticalInk $SourceClosed.GetPixel([int]$parts[0],[int]$parts[1])) -ge 0.30) `
-                "$($eye.Name) lowered cap is missing at source $probe."
+                "$($eye.Name) shallow cup is missing at source $probe."
         }
-        $parts=$eye.RejectedLowerCenter.Split(',')
-        Assert-True ((Get-OpticalInk $SourceClosed.GetPixel([int]$parts[0],[int]$parts[1])) -le 0.20) `
-            "$($eye.Name) rejected cup center survived at source $($eye.RejectedLowerCenter)."
+        foreach($probe in $eye.ClearedCenters)
+        {
+            $parts=$probe.Split(',')
+            Assert-True ((Get-OpticalInk $SourceClosed.GetPixel([int]$parts[0],[int]$parts[1])) -le 0.20) `
+                "$($eye.Name) rejected center survived at source $probe."
+        }
+        foreach($probe in $eye.ClearedOuter)
+        {
+            $parts=$probe.Split(',')
+            Assert-True ((Get-OpticalInk $SourceClosed.GetPixel([int]$parts[0],[int]$parts[1])) -le 0.30) `
+                "$($eye.Name) rejected wide endpoint survived at source $probe."
+        }
+        foreach($probe in $eye.NativeUpperEndpoints)
+        {
+            $parts=$probe.Split(',')
+            Assert-True ((Get-OpticalInk $NativeClosed.GetPixel([int]$parts[0],[int]$parts[1])) -ge 0.25) `
+                "$($eye.Name) shallow-cup endpoint is missing after the single production resize at native $probe."
+        }
+        $lowerCenterInk=Get-OpticalInk $NativeClosed.GetPixel($eye.NativeCenterX,54)
+        $centerInk=0.0;$centerWeightedY=0.0
+        foreach($y in 52..55)
+        {
+            $ink=Get-OpticalInk $NativeClosed.GetPixel($eye.NativeCenterX,$y)
+            $centerInk+=$ink;$centerWeightedY+=($y*$ink)
+        }
+        $centerY=$centerWeightedY/$centerInk
+        $endpointYs=@($eye.NativeUpperEndpoints|ForEach-Object{
+            $x=[int]$_.Split(',')[0];$inkTotal=0.0;$weightedY=0.0
+            foreach($y in 52..55)
+            {
+                $ink=Get-OpticalInk $NativeClosed.GetPixel($x,$y)
+                $inkTotal+=$ink;$weightedY+=($y*$ink)
+            }
+            $weightedY/$inkTotal
+        })
+        $endpointY=($endpointYs|Measure-Object -Average).Average
+        $dip=$centerY-$endpointY
+        Assert-True ($lowerCenterInk -ge 0.25 -and $dip -ge 0.25 -and $dip -le 0.85) `
+            "$($eye.Name) shallow cup did not retain a gentle downward center after the single production resize (endpointY=$endpointY, centerY=$centerY, dip=$dip, lower=$lowerCenterInk)."
     }
 
     $nativeChanges = 0
@@ -556,13 +596,6 @@ function Assert-EyeAndMouthContract(
         }
     }
     Assert-True ($nativeChanges -ge 80) 'Both native eyes did not visibly close.'
-
-    foreach($probe in @('23,53','41,53'))
-    {
-        $parts=$probe.Split(',')
-        Assert-True ((Get-OpticalInk $NativeClosed.GetPixel([int]$parts[0],[int]$parts[1])) -ge 0.25) `
-            "Lowered cap center is missing after the single production resize at native $probe."
-    }
 
     foreach ($eye in @(
         @{ Name='left'; StartX=18; EndX=29; LidY=53; Lower=@('20,55','22,56','25,55') },
@@ -726,10 +759,10 @@ $expectedHashes = [ordered]@{
     Authority = 'DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
     SourceOpen = 'D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF'
     SourceOpenBaseline = '8F542A4F1B2671789BD7CD4980D890BF96CFCC9DADBC9D4E61963CCE2D384CCB'
-    SourceClosed = 'E50444B154A8E088665217AE1FEDE98A28DC090CD12A17943B245A5E0D9C2E58'
+    SourceClosed = 'D7645AF7A50A5E3C3F7E70F6050163B6FC5C4E46FEE9BEA779A45D4D7BE5F673'
     NativeOpen = '238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511'
     NativeOpenBaseline = '3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59'
-    NativeClosed = '1E6AF81ECB60BE3B732FCFA42A8359E828ADF6BF407B9363E239FFE07090C4FF'
+    NativeClosed = '014470FC4DEDD9C2FE6B5B24E254624774A5AE0F1F46662761E186143C6D68BF'
     Contour = 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65'
 }
 foreach ($name in @('Source','Seed','Mask','Authority'))
