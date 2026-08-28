@@ -10,6 +10,8 @@
 
 **Spec:** docs/specs/2026-08-26-dororong-m1-design.md
 
+**Approved recovery revision:** 2026-08-28
+
 **Plan base:** f09599bf8501fdcb3e2042fb548b48fd7b1df4f1
 
 **Supersedes:** Tasks 2 through 4 of docs/plans/2026-08-27-dororong-continuous-subpixel-outline.md. Its empty sweeps remain failure evidence, not calibration input. Commits cd03851, 2169440, and 645a650 remain historical authority work; this plan reauthors body normals only after the new ownership and contour are frozen.
@@ -25,10 +27,10 @@
 - The only legal continuation endpoints are front hair (118,151) and rear ribbon (161,116).
 - Source alpha never changes. RGB changes only inside the reviewed final mask; all final mask-zero processed-source pixels remain byte-identical before the single final resize.
 - Every non-seed body pixel is reconstructed. Fill seeds require processed alpha 255, cleaned seed 255, distance greater than 8.0 from the final E-union-C contour, all RGB channels at least 225, and channel spread at most 8.
-- The outline color and optical target come from the unchanged clean head/hair authority. Body reconstruction uses exactly one global width. Segment widths, local strokes, coordinate patches, tolerance relaxation, post-resize body edits, and candidate-derived targets are forbidden.
+- The outline color and optical target come from the unchanged clean head/hair authority. Body reconstruction uses one intended full rendered thickness `W = 2.20898670201159`: one-sided exposed `E` uses inward radius `W`, while two-sided internal continuation `C` uses centered radius `W/2 = 1.104493351005795`. This side-count correction is not a segment-specific visual width. Segment-specific visual widths, local strokes, coordinate patches, tolerance relaxation, post-resize body edits, and candidate-derived targets are forbidden.
 - Every final mask-255 pixel evaluates exactly 64 samples at (x-0.5+(i+0.5)/8, y-0.5+(j+0.5)/8), i,j in 0..7, against the minimum Euclidean distance to exposed edges union legal continuations.
 - Body normal authoring may read only the pinned source, frozen seed/final masks, frozen contour, existing named regions, and reference overlays. It may not read candidate pixels, passing intervals, sweep scores, or the failed Task 2 report.
-- Feasibility sweeps 0.25 through 4.00 inclusive in 1/64 increments. Every source body normal must lie within 10 percent of the frozen source hair median. An empty intersection ends this design without asset changes or another tuning pass.
+- The completed 0.25-through-4.00 source feasibility sweep and its definitive empty fifteen-normal 10% intersection remain diagnostic evidence. The source intersection is not an automated release requirement, does not forbid the user-directed recovery, and must not be rerun.
 - Native acceptance keeps every body normal within 0.35 equivalent opaque pixel of the frozen native hair median and body maximum-minus-minimum at most 0.50.
 - Open and closed frames share identical reconstructed body pixels and source alpha. Both pass through one premultiplied high-quality 225-to-96 resize.
 - Existing untracked manual acceptance attempts 2 through 6 are user-owned evidence. No task may modify, stage, delete, or rename them.
@@ -335,7 +337,51 @@ Task 5 is blocked until independent review approves production/test independence
 
 ---
 
-### Task 5: Integrate the approved body reconstruction into exact runtime art
+## User-directed recovery after Task 4
+
+Task 4 remains a completed historical gate with a definitive `EMPTY` result: `CenterOuter` admitted `1.203125..1.609375`, while `FrontOuter` and `LowerRearRim` began at `2.0625`. Its implementation history, bound invocation, intervals, and no-asset-change outcome are preserved. The user directly rejected the unchanged live result and explicitly required the body to follow the thin head/hair line. This recovery supersedes only Task 4's terminal prohibition on a runtime candidate; it does not alter Tasks 1–4 or authorize another feasibility sweep.
+
+### Task 4B: Implement one visible width with continuation side compensation
+
+**Files:**
+- Modify: tools/Dororong.SubpixelOutline.psm1
+- Modify: tools/Dororong.SubpixelOutline.Constants.psd1
+- Modify: tests/Dororong.App.SubpixelOutline.Tests.ps1
+
+**Interfaces:**
+- Consumes: Tasks 1–3 frozen ownership, canonical `E`/`C` geometry, endpoints, fill authority, `8x8` sampling, hair median/color rule, and Task 4 diagnostic evidence.
+- Produces: fixed `Width = 2.20898670201159` as the intended full rendered thickness, `E -> W` one-sided distance coverage, `C -> W/2` centered two-sided distance coverage, and independent synthetic proof of that side-count rule.
+
+- [ ] **Step 1: Write causal side-compensation RED before production edits**
+
+Extend the independent synthetic test with separate exposed and continuation fixtures. Prove that an exposed edge receives inward thickness `W`, while an internal continuation receives the same full visible thickness by covering both sides to radius `W/2`. Capture a causal RED against the current one-radius implementation.
+
+Add independent named mutations that (1) omit `C` from distance coverage, (2) apply `W` on both sides of `C`, and (3) apply `W/2` inward to `E`. Each mutation must fail its own rendered-full-thickness or continuation-coverage assertion rather than a process, input-hash, or unrelated geometry check.
+
+- [ ] **Step 2: Implement fixed optical target and side-count coverage**
+
+Add the literal `Width = 2.20898670201159` to the reviewed constants. Keep the component-wise median outline-color rule; the representative attempt-2 readback is RGB `(26,2,10)`. Update distance coverage so canonical kind `E` uses inward radius `Width` and kind `C` uses centered radius `Width / 2`. Do not change the final mask, canonical segment records or kinds, endpoint pair, fill field, sample factor or locations, alpha/protected-pixel behavior, source identity, or resize boundary. Do not add segment overrides, local strokes, or post-resize corrections.
+
+- [ ] **Step 3: Bind the implementation to frozen candidate evidence**
+
+Require the deterministic source-open and native-open candidate checks to reproduce the approved attempt-2 representative evidence before any runtime write:
+
+- full rendered thickness `2.20898670201159`;
+- median outline RGB `(26,2,10)`;
+- source-225 SHA-256 `8302307105F76A99C531AA8FD61908B58FF1C15537B703F6B6EFC20E895DCBE3`;
+- native-96 SHA-256 `4329C62523C9E9BC0D3223037506E06160DB32B31F5876B7EBC68C95BE4F560B`.
+
+The candidate hashes are representative exact-art evidence, not runtime-fix or live-acceptance evidence. If deterministic integration cannot reproduce them, report the exact mismatch and stop; do not relax a rule or run a second feasibility sweep.
+
+- [ ] **Step 4: Run focused GREEN and commit Task 4B**
+
+Run the geometry, authority, full subpixel, and candidate-binding checks. Require every new mutation to fail causally and the unmutated implementation to pass. Output exact module/test/constants hashes, `Width`, `Width/2`, outline RGB, contour counts, endpoints, source/native candidate hashes, and the preserved Task 4 diagnostic intervals. Commit only the three listed Task 4B files after independent review.
+
+Task 5 is blocked until independent review approves production/test independence, both side-count mutations, exact candidate reproduction, and the unchanged authority boundaries.
+
+---
+
+### Task 5 (revised): Integrate the compensated single-visible-width reconstruction into exact runtime art
 
 **Files:**
 - Modify: tools/Generate-CanonicalArt.ps1
@@ -344,12 +390,12 @@ Task 5 is blocked until independent review approves production/test independence
 - Modify: src/Dororong.App/Assets/dororong-closed-eyes.png
 
 **Interfaces:**
-- Consumes: Tasks 1 through 4 frozen source, seed, final mask, contour, fill, normals, outline RGB, and Width.
+- Consumes: Tasks 1 through 4B frozen source, seed, final mask, contour, fill, normals, median outline RGB, fixed `Width`, side-count coverage, and representative candidate hashes.
 - Produces: six evidence frames, exact committed 96px open/closed frames, and exact-art optical/invariant evidence.
 
 - [ ] **Step 1: Replace the exact-art contract before generator edits**
 
-Keep source identity, 96x96 dimensions/pixel format, alpha-zero RGB hygiene, presenter 96-DPI arrangement, native alpha hit testing, state mapping, eye confinement, mouth preservation, and open/closed alpha equality.
+Keep source identity, 96x96 dimensions/pixel format, alpha-zero RGB hygiene, presenter 96-DPI arrangement, native alpha hit testing, state mapping, eye confinement, mouth preservation, open/closed alpha equality, and exact open/closed source-body equality.
 
 Remove assertions for native coordinate lightening, partial-alpha freezing, protection bands, and the rejected subtractive correction. Invoke the real generator through its required SourcePath, BodyMaskPath, OutputDirectory, and EvidenceDirectory interface. Independently invoke the reviewed body rasterizer inside the test and require the generated source-open candidate to match that direct result at every pixel. Independently resize that source candidate once through the reviewed resize boundary and require the native-open candidate to match at every pixel; this behavioral equality forbids any extra native correction without scanning source text. Require the real generator to emit:
 
@@ -369,21 +415,23 @@ Expected: build exit 0; exact-art exit 1 because the current generator does not 
 
 - [ ] **Step 2: Replace the generator body pipeline**
 
-Require SourcePath, BodyMaskPath, OutputDirectory, and optional EvidenceDirectory. Import the reviewed source-raster and subpixel modules. After boundary background removal, reconstruct the open source frame once using the frozen final mask/fill/contour/outline RGB/Width. Derive closed eyes from that reconstructed source frame using the existing reviewed eye stencils. Resize open and closed exactly once through the shared premultiplied high-quality 225-to-96 function.
+Require SourcePath, BodyMaskPath, OutputDirectory, and optional EvidenceDirectory. Import the reviewed source-raster and subpixel modules. After boundary background removal, reconstruct the open source frame once using the frozen final mask/fill/contour, median outline RGB, and compensated `E -> W` / `C -> W/2` coverage. Derive closed eyes from that reconstructed source frame using the existing reviewed eye stencils, then prove the body-owned source pixels are exactly equal between open and closed candidates. Resize open and closed exactly once through the shared premultiplied high-quality 225-to-96 function.
 
 Save six evidence images only when requested and save only native candidates to OutputDirectory. Print source, seed, mask, component, contour, authority, constants, open, closed hashes, factor, Width, outline RGB, segment count, fill-seed count, and legal endpoints.
 
 - [ ] **Step 3: Prove exact-art contracts and mutations**
 
-Assert source alpha equality, final mask-zero source RGB equality, no dark/newly-owned seed preservation, generated/committed hash equality, open/closed body equality, source 10 percent hair match, native 0.35 hair match, and native body spread at most 0.50.
+Assert source alpha equality, final mask-zero source RGB equality, no dark/newly-owned seed preservation, exact source/native candidate reproduction, generated/committed hash equality, open/closed source-body equality, open/closed native-body equality, native `0.35` hair match, and native body spread at most `0.50`. The original fifteen-normal 10% source feasibility assertion is removed from release checks; retain its measurements and empty intervals as diagnostics only.
+
+The native hair-match and spread assertions, full visual checks, exact-art invariants, and live user acceptance remain required unless a causal RED proves that one contradicts the approved exact attempt-2 candidate. Any such contradiction must be reported with the exact failing observable and evidence; it must not be silently relaxed, deleted, or retargeted from candidate output.
 
 Unique temporary mutations must reach named semantic failures for Width plus 1/64, factor 4, fill floor 224, final mask boundary bit, protected candidate RGB, candidate alpha, and closed-frame body RGB. A process or pinned-input failure is not accepted.
 
 - [ ] **Step 4: Generate assets and inspect every visual surface**
 
-Run the generator into a temporary candidate directory first. Inspect source baseline/candidate, native baseline/candidate, closed candidate, nearest-neighbor 4x versions, and white/dark composites. Cover full frame, front outer/foot/inner, both valleys/undersides, center outer/foot/inner, rear outer/foot/inner, upper/lower rear rim, and both continuation junctions.
+Run the generator into a temporary candidate directory first. Require the exact source/native open candidate hashes from Task 4B and exact open/closed source-body equality before visual review. Inspect source baseline/candidate, native baseline/candidate, source/native closed candidate, nearest-neighbor 4x versions, and white/dark composites. Cover full frame, front outer/foot/inner, both valleys/undersides, center outer/foot/inner, rear outer/foot/inner, upper/lower rear rim, and both continuation junctions.
 
-Fail on any new branch, protruding antialias support, displaced silhouette, missing span, broken valley, flattened foot, protected-part change, opaque light fringe, or body segment visibly heavier/lighter than the unchanged hair references. Confirm the body is identical between open and closed frames and the eyes/mouth remain correct. Only after all surfaces pass, regenerate directly into src/Dororong.App/Assets.
+Fail on any new branch, protruding antialias support, displaced silhouette, missing span, broken valley, flattened foot, protected-part change, opaque light fringe, or body segment visibly heavier/lighter than the unchanged hair references. Confirm the body is identical between open and closed frames and the eyes/mouth remain correct. Only after the exact source/native checks and every visual surface pass may the generator update `src/Dororong.App/Assets`; until then, the attempt-2 candidate remains representative evidence only.
 
 - [ ] **Step 5: Run focused GREEN and commit**
 
