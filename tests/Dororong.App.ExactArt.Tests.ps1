@@ -525,13 +525,43 @@ function Assert-EyeAndMouthContract(
     $sourceChanges=Assert-SourceEyeChangeContract $SourceOpen $SourceClosed
 
     foreach($eye in @(
-        @{Name='left'; UpperEndpoints=@('48,124','60,124'); LowerCenter='54,126';
-            ClearedCenters=@('54,124','54,127'); ClearedOuter=@('46,124','62,124');
-            NativeUpperEndpoints=@('20,53','25,53'); NativeCenterX=23},
-        @{Name='right'; UpperEndpoints=@('90,124','102,124'); LowerCenter='96,126';
-            ClearedCenters=@('96,124','96,127'); ClearedOuter=@('88,124','104,124');
-            NativeUpperEndpoints=@('38,53','43,53'); NativeCenterX=41}))
+        @{Name='left'; SourceStartX=43;SourceEndX=64;NativeOpenStartX=18;NativeOpenEndX=29;
+            UpperEndpoints=@('46,124','58,124'); LowerCenter='52,126';
+            ClearedCenters=@('52,124','52,127'); ClearedOuter=@('44,124','60,124');
+            NativeUpperEndpoints=@('19,53','24,53'); NativeCenterX=22},
+        @{Name='right'; SourceStartX=86;SourceEndX=106;NativeOpenStartX=35;NativeOpenEndX=47;
+            UpperEndpoints=@('88,124','100,124'); LowerCenter='94,126';
+            ClearedCenters=@('94,124','94,127'); ClearedOuter=@('86,124','102,124');
+            NativeUpperEndpoints=@('37,53','42,53'); NativeCenterX=40}))
     {
+        $openIrisXs=[Collections.Generic.List[int]]::new()
+        foreach($y in 49..61)
+        {
+            foreach($x in $eye.NativeOpenStartX..$eye.NativeOpenEndX)
+            {
+                $pixel=$NativeOpen.GetPixel($x,$y)
+                if($pixel.A-gt0-and($pixel.B-$pixel.R)-ge10){$openIrisXs.Add($x)}
+            }
+        }
+        $openCenterX=[int][Math]::Round(
+            (($openIrisXs|Measure-Object -Minimum).Minimum+
+             ($openIrisXs|Measure-Object -Maximum).Maximum)/2.0,
+            0,[MidpointRounding]::ToEven)
+        $lidInk=0.0;$lidWeightedX=0.0
+        foreach($y in 124..126)
+        {
+            foreach($x in $eye.SourceStartX..$eye.SourceEndX)
+            {
+                $ink=Get-OpticalInk $SourceClosed.GetPixel($x,$y)
+                if($ink-ge0.30){$lidInk+=$ink;$lidWeightedX+=($x*$ink)}
+            }
+        }
+        $sourceLidCenterX=$lidWeightedX/$lidInk
+        $nativeLidCenterX=[int][Math]::Round(
+            ((($sourceLidCenterX+0.5)*96.0/225.0)-0.5),
+            0,[MidpointRounding]::AwayFromZero)
+        Assert-Equal $openCenterX $nativeLidCenterX `
+            "$($eye.Name) lid horizontal center is not aligned with the canonical open eye (open=$openCenterX, lid=$nativeLidCenterX, sourceLid=$sourceLidCenterX)."
         foreach($probe in $eye.UpperEndpoints + @($eye.LowerCenter))
         {
             $parts=$probe.Split(',')
@@ -759,10 +789,10 @@ $expectedHashes = [ordered]@{
     Authority = 'DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
     SourceOpen = 'D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF'
     SourceOpenBaseline = '8F542A4F1B2671789BD7CD4980D890BF96CFCC9DADBC9D4E61963CCE2D384CCB'
-    SourceClosed = 'D7645AF7A50A5E3C3F7E70F6050163B6FC5C4E46FEE9BEA779A45D4D7BE5F673'
+    SourceClosed = '3AEADE8B54A3423B9CB54D9AB323A9C79177678C9CB134CF15B5CBC089340AF0'
     NativeOpen = '238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511'
     NativeOpenBaseline = '3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59'
-    NativeClosed = '014470FC4DEDD9C2FE6B5B24E254624774A5AE0F1F46662761E186143C6D68BF'
+    NativeClosed = 'D0C0BE25471A92D65948132CE6154BA8AF56FF1F59FCDB8D0C4EDF64B206747A'
     Contour = 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65'
 }
 foreach ($name in @('Source','Seed','Mask','Authority'))
