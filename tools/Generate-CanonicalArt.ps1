@@ -59,6 +59,7 @@ $closedEyeGeometry=@{
     Left=@{P0=@(43.00,118.80);P1=@(54.440,124.40);P2=@(63.50,119.40)}
     Right=@{P0=@(85.75,125.60);P1=@(92.298,131.55);P2=@(103.75,126.50)}
 }
+$halfClosedVerticalOffset=-3.0
 
 function ConvertFrom-CoordinateRun([string]$Run)
 {
@@ -145,6 +146,35 @@ function Add-SubpixelQuadraticCurve(
     }
 }
 
+function Move-EyeGeometryVertically([hashtable]$Eye,[double]$Offset)
+{
+    return @{
+        P0=@([double]$Eye.P0[0],[double]$Eye.P0[1]+$Offset)
+        P1=@([double]$Eye.P1[0],[double]$Eye.P1[1]+$Offset)
+        P2=@([double]$Eye.P2[0],[double]$Eye.P2[1]+$Offset)
+    }
+}
+
+function Get-QuadraticCurveYAtX([hashtable]$Eye,[double]$X,[int]$Segments)
+{
+    $nearestDistance=[double]::PositiveInfinity
+    $nearestY=[double]$Eye.P0[1]
+    foreach($index in 0..$Segments)
+    {
+        $t=[double]$index/$Segments;$u=1.0-$t
+        $pointX=($u*$u*[double]$Eye.P0[0])+
+            (2.0*$u*$t*[double]$Eye.P1[0])+($t*$t*[double]$Eye.P2[0])
+        $distance=[Math]::Abs($pointX-$X)
+        if($distance-lt$nearestDistance)
+        {
+            $nearestDistance=$distance
+            $nearestY=($u*$u*[double]$Eye.P0[1])+
+                (2.0*$u*$t*[double]$Eye.P1[1])+($t*$t*[double]$Eye.P2[1])
+        }
+    }
+    return $nearestY
+}
+
 function Get-BilinearFaceColor(
     [Drawing.Bitmap]$Bitmap,[int]$X,[int]$Y,[hashtable]$Eye)
 {
@@ -204,6 +234,53 @@ function New-ClosedEyeFrame([Drawing.Bitmap]$Open,[Drawing.Bitmap]$FaceSource)
     catch{$closed.Dispose();throw}
 }
 
+function New-HalfClosedEyeFrame([Drawing.Bitmap]$Open,[Drawing.Bitmap]$FaceSource)
+{
+    $halfClosed=$Open.Clone(
+        [Drawing.Rectangle]::new(0,0,$Open.Width,$Open.Height),
+        [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    try
+    {
+        $eyes=@(
+            @{Runs=$leftEyeStencilRuns;MinimumX=43;MaximumX=64;MinimumY=114;MaximumY=135
+                TopLeftX=42;TopLeftY=137;TopRightX=66;TopRightY=136
+                BottomLeftX=48;BottomLeftY=143;BottomRightX=64;BottomRightY=143
+                Geometry=(Move-EyeGeometryVertically $closedEyeGeometry.Left $halfClosedVerticalOffset)},
+            @{Runs=$rightEyeStencilRuns;MinimumX=86;MaximumX=106;MinimumY=114;MaximumY=143
+                TopLeftX=65;TopLeftY=134;TopRightX=106;TopRightY=142
+                BottomLeftX=86;BottomLeftY=144;BottomRightX=106;BottomRightY=144
+                Geometry=(Move-EyeGeometryVertically $closedEyeGeometry.Right $halfClosedVerticalOffset)})
+        foreach($eye in $eyes)
+        {
+            foreach($encodedRun in $eye.Runs)
+            {
+                $run=ConvertFrom-CoordinateRun $encodedRun
+                foreach($x in $run.StartX..$run.EndX)
+                {
+                    $curveY=Get-QuadraticCurveYAtX $eye.Geometry ([double]$x+0.5) `
+                        ([int]$closedEyeGeometry.CurveSegments)
+                    if(([double]$run.Y+0.5)-gt$curveY){continue}
+                    $face=Get-BilinearFaceColor $FaceSource $x $run.Y $eye
+                    $alpha=$halfClosed.GetPixel($x,$run.Y).A
+                    $halfClosed.SetPixel($x,$run.Y,[Drawing.Color]::FromArgb(
+                        $alpha,$face.R,$face.G,$face.B))
+                }
+            }
+        }
+        $lidColor=$Open.GetPixel(43,118)
+        $leftMask=New-CoordinateMask $leftEyeStencilRuns $halfClosed.Width $halfClosed.Height
+        $rightMask=New-CoordinateMask $rightEyeStencilRuns $halfClosed.Width $halfClosed.Height
+        Add-SubpixelQuadraticCurve $halfClosed $leftMask $eyes[0].Geometry $lidColor `
+            ([double]$closedEyeGeometry.StrokeWidth) ([int]$closedEyeGeometry.SubpixelFactor) `
+            ([int]$closedEyeGeometry.CurveSegments)
+        Add-SubpixelQuadraticCurve $halfClosed $rightMask $eyes[1].Geometry $lidColor `
+            ([double]$closedEyeGeometry.StrokeWidth) ([int]$closedEyeGeometry.SubpixelFactor) `
+            ([int]$closedEyeGeometry.CurveSegments)
+        return $halfClosed
+    }
+    catch{$halfClosed.Dispose();throw}
+}
+
 function Get-Median([int[]]$Values)
 {
     $sorted=@($Values|Sort-Object);$middle=[int]($sorted.Count/2)
@@ -241,8 +318,9 @@ function Save-Png([Drawing.Bitmap]$Bitmap,[string]$Path)
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory|Out-Null
 if($EvidenceDirectory){New-Item -ItemType Directory -Force -Path $EvidenceDirectory|Out-Null}
-$raw=$null;$source=$null;$seed=$null;$mask=$null;$open=$null;$closed=$null
-$openProxy=$null;$closedProxy=$null;$nativeOpen=$null;$nativeClosed=$null;$nativeBaseline=$null
+$raw=$null;$source=$null;$seed=$null;$mask=$null;$open=$null;$closed=$null;$halfClosed=$null
+$openProxy=$null;$closedProxy=$null;$halfClosedProxy=$null
+$nativeOpen=$null;$nativeClosed=$null;$nativeHalfClosed=$null;$nativeBaseline=$null
 try
 {
     $raw=[Drawing.Bitmap]::new($paths.Source)
@@ -259,6 +337,7 @@ try
     $outline=Get-OutlineColor $source @($constants.OutlineSamples)
     $open=Invoke-DororongSubpixelOutline $source $mask $fill $distanceMap $outline ([double]$constants.Width)
     $closed=New-ClosedEyeFrame $open $source
+    $halfClosed=New-HalfClosedEyeFrame $open $source
 
     $proxyComponents=@(Get-DororongResizeProxyComponents $mask $source `
         ([int]$constants.ProxyMaximumSize) ([int]$constants.ProxyMaximumChroma))
@@ -270,10 +349,13 @@ try
     {throw "Resize-proxy identity changed: components=$($proxyComponents.Count), pixels=$proxyPixelCount, hash=$($membership.Hash)."}
     $openProxy=New-DororongResizeProxy $open $fill $proxyComponents
     $closedProxy=New-DororongResizeProxy $closed $fill $proxyComponents
+    $halfClosedProxy=New-DororongResizeProxy $halfClosed $fill $proxyComponents
     $nativeOpen=Resize-DororongPremultiplied96 $openProxy
     $nativeClosed=Resize-DororongPremultiplied96 $closedProxy
+    $nativeHalfClosed=Resize-DororongPremultiplied96 $halfClosedProxy
     Save-Png $nativeOpen (Join-Path $OutputDirectory 'dororong-canonical.png')
     Save-Png $nativeClosed (Join-Path $OutputDirectory 'dororong-closed-eyes.png')
+    Save-Png $nativeHalfClosed (Join-Path $OutputDirectory 'dororong-half-closed-eyes.png')
 
     if($EvidenceDirectory)
     {
@@ -281,9 +363,11 @@ try
         Save-Png $source (Join-Path $EvidenceDirectory 'source-open-baseline.png')
         Save-Png $open (Join-Path $EvidenceDirectory 'source-open-candidate.png')
         Save-Png $closed (Join-Path $EvidenceDirectory 'source-closed-candidate.png')
+        Save-Png $halfClosed (Join-Path $EvidenceDirectory 'source-half-closed-candidate.png')
         Save-Png $nativeBaseline (Join-Path $EvidenceDirectory 'native-open-baseline.png')
         Save-Png $nativeOpen (Join-Path $EvidenceDirectory 'native-open-candidate.png')
         Save-Png $nativeClosed (Join-Path $EvidenceDirectory 'native-closed-candidate.png')
+        Save-Png $nativeHalfClosed (Join-Path $EvidenceDirectory 'native-half-closed-candidate.png')
     }
 
     $widthText=([double]$constants.Width).ToString('R',[Globalization.CultureInfo]::InvariantCulture)
@@ -291,12 +375,13 @@ try
     $endpointText=@($constants.LegalEndpoints|ForEach-Object{"$($_.X),$($_.Y)"})-join'|'
     Write-Output "GENERATOR INPUT source=$($preHashes.Source) seed=$($preHashes.Seed) mask=$($preHashes.Mask) ownership=$ownershipIdentity authority=$authorityIdentity constants=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.Constants).Hash) sourceRasterModule=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.SourceRasterModule).Hash) subpixelModule=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.SubpixelModule).Hash) ownershipConstants=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.OwnershipConstants).Hash) ownershipModule=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.OwnershipModule).Hash) subpixelTest=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.SubpixelTest).Hash) exactArtTest=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.ExactArtTest).Hash) generator=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.Generator).Hash)"
     Write-Output "GENERATOR GEOMETRY factor=$($constants.SubpixelFactor) width=$widthText halfWidth=$halfText eMultiplier=$($constants.ExposedCoverageMultiplier) cMultiplier=$($constants.ContinuationCoverageMultiplier) outlineRgb=$($outline.R),$($outline.G),$($outline.B) segments=$(@($contour.Segments).Count) exposed=$($contour.ExposedSegmentCount) continuations=$($contour.ContinuationSegmentCount) contourHash=$(Get-DororongCanonicalContourHash $contour) endpoints=$endpointText eligibleSeeds=$($fill.EligibleSeedCount)"
-    Write-Output "GENERATOR PROXY proxyComponents=$($proxyComponents.Count) proxyPixels=$proxyPixelCount proxyHash=$($membership.Hash) proxyOpen=$(Get-BitmapPngHash $openProxy) proxyClosed=$(Get-BitmapPngHash $closedProxy)"
-    Write-Output "GENERATOR OUTPUT sourceOpen=$(Get-BitmapPngHash $open) sourceClosed=$(Get-BitmapPngHash $closed) nativeOpen=$(Get-BitmapPngHash $nativeOpen) nativeClosed=$(Get-BitmapPngHash $nativeClosed) resizeOpen=1 resizeClosed=1"
+    Write-Output "GENERATOR PROXY proxyComponents=$($proxyComponents.Count) proxyPixels=$proxyPixelCount proxyHash=$($membership.Hash) proxyOpen=$(Get-BitmapPngHash $openProxy) proxyClosed=$(Get-BitmapPngHash $closedProxy) proxyHalfClosed=$(Get-BitmapPngHash $halfClosedProxy)"
+    Write-Output "GENERATOR OUTPUT sourceOpen=$(Get-BitmapPngHash $open) sourceClosed=$(Get-BitmapPngHash $closed) sourceHalfClosed=$(Get-BitmapPngHash $halfClosed) nativeOpen=$(Get-BitmapPngHash $nativeOpen) nativeClosed=$(Get-BitmapPngHash $nativeClosed) nativeHalfClosed=$(Get-BitmapPngHash $nativeHalfClosed) resizeOpen=1 resizeClosed=1 resizeHalfClosed=1"
 }
 finally
 {
-    foreach($bitmap in @($nativeBaseline,$nativeClosed,$nativeOpen,$closedProxy,$openProxy,$closed,$open,$mask,$seed,$source,$raw))
+    foreach($bitmap in @($nativeBaseline,$nativeHalfClosed,$nativeClosed,$nativeOpen,
+        $halfClosedProxy,$closedProxy,$openProxy,$halfClosed,$closed,$open,$mask,$seed,$source,$raw))
     {if($null-ne$bitmap){$bitmap.Dispose()}}
     foreach($name in $expectedInputHashes.Keys)
     {

@@ -274,9 +274,11 @@ function Assert-ExactGeneratorEvidenceSet([string]$Directory,[Collections.IDicti
 {
     $contracts=@(
         [pscustomobject]@{Name='native-closed-candidate.png';Width=96;Height=96;Hash=$Hashes.NativeClosed},
+        [pscustomobject]@{Name='native-half-closed-candidate.png';Width=96;Height=96;Hash=$Hashes.NativeHalfClosed},
         [pscustomobject]@{Name='native-open-baseline.png';Width=96;Height=96;Hash=$Hashes.NativeOpenBaseline},
         [pscustomobject]@{Name='native-open-candidate.png';Width=96;Height=96;Hash=$Hashes.NativeOpen},
         [pscustomobject]@{Name='source-closed-candidate.png';Width=225;Height=225;Hash=$Hashes.SourceClosed},
+        [pscustomobject]@{Name='source-half-closed-candidate.png';Width=225;Height=225;Hash=$Hashes.SourceHalfClosed},
         [pscustomobject]@{Name='source-open-baseline.png';Width=225;Height=225;Hash=$Hashes.SourceOpenBaseline},
         [pscustomobject]@{Name='source-open-candidate.png';Width=225;Height=225;Hash=$Hashes.SourceOpen})
     $expected=@($contracts|ForEach-Object Name|Sort-Object)
@@ -284,7 +286,7 @@ function Assert-ExactGeneratorEvidenceSet([string]$Directory,[Collections.IDicti
         "Generator evidence directory is missing: $Directory"
     $observed=@(Get-ChildItem -LiteralPath $Directory -File|Sort-Object Name|ForEach-Object Name)
     Assert-Equal ($expected-join'|') ($observed-join'|') `
-        'Generator evidence surface is not exactly the six contract PNGs.'
+        'Generator evidence surface is not exactly the eight contract PNGs.'
     foreach($contract in $contracts)
     {
         $path=Join-Path $Directory $contract.Name
@@ -903,9 +905,11 @@ $expectedHashes = [ordered]@{
     SourceOpen = 'D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF'
     SourceOpenBaseline = '8F542A4F1B2671789BD7CD4980D890BF96CFCC9DADBC9D4E61963CCE2D384CCB'
     SourceClosed = '7FE167DBD0419A4A91457D60388824C6DA5913E93DCF9DC25957716959995B89'
+    SourceHalfClosed = '4C97041A3D9F0AB75EDA8D681E4CDCFA716FE1DEF7636876D320DEFFF56AD35B'
     NativeOpen = '238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511'
     NativeOpenBaseline = '3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59'
     NativeClosed = '9DEEE528E19D412FC1BA4CC2FD83E507DCFBA3ED13268836BB72B0717C9D2238'
+    NativeHalfClosed = '3F69D0D5C00DA5767D30AA1B58B3FE782296109AF0934DA9469654D214C14E52'
     Contour = 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65'
 }
 foreach ($name in @('Source','Seed','Mask','Authority'))
@@ -918,7 +922,7 @@ Add-Type -AssemblyName System.Drawing
 if(-not[string]::IsNullOrWhiteSpace($EvidenceOnlyDirectory))
 {
     Assert-ExactGeneratorEvidenceSet ([IO.Path]::GetFullPath($EvidenceOnlyDirectory)) $expectedHashes
-    Write-Output 'EVIDENCE-ONLY PASS files=6 decoded=6 sourceDimensions=225x225 nativeDimensions=96x96 hashes=reviewed-exact contract=exact'
+    Write-Output 'EVIDENCE-ONLY PASS files=8 decoded=8 sourceDimensions=225x225 nativeDimensions=96x96 hashes=reviewed-exact contract=exact'
     return
 }
 if(-not[string]::IsNullOrWhiteSpace($EyeOnlyOpenPath)-or
@@ -1112,19 +1116,24 @@ Assert-True $generatorText.Contains('resizeOpen=1',[StringComparison]::Ordinal) 
     'Generator did not report exactly one open-frame resize.'
 Assert-True $generatorText.Contains('resizeClosed=1',[StringComparison]::Ordinal) `
     'Generator did not report exactly one closed-frame resize.'
+Assert-True $generatorText.Contains('resizeHalfClosed=1',[StringComparison]::Ordinal) `
+    'Generator did not report exactly one half-closed-frame resize.'
 
 $generatedOpenPath = Join-Path $outputDirectory 'dororong-canonical.png'
 $generatedClosedPath = Join-Path $outputDirectory 'dororong-closed-eyes.png'
+$generatedHalfClosedPath = Join-Path $outputDirectory 'dororong-half-closed-eyes.png'
 $evidencePaths = [ordered]@{
     SourceOpenBaseline = Join-Path $evidenceDirectory 'source-open-baseline.png'
     SourceOpenCandidate = Join-Path $evidenceDirectory 'source-open-candidate.png'
     SourceClosedCandidate = Join-Path $evidenceDirectory 'source-closed-candidate.png'
+    SourceHalfClosedCandidate = Join-Path $evidenceDirectory 'source-half-closed-candidate.png'
     NativeOpenBaseline = Join-Path $evidenceDirectory 'native-open-baseline.png'
     NativeOpenCandidate = Join-Path $evidenceDirectory 'native-open-candidate.png'
     NativeClosedCandidate = Join-Path $evidenceDirectory 'native-closed-candidate.png'
+    NativeHalfClosedCandidate = Join-Path $evidenceDirectory 'native-half-closed-candidate.png'
 }
 Assert-ExactGeneratorEvidenceSet $evidenceDirectory $expectedHashes
-foreach ($path in @($generatedOpenPath,$generatedClosedPath) + @($evidencePaths.Values))
+foreach ($path in @($generatedOpenPath,$generatedClosedPath,$generatedHalfClosedPath) + @($evidencePaths.Values))
 { Assert-True (Test-Path -LiteralPath $path -PathType Leaf) "Generator output is missing: $path" }
 
 Assert-Equal $expectedHashes.SourceOpen `
@@ -1139,10 +1148,11 @@ Assert-Equal $expectedHashes.NativeOpen `
 
 $raw=$null; $source=$null; $seed=$null; $mask=$null; $direct=$null
 $directProxy=$null; $directNative=$null; $baselineNative=$null; $sourceBaseline=$null
-$sourceOpen=$null; $sourceClosed=$null; $nativeBaseline=$null
-$sourceOpenProxy=$null; $sourceClosedProxy=$null; $sourceEyeBlank=$null
+$sourceOpen=$null; $sourceClosed=$null; $sourceHalfClosed=$null; $nativeBaseline=$null
+$sourceOpenProxy=$null; $sourceClosedProxy=$null; $sourceHalfClosedProxy=$null; $sourceEyeBlank=$null
 $sourceEyeBlankProxy=$null; $nativeEyeBlank=$null
-$nativeOpen=$null; $nativeClosed=$null; $generatedOpen=$null; $generatedClosed=$null
+$nativeOpen=$null; $nativeClosed=$null; $nativeHalfClosed=$null
+$generatedOpen=$null; $generatedClosed=$null; $generatedHalfClosed=$null
 try
 {
     $raw = [Drawing.Bitmap]::new($paths.Source)
@@ -1166,11 +1176,14 @@ try
     $sourceBaseline = [Drawing.Bitmap]::new($evidencePaths.SourceOpenBaseline)
     $sourceOpen = [Drawing.Bitmap]::new($evidencePaths.SourceOpenCandidate)
     $sourceClosed = [Drawing.Bitmap]::new($evidencePaths.SourceClosedCandidate)
+    $sourceHalfClosed = [Drawing.Bitmap]::new($evidencePaths.SourceHalfClosedCandidate)
     $nativeBaseline = [Drawing.Bitmap]::new($evidencePaths.NativeOpenBaseline)
     $nativeOpen = [Drawing.Bitmap]::new($evidencePaths.NativeOpenCandidate)
     $nativeClosed = [Drawing.Bitmap]::new($evidencePaths.NativeClosedCandidate)
+    $nativeHalfClosed = [Drawing.Bitmap]::new($evidencePaths.NativeHalfClosedCandidate)
     $generatedOpen = [Drawing.Bitmap]::new($generatedOpenPath)
     $generatedClosed = [Drawing.Bitmap]::new($generatedClosedPath)
+    $generatedHalfClosed = [Drawing.Bitmap]::new($generatedHalfClosedPath)
 
     Assert-BitmapEqual $source $sourceBaseline 'Source-open baseline evidence differs from direct background removal.'
     Assert-BitmapEqual $direct.Candidate $sourceOpen 'Generated source-open differs from one direct production-module raster.'
@@ -1178,13 +1191,18 @@ try
     Assert-BitmapEqual $directNative $nativeOpen 'Generated native-open differs from one direct shared resize.'
     Assert-BitmapEqual $nativeOpen $generatedOpen 'Native-open output differs from its evidence file.'
     Assert-BitmapEqual $nativeClosed $generatedClosed 'Native-closed output differs from its evidence file.'
+    Assert-BitmapEqual $nativeHalfClosed $generatedHalfClosed `
+        'Native-half-closed output differs from its evidence file.'
 
     Assert-SourceCandidateContract $source $mask $sourceOpen 'Source-open candidate'
     Assert-SourceCandidateContract $source $mask $sourceClosed 'Source-closed candidate' -AllowEyeChanges
+    Assert-SourceCandidateContract $source $mask $sourceHalfClosed 'Source-half-closed candidate' -AllowEyeChanges
     Assert-FillSeedContract $source $seed $direct.FillField 'Production fill field'
     Assert-SourceBodyEquality $sourceOpen $sourceClosed $mask 'Source candidate'
+    Assert-SourceBodyEquality $sourceOpen $sourceHalfClosed $mask 'Source half-closed candidate'
     $sourceOpenProxy=New-IndependentResizeProxy $sourceOpen $direct.FillField $proxyComponents
     $sourceClosedProxy=New-IndependentResizeProxy $sourceClosed $direct.FillField $proxyComponents
+    $sourceHalfClosedProxy=New-IndependentResizeProxy $sourceHalfClosed $direct.FillField $proxyComponents
     $sourceEyeBlank=New-IndependentEyeBlank $sourceOpen $source
     Assert-Equal '4DCFA02B90809A64AE7908CF6228388B2DEE88D97EBD4CE54F236721D97DAD45' `
         (Get-BitmapPixelHash $sourceEyeBlank) 'Independent source eye blank pixels changed.'
@@ -1193,9 +1211,12 @@ try
     Assert-Equal 'F7E8F8B6C789A9F4AF1A7393DB369C5378B0FD53E4260A13837FF6F1D4493206' `
         (Get-BitmapPixelHash $nativeEyeBlank) 'Independent native eye blank pixels changed.'
     Assert-ProxyInputEqualityOutsideEyes $sourceOpenProxy $sourceClosedProxy 'Canonical resize proxy'
+    Assert-ProxyInputEqualityOutsideEyes $sourceOpenProxy $sourceHalfClosedProxy `
+        'Canonical half-closed resize proxy'
     Assert-BitmapEqual $directProxy $sourceOpenProxy 'Direct and generated source-open resize proxies differ.'
     Assert-AlphaZeroRgb $nativeOpen 'Native-open candidate'
     Assert-AlphaZeroRgb $nativeClosed 'Native-closed candidate'
+    Assert-AlphaZeroRgb $nativeHalfClosed 'Native-half-closed candidate'
     Assert-EyeAndMouthContract $sourceOpen $sourceClosed $nativeOpen $nativeEyeBlank $nativeClosed
     $metrics = Measure-NativeBodyMetrics $nativeOpen $authority $direct.OutlineColor
 
@@ -1351,9 +1372,11 @@ try
 }
 finally
 {
-    foreach ($bitmap in @($generatedClosed,$generatedOpen,$nativeClosed,$nativeOpen,$nativeEyeBlank,
-        $sourceEyeBlankProxy,$sourceEyeBlank,$nativeBaseline,$sourceClosedProxy,$sourceOpenProxy,
-        $sourceClosed,$sourceOpen,$sourceBaseline,$baselineNative,
+    foreach ($bitmap in @($generatedHalfClosed,$generatedClosed,$generatedOpen,
+        $nativeHalfClosed,$nativeClosed,$nativeOpen,$nativeEyeBlank,
+        $sourceEyeBlankProxy,$sourceEyeBlank,$nativeBaseline,
+        $sourceHalfClosedProxy,$sourceClosedProxy,$sourceOpenProxy,
+        $sourceHalfClosed,$sourceClosed,$sourceOpen,$sourceBaseline,$baselineNative,
         $directNative,$directProxy))
     { if ($null -ne $bitmap) { $bitmap.Dispose() } }
     if ($null -ne $direct -and $null -ne $direct.Candidate) { $direct.Candidate.Dispose() }
@@ -1415,15 +1438,22 @@ Assert-Frame $image 'dororong-closed-eyes.png' 'Sleep'
 $presenter.Render([Dororong.Core.Behavior.PetSnapshot]::new(
     $stateType::Idle,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,0.68,$false,$null))
 Assert-Frame $image 'dororong-closed-eyes.png' 'Idle blink'
+$presenter.Render([Dororong.Core.Behavior.PetSnapshot]::new(
+    $stateType::Idle,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,0.66,$false,$null))
+Assert-Frame $image 'dororong-half-closed-eyes.png' 'Idle blink transition'
 
 $runtimeOpenPath=Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical.png'
 $runtimeClosedPath=Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-closed-eyes.png'
+$runtimeHalfClosedPath=Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-half-closed-eyes.png'
 $runtimeOpenHash=(Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeOpenPath).Hash
 $runtimeClosedHash=(Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeClosedPath).Hash
+$runtimeHalfClosedHash=(Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeHalfClosedPath).Hash
 $generatedClosedHash=(Get-FileHash -Algorithm SHA256 -LiteralPath $generatedClosedPath).Hash
-if($runtimeOpenHash-ne$expectedHashes.NativeOpen-or$runtimeClosedHash-ne$generatedClosedHash)
+$generatedHalfClosedHash=(Get-FileHash -Algorithm SHA256 -LiteralPath $generatedHalfClosedPath).Hash
+if($runtimeOpenHash-ne$expectedHashes.NativeOpen-or$runtimeClosedHash-ne$generatedClosedHash-or
+    $runtimeHalfClosedHash-ne$generatedHalfClosedHash)
 {
-    throw "Committed runtime assets are stale after all E-only candidate, invariant, mutation, and presenter checks: expectedOpen=$($expectedHashes.NativeOpen) observedOpen=$runtimeOpenHash expectedClosed=$generatedClosedHash observedClosed=$runtimeClosedHash."
+    throw "Committed runtime assets are stale after all E-only candidate, invariant, mutation, and presenter checks: expectedOpen=$($expectedHashes.NativeOpen) observedOpen=$runtimeOpenHash expectedClosed=$generatedClosedHash observedClosed=$runtimeClosedHash expectedHalfClosed=$generatedHalfClosedHash observedHalfClosed=$runtimeHalfClosedHash."
 }
 
 Write-Output 'EXACT ART PASS: representative source/native reconstruction, fill provenance, source/protected/alpha invariants, open/closed body equality, reviewed eye semantics, causal mutations, 96-DPI presentation, alpha hit testing, and state mapping passed; native body optical diagnostics were recorded and did not gate PASS.'

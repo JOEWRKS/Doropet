@@ -15,6 +15,7 @@ public sealed class BodyPressEventArgs(PointD localPosition) : EventArgs
 public partial class DororongPresenter : UserControl
 {
     private static readonly BitmapImage CanonicalFrame = LoadFrame("dororong-canonical.png");
+    private static readonly BitmapImage HalfClosedEyesFrame = LoadFrame("dororong-half-closed-eyes.png");
     private static readonly BitmapImage ClosedEyesFrame = LoadFrame("dororong-closed-eyes.png");
 
     public DororongPresenter()
@@ -38,9 +39,17 @@ public partial class DororongPresenter : UserControl
         {
             case PetState.Idle:
                 BodyScaleTransform.ScaleY = 1 + (0.025 * cycle);
-                if (p is >= 0.66 and <= 0.72)
+                if (p is >= 0.65 and < 0.675)
+                {
+                    DororongImage.Source = HalfClosedEyesFrame;
+                }
+                else if (p is >= 0.675 and <= 0.715)
                 {
                     DororongImage.Source = ClosedEyesFrame;
+                }
+                else if (p is > 0.715 and <= 0.74)
+                {
+                    DororongImage.Source = HalfClosedEyesFrame;
                 }
 
                 break;
