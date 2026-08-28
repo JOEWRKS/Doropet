@@ -31,7 +31,7 @@
 | ID | Expected observable | evidenceLayer | applicability | semantics |
 |---|---|---|---|---|
 | A-EYE-1 | The canonical open frame and every pixel outside the reviewed source/native eye support remain unchanged. | source/runtime asset identity | always: open and closed assets | acceptance |
-| A-EYE-2 | Both closed eyelids form shallow lowered caps: their center sits above their outer endpoints, at matching visual height, with the open iris/pupil/lower oval fully removed. | exact 96x96 asset at native and nearest-neighbor enlarged scale | closed-eye frame | acceptance |
+| A-EYE-2 | Both closed eyelids form smooth shallow `⌣` curves: their center sits gently below their outer endpoints and aligns horizontally with the corresponding open-eye center, at matching visual height, with the open iris/pupil/lower oval fully removed. | exact 96x96 asset at native and nearest-neighbor enlarged scale | closed-eye frame | acceptance |
 | A-EYE-3 | Mouth, face boundary, hair, decorations, body silhouette, thin outline, and no-tail reading match the approved canonical frame. | exact 96x96 asset comparison | closed-eye frame | acceptance |
 | A-SLEEP-1 | SLEEP always uses the closed-eye frame, remains gently lowered, and changes both scale and vertical position over its 2.4-second phase without severe squash. | WPF presenter state/phase | SLEEP at phases 0.25 and 0.75 | acceptance |
 | A-WAKE-1 | Rendering a wake reaction after SLEEP clears the sleep transforms and uses the canonical open frame. | WPF presenter transition | SLEEP to CURIOUS, STARTLED, CLICK_REACTION, and DRAGGED | acceptance |
@@ -54,26 +54,7 @@
 
 - [ ] **Step 1: Add the resting-curve regression checks before changing the generator**
 
-  In `Assert-EyeAndMouthContract`, retain all current eye-removal, alpha, support, mouth, and protected-art checks. Add independent optical-ink probes that require each source lid to have a dark center at its upper row, dark endpoints at its lower row, and no dark lower-center continuation:
-
-  ```powershell
-  foreach($eye in @(
-      @{Name='left'; UpperCenter='54,124'; Lower=@('47,127','61,127'); ClearedLowerCenter='54,127'},
-      @{Name='right'; UpperCenter='96,124'; Lower=@('89,127','103,127'); ClearedLowerCenter='96,127'}))
-  {
-      foreach($probe in @($eye.UpperCenter) + $eye.Lower)
-      {
-          $parts=$probe.Split(',')
-          Assert-True ((Get-OpticalInk $SourceClosed.GetPixel([int]$parts[0],[int]$parts[1])) -ge 0.30) `
-              "$($eye.Name) resting lid is missing at source $probe."
-      }
-      $parts=$eye.ClearedLowerCenter.Split(',')
-      Assert-True ((Get-OpticalInk $SourceClosed.GetPixel([int]$parts[0],[int]$parts[1])) -le 0.20) `
-          "$($eye.Name) rejected cup-shaped lower center survived at source $($eye.ClearedLowerCenter)."
-  }
-  ```
-
-  Add native probes for the raised cap centers `(23,53)` and `(41,53)` with optical ink at least `0.25`, plus candidate-local visual inspection of the lower endpoints. These checks catch the bug where the source cap exists but disappears after the single production resize.
+  In `Assert-EyeAndMouthContract`, retain all current eye-removal, alpha, support, mouth, and protected-art checks. Require dark source endpoints on row 124 and a connected dark center on row 126, while clearing the rejected cap centers, old deep centers, and old wide endpoints. At native size, require balanced endpoint anchors and measure the vertical optical-ink centroid across rows 52–55. Each center must sit `0.25..0.85` pixel below its endpoints so the production resize retains a gentle visible `⌣` rather than a cap, flat line, V, or deep bowl. Also compare horizontal lid centers to the corresponding canonical open-eye centers; the pair must not retain attempt 2's approximately one-native-pixel rightward displacement.
 
 - [ ] **Step 2: Run the exact-art test and verify RED**
 
@@ -83,24 +64,11 @@
   pwsh -NoProfile -File tests/Dororong.App.ExactArt.Tests.ps1 -Configuration Release
   ```
 
-  Expected: FAIL on the new upper-center or cleared-lower-center cap assertion while the generator still uses the rejected `⌣` lid runs. A syntax, missing-file, or build error is not the required RED result.
+  Expected: FAIL on the horizontal center-alignment assertion while the generator still uses attempt 2's right-shifted `⌣` lid runs. A syntax, missing-file, or build error is not the required RED result.
 
 - [ ] **Step 3: Replace only the lid runs**
 
-  Keep both eye-removal stencils and `New-ClosedEyeFrame` face-color restoration unchanged. Replace only `$leftLidRuns` and `$rightLidRuns` with these shallow resting curves:
-
-  ```powershell
-  $leftLidRuns=@(
-      '124:50-58',
-      '125:48-60',
-      '126:47-49','126:59-61',
-      '127:46-48','127:60-62')
-  $rightLidRuns=@(
-      '124:92-100',
-      '125:90-102',
-      '126:89-91','126:101-103',
-      '127:88-90','127:102-104')
-  ```
+  Keep both eye-removal stencils and `New-ClosedEyeFrame` face-color restoration unchanged. Measure the canonical open-eye horizontal centers, then translate every x coordinate in `$leftLidRuns` and `$rightLidRuns` left by the same integer source-pixel offset required to align the native lid centers. Preserve every row, run width, inter-eye spacing, and the existing shallow `⌣` depth. The expected correction is approximately two source pixels, producing about one native pixel of left movement; the test, not an unrelated shape adjustment, must establish the exact offset.
 
   Keep the lid color sampled from the canonical source outline. Do not edit the canonical source PNG, body mask, open runtime frame, or source/body outline code.
 
@@ -210,12 +178,13 @@
 ### Task 3: Exact Stage-A artifact and ordered Windows observation
 
 **Files:**
-- Create after observation: `docs/verification/2026-08-28-m1-windows-acceptance-manual-stage-a-attempt-1.md`
-- Do not modify: any existing attempt-1 through attempt-8 evidence file.
+- Create after observation: `docs/verification/2026-08-29-m1-windows-acceptance-manual-stage-a-attempt-2.md`
+- Update: `TASKS.md`
+- Preserve historical verdicts in all earlier evidence files; a short correction addendum may link superseding design direction without changing those verdicts.
 
 **Interfaces:**
 - Consumes: reviewed Task 1 and Task 2 commits.
-- Produces: one clean Stage-A Release artifact in `artifacts/repro/stage-a-closed-eye-sleep/`, exact hashes, and direct user verdicts for the first small observation group.
+- Produces: one clean Stage-A Release artifact in `artifacts/repro/stage-a-closed-eye-sleep-attempt-2/`, exact hashes, captured IDLE-blink evidence, and direct user verdicts for the remaining small observation group.
 
 - [ ] **Step 1: Verify the reviewed source state**
 
@@ -226,7 +195,7 @@
   Run:
 
   ```powershell
-  dotnet publish src/Dororong.App/Dororong.App.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts/repro/stage-a-closed-eye-sleep
+  dotnet publish src/Dororong.App/Dororong.App.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts/repro/stage-a-closed-eye-sleep-attempt-2
   ```
 
   Record SHA-256 for `Dororong.App.exe`, `Dororong.App.dll`, `Dororong.Core.dll`, `dororong-canonical.png`, and `dororong-closed-eyes.png`. Confirm the packaged open/closed asset hashes equal the reviewed runtime asset hashes.
@@ -247,12 +216,12 @@
 
 - [ ] **Step 5: Record evidence without overstating M1**
 
-  Add the new attempt-specific verification file with exact commit/artifact identity, commands, observed facts, and verdicts. Overall M1 remains `PARTIAL`; any unobserved Stage-A or later-roadmap behavior remains `UNVERIFIED`.
+  Add the attempt-2 verification file with exact commit/artifact identity, commands, observed facts, and verdicts. Overall M1 remains `PARTIAL`; any unobserved Stage-A or later-roadmap behavior remains `UNVERIFIED`.
 
 - [ ] **Step 6: Commit the verification record only after user observation**
 
   ```powershell
-  git add -- docs/verification/2026-08-28-m1-windows-acceptance-manual-stage-a-attempt-1.md TASKS.md
+  git add -- docs/plans/2026-08-28-dororong-m1-stage-a-closed-eye-sleep.md docs/verification/2026-08-29-m1-windows-acceptance-manual-stage-a-attempt-1.md docs/verification/2026-08-29-m1-windows-acceptance-manual-stage-a-attempt-2.md TASKS.md
   git commit -m "docs: record Stage A Windows observation"
   ```
 

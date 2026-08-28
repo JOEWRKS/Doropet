@@ -31,7 +31,7 @@ Verdicts:
 | Gentle SLEEP breathing | `UNVERIFIED` | The visible closed state passed too quickly for the user to capture or judge. |
 | Click-only wake reaction | `UNVERIFIED` | No direct observation was reported. |
 
-The exact moment could not be captured, so whether the fleeting frame was the roughly 0.12-second IDLE blink or a SLEEP frame immediately followed by wake remains `UNVERIFIED`. Source inspection confirms the attempted asset used `⌣` curves whose centers sat below their endpoints. That exact closed-frame treatment is rejected and will be replaced by lowered shallow `⌒` caps before another live launch.
+The exact moment could not be captured, so whether the fleeting frame was the roughly 0.12-second IDLE blink or a SLEEP frame immediately followed by wake remains `UNVERIFIED`. Source inspection confirms the attempted asset used `⌣` curves whose centers sat below their endpoints. This attempt's exact deep/wide treatment remains rejected. A later `⌒` correction direction was also explicitly rejected by the user as a workaround; Stage A attempt 2 instead redraws a narrower, gentler `⌣` and keeps this attempt-1 verdict unchanged.
 
 ## Capture and process boundary
 
