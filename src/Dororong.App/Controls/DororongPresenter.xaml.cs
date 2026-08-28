@@ -77,9 +77,9 @@ public partial class DororongPresenter : UserControl
                 break;
 
             case PetState.Sleep:
-                BodyScaleTransform.ScaleX = 1 + (0.025 * cycle);
-                BodyScaleTransform.ScaleY = 0.82;
-                BodyTranslateTransform.Y = 8;
+                BodyScaleTransform.ScaleX = 1 + (0.012 * cycle);
+                BodyScaleTransform.ScaleY = 0.90 + (0.012 * cycle);
+                BodyTranslateTransform.Y = 6 - cycle;
                 DororongImage.Source = ClosedEyesFrame;
                 break;
 
