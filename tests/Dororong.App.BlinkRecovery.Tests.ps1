@@ -21,21 +21,34 @@ function Get-PurpleCount([Drawing.Bitmap]$Bitmap,[object]$Region)
     return $count
 }
 
-function Get-LidCenterY([Drawing.Bitmap]$Bitmap,[object[]]$Coordinates)
+function Test-LidInk([Drawing.Color]$Pixel)
 {
-    $weightedY = 0.0
-    $weight = 0.0
-    foreach ($coordinate in $Coordinates)
+    return $Pixel.ToArgb() -in @(
+        [Drawing.Color]::FromArgb(255,50,42,48).ToArgb(),
+        [Drawing.Color]::FromArgb(255,150,130,133).ToArgb())
+}
+
+function Get-ChangedLidGeometry([Drawing.Bitmap]$Open,[Drawing.Bitmap]$State,[object]$Region)
+{
+    $coordinates = [Collections.Generic.List[object[]]]::new()
+    foreach ($y in $Region.Y0..$Region.Y1)
     {
-        $pixel = $Bitmap.GetPixel([int]$coordinate[0],[int]$coordinate[1])
-        if ($pixel.A -eq 0) { continue }
-        $darkness = 255.0 - (($pixel.R + $pixel.G + $pixel.B) / 3.0)
-        if ($darkness -le 0) { continue }
-        $weightedY += [double]$coordinate[1] * $darkness
-        $weight += $darkness
+        foreach ($x in $Region.X0..$Region.X1)
+        {
+            $before=$Open.GetPixel($x,$y);$after=$State.GetPixel($x,$y)
+            if ($before.ToArgb() -ne $after.ToArgb() -and (Test-LidInk $after) -and -not (Test-Purple $after))
+            { $coordinates.Add(@($x,$y)) }
+        }
     }
-    if ($weight -eq 0) { throw 'The expected lid coordinates contain no visible ink.' }
-    return $weightedY / $weight
+    if ($coordinates.Count -eq 0) { throw 'The reviewed eye region contains no changed lid ink.' }
+    $xs=@($coordinates|ForEach-Object{[int]$_[0]});$ys=@($coordinates|ForEach-Object{[int]$_[1]})
+    $minX=($xs|Measure-Object -Minimum).Minimum;$maxX=($xs|Measure-Object -Maximum).Maximum
+    $minY=($ys|Measure-Object -Minimum).Minimum;$maxY=($ys|Measure-Object -Maximum).Maximum
+    return [pscustomobject]@{
+        Width=1+$maxX-$minX
+        Depth=$maxY-$minY
+        CenterY=($minY+$maxY)/2.0
+    }
 }
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
@@ -73,37 +86,35 @@ if (-not (Test-Path -LiteralPath $squintPath -PathType Leaf))
     $failures.Add('The single lid-only squint runtime resource is missing.')
 }
 
+$openPath = Join-Path $assetRoot 'dororong-canonical.png'
+$open = [Drawing.Bitmap]::new($openPath)
 $closed = [Drawing.Bitmap]::new($closedPath)
 try
 {
-    if ((Test-Path -LiteralPath $old70Path) -or (Test-Path -LiteralPath $old25Path))
+    $leftClosed = Get-ChangedLidGeometry $open $closed $regions[0]
+    $rightClosed = Get-ChangedLidGeometry $open $closed $regions[1]
+    if ($leftClosed.CenterY -ne $rightClosed.CenterY)
     {
-        # Complete rejected Task 15 lid memberships. This branch makes the RED
-        # run measure the actual failed asset rather than an expected constant.
-        $leftClosed = @(@(19,51),@(20,52),@(21,53),@(22,53),@(23,53),@(24,52),@(25,51))
-        $rightClosed = @(@(38,55),@(39,56),@(40,57),@(41,58),@(42,58),@(43,57),@(44,56))
+        $failures.Add("The final left/right native vertical centers are unequal (left=$($leftClosed.CenterY) right=$($rightClosed.CenterY)).")
     }
-    else
+    foreach ($entry in @(
+        @{Name='viewer-left';Geometry=$leftClosed},
+        @{Name='viewer-right';Geometry=$rightClosed}))
     {
-        $leftClosed = @(@(20,53),@(21,54),@(22,54),@(23,54),@(24,54),@(25,53))
-        $rightClosed = @(@(37,55),@(38,56),@(39,56),@(40,56),@(41,55))
-    }
-    $leftCenter = Get-LidCenterY $closed $leftClosed
-    $rightCenter = Get-LidCenterY $closed $rightClosed
-    $difference = [Math]::Abs($leftCenter-$rightCenter)
-    if ($difference -gt 2.0)
-    {
-        $failures.Add("The corrected closed lid centers remain more than two native rows apart (left=$leftCenter right=$rightCenter difference=$difference).")
+        if ($entry.Geometry.Width -ne 7)
+        { $failures.Add("The $($entry.Name) final lid visible width is $($entry.Geometry.Width), not 7.") }
+        if ($entry.Geometry.Depth -ne 2)
+        { $failures.Add("The $($entry.Name) final lid depth is $($entry.Geometry.Depth), not 2.") }
     }
 }
-finally { $closed.Dispose() }
+finally { $closed.Dispose();$open.Dispose() }
 
 if ((Test-Path -LiteralPath $squintPath) -and (Get-FileHash -LiteralPath $squintPath -Algorithm SHA256).Hash -ne
-    'CE77E5AEA5AEB4EAEFEBE28ABE1FEBEC51729546FD71C8B9FA713F809B05FFA5')
-{ $failures.Add('The runtime squint is not the exact approved iris-free Task 18 input.') }
+    '615C758D82F745F41D22547B1B42DB16AAF6ACA900229F55823DFD82A6584721')
+{ $failures.Add('The runtime squint is not the exact approved Task 19 attempt-2 pair-B input.') }
 if ((Get-FileHash -LiteralPath $closedPath -Algorithm SHA256).Hash -ne
-    'DE4D8DAD77521C1F720D0A25984897AA1B4FFF5CB6F5E427627DBCB2263E68DD')
-{ $failures.Add('The runtime closed face is not the exact approved Task 18 input.') }
+    '319C3E931C8D9D2D32CB172B1AB7617EB7362700FC832182F9B187B0BAB9DFBB')
+{ $failures.Add('The runtime closed face is not the exact approved Task 19 attempt-2 pair-B input.') }
 
 $coreAssemblyPath = Join-Path $repositoryRoot "src/Dororong.Core/bin/$Configuration/net8.0/Dororong.Core.dll"
 $appAssemblyPath = Join-Path $repositoryRoot "src/Dororong.App/bin/$Configuration/net8.0-windows/Dororong.App.dll"
@@ -138,4 +149,4 @@ if (($expected -join '|') -ne (@($observed) -join '|'))
 }
 
 if ($failures.Count -gt 0) { throw ($failures -join [Environment]::NewLine) }
-Write-Output 'BLINK RECOVERY PASS: rejected iris resources are absent, closed lid centers are within two rows, and IDLE playback does not require iris-bearing intermediates.'
+Write-Output 'BLINK RECOVERY PASS: rejected iris resources are absent, pair-B closed lids have equal centers, width 7, depth 2, and IDLE playback does not require iris-bearing intermediates.'

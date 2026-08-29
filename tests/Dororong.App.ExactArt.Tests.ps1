@@ -52,8 +52,8 @@ $expected=[ordered]@{
     Source='F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504'
     Mask='D08B3A941C662F1CBC55C486C13FD4C6CD8901DA9CD5CF8512509698219FE46F'
     Open='238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511'
-    Squint='CE77E5AEA5AEB4EAEFEBE28ABE1FEBEC51729546FD71C8B9FA713F809B05FFA5'
-    Closed='DE4D8DAD77521C1F720D0A25984897AA1B4FFF5CB6F5E427627DBCB2263E68DD'
+    Squint='615C758D82F745F41D22547B1B42DB16AAF6ACA900229F55823DFD82A6584721'
+    Closed='319C3E931C8D9D2D32CB172B1AB7617EB7362700FC832182F9B187B0BAB9DFBB'
     SourceOpen='D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF'
     SourceBaseline='8F542A4F1B2671789BD7CD4980D890BF96CFCC9DADBC9D4E61963CCE2D384CCB'
     NativeBaseline='3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59'
@@ -67,7 +67,7 @@ Assert-True (-not(Test-Path -LiteralPath (Join-Path $assetRoot 'dororong-eyes-70
 Assert-True (-not(Test-Path -LiteralPath (Join-Path $assetRoot 'dororong-eyes-25-open.png'))) `
     'The obsolete 25-percent iris-bearing runtime asset returned.'
 
-$runRoot=Join-Path $repositoryRoot ".superpowers/sdd/2026-08-29-dororong-stage-a-eye-geometry-blink-recovery/task-18-exact-art/$([Guid]::NewGuid().ToString('N'))"
+$runRoot=Join-Path $repositoryRoot ".superpowers/sdd/2026-08-29-dororong-stage-a-eye-geometry-blink-recovery/task-20-exact-art/$([Guid]::NewGuid().ToString('N'))"
 $outputDirectory=Join-Path $runRoot 'output'
 $evidenceDirectory=Join-Path $runRoot 'evidence'
 $generatorOutput=& pwsh -NoProfile -File $paths.Generator -SourcePath $paths.Source `

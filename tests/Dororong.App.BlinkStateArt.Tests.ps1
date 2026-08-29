@@ -10,8 +10,8 @@ function Assert-True([bool]$Condition,[string]$Message)
 function Test-Purple([Drawing.Color]$Pixel)
 { return $Pixel.A -gt 0 -and ($Pixel.B - $Pixel.R) -ge 10 }
 
-function Test-Dark([Drawing.Color]$Pixel)
-{ return $Pixel.A -gt 0 -and (($Pixel.R + $Pixel.G + $Pixel.B) / 3.0) -lt 200 }
+function Test-EyeWhite([Drawing.Color]$Pixel)
+{ return $Pixel.ToArgb() -eq [Drawing.Color]::FromArgb(255,247,244,242).ToArgb() }
 
 function Test-LidInk([Drawing.Color]$Pixel)
 {
@@ -68,18 +68,32 @@ function Get-Center([string[]]$Coordinates)
 {
     $xs = @($Coordinates | ForEach-Object { [int]$_.Split(',')[0] })
     $ys = @($Coordinates | ForEach-Object { [int]$_.Split(',')[1] })
+    $minX=($xs | Measure-Object -Minimum).Minimum;$maxX=($xs | Measure-Object -Maximum).Maximum
+    $minY=($ys | Measure-Object -Minimum).Minimum;$maxY=($ys | Measure-Object -Maximum).Maximum
     return [pscustomobject]@{
-        X = ($xs | Measure-Object -Average).Average
-        Y = ($ys | Measure-Object -Average).Average
-        MinY = ($ys | Measure-Object -Minimum).Minimum
-        MaxY = ($ys | Measure-Object -Maximum).Maximum
+        X = ($minX+$maxX)/2.0
+        Y = ($minY+$maxY)/2.0
+        MinX = $minX
+        MaxX = $maxX
+        MinY = $minY
+        MaxY = $maxY
     }
 }
 
-function Assert-NoHairContact([Drawing.Bitmap]$Open,[Drawing.Bitmap]$State,[string[]]$Lid,[string]$Label)
+function Get-NormalizedShape([string[]]$Coordinates)
+{
+    $center=Get-Center $Coordinates
+    return @($Coordinates|ForEach-Object{
+        $parts=$_.Split(',');"$([int]$parts[0]-$center.MinX),$([int]$parts[1]-$center.MinY)"
+    }|Sort-Object)-join'|'
+}
+
+function Assert-NoHairContact([string[]]$Lid,[string[]]$ProtectedHair,[string]$Label)
 {
     $lidSet = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach ($key in $Lid) { $null = $lidSet.Add($key) }
+    $hairSet = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($key in $ProtectedHair) { $null = $hairSet.Add($key) }
     foreach ($key in $Lid)
     {
         $parts = $key.Split(',');$x=[int]$parts[0];$y=[int]$parts[1]
@@ -90,8 +104,7 @@ function Assert-NoHairContact([Drawing.Bitmap]$Open,[Drawing.Bitmap]$State,[stri
                 if ($dx -eq 0 -and $dy -eq 0) { continue }
                 $neighborKey = "$($x+$dx),$($y+$dy)"
                 if ($lidSet.Contains($neighborKey)) { continue }
-                $before = $Open.GetPixel($x+$dx,$y+$dy);$after = $State.GetPixel($x+$dx,$y+$dy)
-                Assert-True (-not ((Test-Dark $after) -and $after.ToArgb() -eq $before.ToArgb())) `
+                Assert-True (-not $hairSet.Contains($neighborKey)) `
                     "$Label has 8-neighbor foreground-hair contact at $neighborKey."
             }
         }
@@ -122,17 +135,22 @@ function Assert-StateRegionContract(
         $actualHash=Get-RegionPixelHash $State $Regions[$index]
         Assert-Equal $ExpectedRegionHashes[$index] $actualHash `
             "$Label $($Regions[$index].Name) full allowed pixel membership changed; this includes every eye-white palette member."
-        $purple=0
+        $purple=0;$eyeWhite=0
         foreach ($y in $Regions[$index].Y0..$Regions[$index].Y1)
         {
             foreach ($x in $Regions[$index].X0..$Regions[$index].X1)
-            { if (Test-Purple $State.GetPixel($x,$y)) { $purple++ } }
+            {
+                $pixel=$State.GetPixel($x,$y)
+                if (Test-Purple $pixel) { $purple++ }
+                if (Test-EyeWhite $pixel) { $eyeWhite++ }
+            }
         }
         Assert-Equal 0 $purple "$Label $($Regions[$index].Name) retained purple iris residue."
+        Assert-Equal 0 $eyeWhite "$Label $($Regions[$index].Name) retained eye-white residue."
     }
 
-    Assert-NoHairContact $Open $State $observedLeft "$Label viewer-left lid"
-    Assert-NoHairContact $Open $State $observedRight "$Label viewer-right lid"
+    Assert-NoHairContact $observedLeft $ProtectedHair "$Label viewer-left lid"
+    Assert-NoHairContact $observedRight $ProtectedHair "$Label viewer-right lid"
     return [pscustomobject]@{Left=$observedLeft;Right=$observedRight}
 }
 
@@ -160,13 +178,13 @@ foreach ($name in @('Old70','Old25','ObsoleteHalf'))
 
 $expectedHashes = [ordered]@{
     Open = '238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511'
-    Squint = 'CE77E5AEA5AEB4EAEFEBE28ABE1FEBEC51729546FD71C8B9FA713F809B05FFA5'
-    Closed = 'DE4D8DAD77521C1F720D0A25984897AA1B4FFF5CB6F5E427627DBCB2263E68DD'
+    Squint = '615C758D82F745F41D22547B1B42DB16AAF6ACA900229F55823DFD82A6584721'
+    Closed = '319C3E931C8D9D2D32CB172B1AB7617EB7362700FC832182F9B187B0BAB9DFBB'
 }
 foreach ($name in @('Open','Squint','Closed'))
 {
     Assert-Equal $expectedHashes[$name] (Get-FileHash -Algorithm SHA256 -LiteralPath $paths[$name]).Hash `
-        "$name is not the exact approved Task 18 raster."
+        "$name is not the exact approved Task 19 attempt-2 pair-B raster."
 }
 
 Add-Type -AssemblyName System.Drawing
@@ -207,10 +225,10 @@ try
     }
 
     $expectedLids = [ordered]@{
-        SquintLeft = @('20,52','21,53','22,53','23,53','24,53','25,52') | Sort-Object
-        SquintRight = @('37,54','38,55','39,55','40,55','41,54') | Sort-Object
-        ClosedLeft = @('20,53','21,54','22,54','23,54','24,54','25,53') | Sort-Object
-        ClosedRight = @('37,55','38,56','39,56','40,56','41,55') | Sort-Object
+        SquintLeft = @('21,51','22,52','23,53','24,52','25,51') | Sort-Object
+        SquintRight = @('35,51','36,52','37,53','38,52','39,51') | Sort-Object
+        ClosedLeft = @('20,53','21,54','22,55','23,55','24,55','25,54','26,53') | Sort-Object
+        ClosedRight = @('34,53','35,54','36,55','37,55','38,55','39,54','40,53') | Sort-Object
     }
     $protectedHair = @(
         '40,47','40,48','40,49','40,61','41,47','41,48','41,49','41,59','41,60','41,61','41,62',
@@ -227,11 +245,11 @@ try
 
     $expectedRegionHashes = [ordered]@{
         Squint = @(
-            'CDCF8F8DDDE9B5C309F506ED9E46B8D36E56D05B873354E330197A3BA431E354',
-            '2D3576DEE824DDDA6350F28FB92CDD2AAB381BC10F6393B70490E2C82003CA52')
+            '9621EB83C531AF1B2A05BFFDF9460C6AA7FE787609DF3250A9F1F1AF83E9BC3F',
+            'F3238566DB6FCFDE3A108159CF4512982927571D2862213E185F8F7E6BEB6C09')
         Closed = @(
-            '3D9C14827EEC541DE0A7165A530547BE8A99398E40B4A72A70134A3177D48E6F',
-            '5529E7014B35249E4D401C551946FF145EC6247187B0FBE34F5D7F5CC39F9189')
+            '94D9385E4330662B526F58F159F4B956F742A4E86B626F6A3AC1C36A66FDF928',
+            '8E7C7028A7FB6080CAD812A3C48C29FDCA7266CDB19DF63323A3666EB01ACD0F')
     }
     $squintContract = Assert-StateRegionContract $open $squint $regions `
         $expectedLids.SquintLeft $expectedLids.SquintRight $protectedHair $expectedRegionHashes.Squint 'squint'
@@ -248,11 +266,24 @@ try
     $closedLeft=Get-Center $observedLids.ClosedLeft;$closedRight=Get-Center $observedLids.ClosedRight
     Assert-Equal $closedLeft.X $squintLeft.X 'Viewer-left squint moved horizontally from closed.'
     Assert-Equal $closedRight.X $squintRight.X 'Viewer-right squint moved horizontally from closed.'
-    Assert-Equal 1.0 ($closedLeft.Y-$squintLeft.Y) 'Viewer-left squint is not exactly one row above closed.'
-    Assert-Equal 1.0 ($closedRight.Y-$squintRight.Y) 'Viewer-right squint is not exactly one row above closed.'
-    Assert-True ([Math]::Abs($closedLeft.Y-$closedRight.Y) -le 2.0) 'Final left/right lid centers differ by more than two native rows.'
-    foreach ($lid in @($squintLeft,$squintRight,$closedLeft,$closedRight))
-    { Assert-Equal 1 ($lid.MaxY-$lid.MinY) 'A lid is not a one-row-deep downward-center curve.' }
+    Assert-Equal $squintLeft.Y $squintRight.Y 'Squint left/right native vertical centers are unequal.'
+    Assert-Equal $closedLeft.Y $closedRight.Y 'Final left/right native vertical centers are unequal.'
+    Assert-Equal 2.0 ($closedLeft.Y-$squintLeft.Y) 'Viewer-left squint does not visibly precede closed by two rows.'
+    Assert-Equal 2.0 ($closedRight.Y-$squintRight.Y) 'Viewer-right squint does not visibly precede closed by two rows.'
+    foreach ($lid in @($closedLeft,$closedRight))
+    {
+        Assert-Equal 7 (1+$lid.MaxX-$lid.MinX) 'A final lid does not have visible width 7.'
+        Assert-Equal 2 ($lid.MaxY-$lid.MinY) 'A final lid does not have two-row downward-center depth.'
+    }
+    foreach ($lid in @($squintLeft,$squintRight))
+    {
+        Assert-Equal 5 (1+$lid.MaxX-$lid.MinX) 'A squint lid is not the selected compact five-column state.'
+        Assert-Equal 2 ($lid.MaxY-$lid.MinY) 'A squint lid does not have the selected pointed two-row depth.'
+    }
+    Assert-True ((Get-NormalizedShape $observedLids.SquintLeft) -ne (Get-NormalizedShape $observedLids.ClosedLeft)) `
+        'Viewer-left squint is only a translated copy of closed.'
+    Assert-True ((Get-NormalizedShape $observedLids.SquintRight) -ne (Get-NormalizedShape $observedLids.ClosedRight)) `
+        'Viewer-right squint is only a translated copy of closed.'
 
     # Mutation contracts exercise cloned production rasters. Each test names
     # the product break that the full repair-region contract must reject.
@@ -300,7 +331,7 @@ finally
     foreach ($bitmap in @($closed,$squint,$open)) { if ($null -ne $bitmap) { $bitmap.Dispose() } }
 }
 
-$runRoot = Join-Path $repositoryRoot ".superpowers/sdd/2026-08-29-dororong-stage-a-eye-geometry-blink-recovery/task-18-test-runs/$([Guid]::NewGuid().ToString('N'))"
+$runRoot = Join-Path $repositoryRoot ".superpowers/sdd/2026-08-29-dororong-stage-a-eye-geometry-blink-recovery/task-20-test-runs/$([Guid]::NewGuid().ToString('N'))"
 $outputDirectory = Join-Path $runRoot 'output';$evidenceDirectory = Join-Path $runRoot 'evidence'
 $generatorOutput = & pwsh -NoProfile -File (Join-Path $repositoryRoot 'tools/Generate-CanonicalArt.ps1') `
     -SourcePath (Join-Path $assetRoot 'dororong-canonical-source.png') `
