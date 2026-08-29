@@ -13,7 +13,14 @@ function Test-Purple([Drawing.Color]$Pixel)
 function Test-Dark([Drawing.Color]$Pixel)
 { return $Pixel.A -gt 0 -and (($Pixel.R + $Pixel.G + $Pixel.B) / 3.0) -lt 200 }
 
-function Get-ChangedDarkCoordinates([Drawing.Bitmap]$Open,[Drawing.Bitmap]$State,[object]$Region)
+function Test-LidInk([Drawing.Color]$Pixel)
+{
+    return $Pixel.ToArgb() -in @(
+        [Drawing.Color]::FromArgb(255,50,42,48).ToArgb(),
+        [Drawing.Color]::FromArgb(255,150,130,133).ToArgb())
+}
+
+function Get-ChangedLidInkCoordinates([Drawing.Bitmap]$Open,[Drawing.Bitmap]$State,[object]$Region)
 {
     $coordinates = [Collections.Generic.List[string]]::new()
     foreach ($y in $Region.Y0..$Region.Y1)
@@ -21,11 +28,40 @@ function Get-ChangedDarkCoordinates([Drawing.Bitmap]$Open,[Drawing.Bitmap]$State
         foreach ($x in $Region.X0..$Region.X1)
         {
             $before = $Open.GetPixel($x,$y);$after = $State.GetPixel($x,$y)
-            if ($before.ToArgb() -ne $after.ToArgb() -and (Test-Dark $after) -and -not (Test-Purple $after))
+            if ($before.ToArgb() -ne $after.ToArgb() -and (Test-LidInk $after) -and -not (Test-Purple $after))
             { $coordinates.Add("$x,$y") }
         }
     }
     return @($coordinates | Sort-Object)
+}
+
+function Get-RegionPixelHash([Drawing.Bitmap]$Bitmap,[object]$Region)
+{
+    $width = $Region.X1-$Region.X0+1;$height = $Region.Y1-$Region.Y0+1
+    $bytes = [byte[]]::new($width*$height*4);$index=0
+    foreach ($y in $Region.Y0..$Region.Y1)
+    {
+        foreach ($x in $Region.X0..$Region.X1)
+        {
+            $pixel=$Bitmap.GetPixel($x,$y)
+            $bytes[$index++]=$pixel.A;$bytes[$index++]=$pixel.R
+            $bytes[$index++]=$pixel.G;$bytes[$index++]=$pixel.B
+        }
+    }
+    return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))
+}
+
+function Assert-ThrowsLike([scriptblock]$Action,[string]$ExpectedPattern,[string]$Label)
+{
+    try { & $Action }
+    catch
+    {
+        $message=$_.Exception.Message
+        if ($message -notmatch $ExpectedPattern)
+        { throw "$Label reached the wrong assertion. Expected '$ExpectedPattern', observed '$message'." }
+        return $message
+    }
+    throw "$Label did not reach an assertion."
 }
 
 function Get-Center([string[]]$Coordinates)
@@ -60,6 +96,44 @@ function Assert-NoHairContact([Drawing.Bitmap]$Open,[Drawing.Bitmap]$State,[stri
             }
         }
     }
+}
+
+function Assert-StateRegionContract(
+    [Drawing.Bitmap]$Open,[Drawing.Bitmap]$State,[object[]]$Regions,
+    [string[]]$ExpectedLeft,[string[]]$ExpectedRight,
+    [string[]]$ProtectedHair,[string[]]$ExpectedRegionHashes,[string]$Label)
+{
+    $observedLeft = Get-ChangedLidInkCoordinates $Open $State $Regions[0]
+    $observedRight = Get-ChangedLidInkCoordinates $Open $State $Regions[1]
+    Assert-Equal ($ExpectedLeft -join '|') ($observedLeft -join '|') `
+        "$Label viewer-left full repair region does not contain exactly one approved shallow lid and no second dark mark."
+    Assert-Equal ($ExpectedRight -join '|') ($observedRight -join '|') `
+        "$Label viewer-right full repair region does not contain exactly one approved shallow lid and no second dark mark."
+
+    foreach ($key in $ProtectedHair)
+    {
+        $parts=$key.Split(',');$x=[int]$parts[0];$y=[int]$parts[1]
+        Assert-Equal ($Open.GetPixel($x,$y).ToArgb()) ($State.GetPixel($x,$y).ToArgb()) `
+            "$Label canonical in-region foreground hair changed at $key."
+    }
+
+    foreach ($index in 0..1)
+    {
+        $actualHash=Get-RegionPixelHash $State $Regions[$index]
+        Assert-Equal $ExpectedRegionHashes[$index] $actualHash `
+            "$Label $($Regions[$index].Name) full allowed pixel membership changed; this includes every eye-white palette member."
+        $purple=0
+        foreach ($y in $Regions[$index].Y0..$Regions[$index].Y1)
+        {
+            foreach ($x in $Regions[$index].X0..$Regions[$index].X1)
+            { if (Test-Purple $State.GetPixel($x,$y)) { $purple++ } }
+        }
+        Assert-Equal 0 $purple "$Label $($Regions[$index].Name) retained purple iris residue."
+    }
+
+    Assert-NoHairContact $Open $State $observedLeft "$Label viewer-left lid"
+    Assert-NoHairContact $Open $State $observedRight "$Label viewer-right lid"
+    return [pscustomobject]@{Left=$observedLeft;Right=$observedRight}
 }
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
@@ -138,39 +212,36 @@ try
         ClosedLeft = @('20,53','21,54','22,54','23,54','24,54','25,53') | Sort-Object
         ClosedRight = @('37,55','38,56','39,56','40,56','41,55') | Sort-Object
     }
-    $observedLids = [ordered]@{
-        SquintLeft = Get-ChangedDarkCoordinates $open $squint ([pscustomobject]@{X0=20;X1=25;Y0=52;Y1=53})
-        SquintRight = Get-ChangedDarkCoordinates $open $squint ([pscustomobject]@{X0=37;X1=41;Y0=54;Y1=55})
-        ClosedLeft = Get-ChangedDarkCoordinates $open $closed ([pscustomobject]@{X0=20;X1=25;Y0=53;Y1=54})
-        ClosedRight = Get-ChangedDarkCoordinates $open $closed ([pscustomobject]@{X0=37;X1=41;Y0=55;Y1=56})
-    }
-    foreach ($name in $expectedLids.Keys)
-    {
-        Assert-Equal ($expectedLids[$name] -join '|') ($observedLids[$name] -join '|') `
-            "$name does not contain exactly one approved shallow lid and no second dark mark."
-    }
+    $protectedHair = @(
+        '40,47','40,48','40,49','40,61','41,47','41,48','41,49','41,59','41,60','41,61','41,62',
+        '42,47','42,48','42,49','42,50','42,57','42,58','42,59','42,60','42,61','42,62',
+        '43,48','43,49','43,50','43,51','43,52','43,56','43,57','43,58','43,59','43,60','43,61','43,62',
+        '44,48','44,49','44,50','44,51','44,52','44,53','44,54','44,55','44,56','44,57','44,58','44,59','44,60','44,61','44,62',
+        '45,48','45,49','45,50','45,51','45,52','45,53','45,54','45,55','45,56','45,57','45,58','45,59','45,60',
+        '46,48','46,49','46,50','46,51','46,52','46,53','46,54','46,55','46,56','46,57','47,50') | Sort-Object
+    Assert-Equal 72 $protectedHair.Count 'The independently approved in-region foreground-hair membership changed.'
+    $hairMembershipBytes=[Text.Encoding]::UTF8.GetBytes($protectedHair -join '|')
+    Assert-Equal '9420F22F10FAF71D8D750B4923A59937553CEF52BD1676161DCE38521020B655' `
+        ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($hairMembershipBytes))) `
+        'The independently approved in-region foreground-hair coordinate set changed.'
 
-    foreach ($entry in @(
-        @{Name='squint';Bitmap=$squint;Left=$observedLids.SquintLeft;Right=$observedLids.SquintRight},
-        @{Name='closed';Bitmap=$closed;Left=$observedLids.ClosedLeft;Right=$observedLids.ClosedRight}))
-    {
-        foreach ($region in $regions)
-        {
-            $purple=0;$eyeWhite=0
-            foreach ($y in $region.Y0..$region.Y1)
-            {
-                foreach ($x in $region.X0..$region.X1)
-                {
-                    $pixel=$entry.Bitmap.GetPixel($x,$y)
-                    if (Test-Purple $pixel) { $purple++ }
-                    if ($pixel.ToArgb() -eq [Drawing.Color]::FromArgb(255,247,244,242).ToArgb()) { $eyeWhite++ }
-                }
-            }
-            Assert-Equal 0 $purple "$($entry.Name) $($region.Name) retained purple iris residue."
-            Assert-Equal 0 $eyeWhite "$($entry.Name) $($region.Name) retained an eye-white island."
-        }
-        Assert-NoHairContact $open $entry.Bitmap $entry.Left "$($entry.Name) viewer-left lid"
-        Assert-NoHairContact $open $entry.Bitmap $entry.Right "$($entry.Name) viewer-right lid"
+    $expectedRegionHashes = [ordered]@{
+        Squint = @(
+            'CDCF8F8DDDE9B5C309F506ED9E46B8D36E56D05B873354E330197A3BA431E354',
+            '2D3576DEE824DDDA6350F28FB92CDD2AAB381BC10F6393B70490E2C82003CA52')
+        Closed = @(
+            '3D9C14827EEC541DE0A7165A530547BE8A99398E40B4A72A70134A3177D48E6F',
+            '5529E7014B35249E4D401C551946FF145EC6247187B0FBE34F5D7F5CC39F9189')
+    }
+    $squintContract = Assert-StateRegionContract $open $squint $regions `
+        $expectedLids.SquintLeft $expectedLids.SquintRight $protectedHair $expectedRegionHashes.Squint 'squint'
+    $closedContract = Assert-StateRegionContract $open $closed $regions `
+        $expectedLids.ClosedLeft $expectedLids.ClosedRight $protectedHair $expectedRegionHashes.Closed 'closed'
+    $observedLids = [ordered]@{
+        SquintLeft = $squintContract.Left
+        SquintRight = $squintContract.Right
+        ClosedLeft = $closedContract.Left
+        ClosedRight = $closedContract.Right
     }
 
     $squintLeft=Get-Center $observedLids.SquintLeft;$squintRight=Get-Center $observedLids.SquintRight
@@ -182,6 +253,47 @@ try
     Assert-True ([Math]::Abs($closedLeft.Y-$closedRight.Y) -le 2.0) 'Final left/right lid centers differ by more than two native rows.'
     foreach ($lid in @($squintLeft,$squintRight,$closedLeft,$closedRight))
     { Assert-Equal 1 ($lid.MaxY-$lid.MinY) 'A lid is not a one-row-deep downward-center curve.' }
+
+    # Mutation contracts exercise cloned production rasters. Each test names
+    # the product break that the full repair-region contract must reject.
+    $extraMark = $squint.Clone()
+    try
+    {
+        $extraMark.SetPixel(30,58,[Drawing.Color]::FromArgb(255,50,42,48))
+        $message = Assert-ThrowsLike {
+            Assert-StateRegionContract $open $extraMark $regions `
+                $expectedLids.SquintLeft $expectedLids.SquintRight $protectedHair $expectedRegionHashes.Squint 'extra-dark-mark mutation'
+        } 'full repair region does not contain exactly one approved shallow lid and no second dark mark' `
+            'Production mutation extra changed non-purple dark mark at (30,58)'
+        Write-Output "MUTATION PASS: extra changed non-purple dark mark rejected: $message"
+    }
+    finally { $extraMark.Dispose() }
+
+    $alteredHair = $squint.Clone()
+    try
+    {
+        $alteredHair.SetPixel(47,50,[Drawing.Color]::FromArgb(255,251,171,199))
+        $message = Assert-ThrowsLike {
+            Assert-StateRegionContract $open $alteredHair $regions `
+                $expectedLids.SquintLeft $expectedLids.SquintRight $protectedHair $expectedRegionHashes.Squint 'altered-hair mutation'
+        } 'canonical in-region foreground hair changed at 47,50' `
+            'Production mutation altered canonical in-region foreground hair at (47,50)'
+        Write-Output "MUTATION PASS: altered canonical in-region foreground hair rejected: $message"
+    }
+    finally { $alteredHair.Dispose() }
+
+    $alternateEyeWhite = $squint.Clone()
+    try
+    {
+        $alternateEyeWhite.SetPixel(30,59,[Drawing.Color]::FromArgb(255,255,255,255))
+        $message = Assert-ThrowsLike {
+            Assert-StateRegionContract $open $alternateEyeWhite $regions `
+                $expectedLids.SquintLeft $expectedLids.SquintRight $protectedHair $expectedRegionHashes.Squint 'alternate-eye-white mutation'
+        } 'full allowed pixel membership changed; this includes every eye-white palette member' `
+            'Production mutation reintroduced alternate eye-white palette member 255,255,255 at (30,59)'
+        Write-Output "MUTATION PASS: alternate eye-white palette member rejected: $message"
+    }
+    finally { $alternateEyeWhite.Dispose() }
 }
 finally
 {
