@@ -30,6 +30,28 @@ function Get-PurpleEyePixelCount(
     return $count
 }
 
+function Get-PurpleEyeCentroidX(
+    [Drawing.Bitmap]$Bitmap,
+    [int]$StartX,[int]$EndX,[int]$StartY,[int]$EndY)
+{
+    $count = 0
+    $sumX = 0.0
+    for ($y = $StartY; $y -le $EndY; $y++)
+    {
+        for ($x = $StartX; $x -le $EndX; $x++)
+        {
+            $pixel = $Bitmap.GetPixel($x,$y)
+            if ($pixel.A -gt 0 -and ($pixel.B - $pixel.R) -ge 10)
+            {
+                $count++
+                $sumX += $x
+            }
+        }
+    }
+    Assert-True ($count -gt 0) 'Purple-eye centroid has no qualifying pixels.'
+    return $sumX / $count
+}
+
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $sourcePath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical-source.png'
 $maskPath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-body-region-mask.png'
@@ -60,8 +82,8 @@ foreach ($path in @(
         "Half-closed generator contract is missing '$path'."
 }
 
-$expectedSourceHalfHash = 'CD7F8C114CAE3B303AC9D986122AF61DCD1AFCF0DC624FA3D819950052B67B0D'
-$expectedNativeHalfHash = '44339755E917FED67A41F8D6D2D9116EA8367106FA2E664BBC38F2E421AC0682'
+$expectedSourceHalfHash = '582A84AFDC446FEE4B0EACF662A02869570A2C9263267A390F2AC41806D59839'
+$expectedNativeHalfHash = '37200E62A1E2B37B00FE799FD03EB06E12D2D3906944F4F1B2B9AA00EDBF0152'
 Assert-Equal $expectedSourceHalfHash `
     (Get-FileHash -Algorithm SHA256 -LiteralPath $sourceHalfPath).Hash `
     'The deterministic source half-closed frame changed.'
@@ -174,7 +196,7 @@ try
             if ($open.ToArgb() -eq $half.ToArgb()) { continue }
             $nativeHalfChanges++
             $insideFilter = ($x-ge16-and$x-le30-and$y-ge46-and$y-le61) -or `
-                ($x-ge31-and$x-le48-and$y-ge46-and$y-le63)
+                ($x-ge34-and$x-le48-and$y-ge46-and$y-le63)
             Assert-True $insideFilter `
                 "Native half-close change escaped scaled eye filter support at ($x,$y)."
         }
@@ -193,6 +215,13 @@ try
         $closedLower=Get-PurpleEyePixelCount $nativeClosed $eye.StartX $eye.EndX $eye.LowerStart $eye.LowerEnd
         $openTotal=Get-PurpleEyePixelCount $nativeOpen $eye.StartX $eye.EndX $eye.UpperStart $eye.LowerEnd
         $halfTotal=Get-PurpleEyePixelCount $nativeHalf $eye.StartX $eye.EndX $eye.UpperStart $eye.LowerEnd
+        if ($eye.Name -eq 'viewer-right')
+        {
+            $openLowerCentroid=Get-PurpleEyeCentroidX $nativeOpen $eye.StartX $eye.EndX $eye.LowerStart $eye.LowerEnd
+            $halfLowerCentroid=Get-PurpleEyeCentroidX $nativeHalf $eye.StartX $eye.EndX $eye.LowerStart $eye.LowerEnd
+            Assert-True ([Math]::Abs($halfLowerCentroid-$openLowerCentroid)-le0.50) `
+                "$($eye.Name) lower iris slid horizontally during half-close (open=$openLowerCentroid, half=$halfLowerCentroid)."
+        }
         Assert-True (($openUpper-$halfUpper)-ge2) `
             "$($eye.Name) upper iris was not blanked by the descending lid (open=$openUpper, half=$halfUpper)."
         Assert-True ($halfLower-ge2-and$halfLower-le$openLower) `

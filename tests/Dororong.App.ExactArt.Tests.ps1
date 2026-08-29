@@ -438,9 +438,6 @@ $script:FrozenForegroundHairRuns=@(
     '129:104-106','130:104-106','131:104-106','132:104-106','133:103-105',
     '134:103-104','135:103-103','136:102-103','137:102-103','138:101-102',
     '139:101-102','140:101-101','141:100-101','142:99-100','143:99-100')
-$script:ShiftedForegroundHairRuns=@(
-    '125:83-83','126:83-84','127:83-85','128:83-85','129:84-85','130:85-85')
-
 $script:ReviewedSourceEyeChangeKeys=[Collections.Generic.HashSet[string]]::new(
     [StringComparer]::Ordinal)
 foreach($encodedRun in @(
@@ -462,16 +459,7 @@ foreach($encodedRun in @(
     {$null=$script:ReviewedSourceEyeChangeKeys.Add("$x,$y")}
 }
 
-foreach($encodedRun in @(
-    '124:81-81','125:80-83','126:80-84','127:80-85',
-    '128:82-85','129:83-85','130:84-85'))
-{
-    $parts=$encodedRun.Split(':');$y=[int]$parts[0];$bounds=$parts[1].Split('-')
-    foreach($x in ([int]$bounds[0])..([int]$bounds[1]))
-    {$null=$script:ReviewedSourceEyeChangeKeys.Add("$x,$y")}
-}
-
-foreach($encodedRun in @($script:FrozenForegroundHairRuns)+@($script:ShiftedForegroundHairRuns))
+foreach($encodedRun in $script:FrozenForegroundHairRuns)
 {
     $parts=$encodedRun.Split(':');$y=[int]$parts[0];$bounds=$parts[1].Split('-')
     foreach($x in ([int]$bounds[0])..([int]$bounds[1]))
@@ -484,27 +472,13 @@ foreach($encodedRun in @($script:FrozenForegroundHairRuns)+@($script:ShiftedFore
 function Test-InSourceEyeRegion([int]$X,[int]$Y)
 {return $script:ReviewedSourceEyeChangeKeys.Contains("$X,$Y")}
 
-$script:ReviewedSourceStateChangeKeys=[Collections.Generic.HashSet[string]]::new(
-    $script:ReviewedSourceEyeChangeKeys,[StringComparer]::Ordinal)
-foreach($encodedRun in @(
-    '114:92-100','115:89-103','116:86-105','117:86-106','118:86-106','119:86-106',
-    '120:86-106','121:86-106','122:86-106','123:86-106','124:86-106','125:86-106',
-    '126:86-106','127:86-106','128:86-106','129:86-106','130:86-106','131:86-106',
-    '132:86-106','133:87-105','134:88-104','135:90-103','136:93-103','137:86-103',
-    '138:86-102','139:88-102','140:89-101','141:99-101','142:99-100','143:99-100'))
-{
-    $parts=$encodedRun.Split(':');$y=[int]$parts[0];$bounds=$parts[1].Split('-')
-    foreach($x in ([int]$bounds[0])..([int]$bounds[1]))
-    {$null=$script:ReviewedSourceStateChangeKeys.Add("$($x-4),$y")}
-}
-
 function Test-InSourceStateRegion([int]$X,[int]$Y)
-{return $script:ReviewedSourceStateChangeKeys.Contains("$X,$Y")}
+{return $script:ReviewedSourceEyeChangeKeys.Contains("$X,$Y")}
 
 function Test-InNativeEyeFilterSupport([int]$X,[int]$Y)
 {
     return ($X -ge 16 -and $X -le 30 -and $Y -ge 46 -and $Y -le 61) -or
-        ($X -ge 31 -and $X -le 48 -and $Y -ge 46 -and $Y -le 63)
+        ($X -ge 34 -and $X -le 48 -and $Y -ge 46 -and $Y -le 63)
 }
 
 function Assert-ProxyInputEqualityOutsideEyes(
@@ -602,7 +576,7 @@ function New-IndependentEyeBlank([Drawing.Bitmap]$Open,[Drawing.Bitmap]$FaceSour
                 }
             }
         }
-        foreach($encodedRun in @($script:FrozenForegroundHairRuns)+@($script:ShiftedForegroundHairRuns))
+        foreach($encodedRun in $script:FrozenForegroundHairRuns)
         {
             $parts=$encodedRun.Split(':');$y=[int]$parts[0];$bounds=$parts[1].Split('-')
             foreach($x in ([int]$bounds[0])..([int]$bounds[1]))
@@ -631,7 +605,7 @@ function Measure-NativeOpenEyeAperture(
     Assert-True ($count-gt0) "$Name canonical open aperture has no visible color pixels."
     return [pscustomobject]@{
         Name=$Name;VisibleWidth=$maxX-$minX+1;Bounds="($minX,$minY)-($maxX,$maxY)"
-        CenterX=$sumX/$count;CenterY=$sumY/$count
+        MinX=$minX;MaxX=$maxX;CenterX=$sumX/$count;CenterY=$sumY/$count
     }
 }
 
@@ -704,8 +678,10 @@ function Measure-NativeClosedEyeCurve(
     }
     return [pscustomobject]@{
         Name=$Name;VisibleWidth=$maxX-$minX+1;Bounds="($minX,$minY)-($maxX,$maxY)"
+        MinX=$minX;MaxX=$maxX
         CenterX=$centerX;CenterY=$weightedY/$total;EndpointY=$endpointY
         CurveCenterY=$centerY;Dip=$centerY-$endpointY;Components=$components;TotalInk=$total
+        ColumnProfile=($columns|ForEach-Object{"$($_.X):$([Math]::Round($_.Y,3))"})-join','
     }
 }
 
@@ -730,9 +706,9 @@ function Assert-SourceEyeChangeContract(
                 "Detached forbidden #FADCE0 eye patch exists at source ($x,$y)."
         }
     }
-    Assert-Equal 873 $script:ReviewedSourceEyeChangeKeys.Count `
+    Assert-Equal 860 $script:ReviewedSourceEyeChangeKeys.Count `
         'Independent reviewed eye/lid membership count changed.'
-    Assert-Equal 873 $observedChanges.Count `
+    Assert-Equal 860 $observedChanges.Count `
         'Observed source open/closed eye/lid change count changed.'
     Assert-True $script:ReviewedSourceEyeChangeKeys.SetEquals($observedChanges) `
         'Observed source open/closed changes do not equal the independent reviewed eye/lid membership.'
@@ -762,11 +738,11 @@ function Assert-EyeAndMouthContract(
             $eye.StartX $eye.EndX $eye.StartY $eye.EndY
         $curve=Measure-NativeClosedEyeCurve $NativeBlank $NativeClosed $eye.Name `
             $eye.StartX $eye.EndX $eye.StartY $eye.EndY
+        Write-Output "CLOSED EYE METRICS name=$($eye.Name) apertureBounds=$($aperture.Bounds) apertureCenter=$($aperture.CenterX),$($aperture.CenterY) curveBounds=$($curve.Bounds) curveCenter=$($curve.CenterX),$($curve.CenterY) width=$($curve.VisibleWidth) components=$($curve.Components) dip=$($curve.Dip) columns=$($curve.ColumnProfile)"
         if($eye.Name-eq'viewer-right')
         {
-            $requestedCenterX=36.8180538802584
-            Assert-True ([Math]::Abs($curve.CenterX-$requestedCenterX)-le0.01) `
-                "$($eye.Name) closed curve did not move exactly three native pixels left from the user-rejected 39.8180538802584 center (target=$requestedCenterX, curve=$($curve.CenterX))."
+            Assert-True ($curve.MinX-ge($aperture.MinX+1)-and$curve.MaxX-le$aperture.MaxX) `
+                "$($eye.Name) visible closed curve is not contained one native pixel inside the central-hair side of its canonical aperture (aperture=$($aperture.Bounds), curve=$($curve.Bounds))."
         }
         else
         {
@@ -783,7 +759,6 @@ function Assert-EyeAndMouthContract(
             "$($eye.Name) closed curve is not one connected native component."
         Assert-True ($curve.Dip-ge0.75-and$curve.Dip-le1.15) `
             "$($eye.Name) closed curve does not retain a gentle roughly one-pixel downward-center dip (dip=$($curve.Dip), endpointY=$($curve.EndpointY), centerY=$($curve.CurveCenterY))."
-        Write-Output "CLOSED EYE METRICS name=$($eye.Name) apertureBounds=$($aperture.Bounds) apertureCenter=$($aperture.CenterX),$($aperture.CenterY) curveBounds=$($curve.Bounds) curveCenter=$($curve.CenterX),$($curve.CenterY) width=$($curve.VisibleWidth) components=$($curve.Components) dip=$($curve.Dip)"
         $measurements.Add([pscustomobject]@{Aperture=$aperture;Curve=$curve})
     }
     $apertureSeparation=$measurements[1].Aperture.CenterY-$measurements[0].Aperture.CenterY
@@ -966,12 +941,12 @@ $expectedHashes = [ordered]@{
     Authority = 'DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
     SourceOpen = 'D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF'
     SourceOpenBaseline = '8F542A4F1B2671789BD7CD4980D890BF96CFCC9DADBC9D4E61963CCE2D384CCB'
-    SourceClosed = '842035A880C30B79694AEC0D481374293A9DA4722410642EFD171ACD490099BD'
-    SourceHalfClosed = 'CD7F8C114CAE3B303AC9D986122AF61DCD1AFCF0DC624FA3D819950052B67B0D'
+    SourceClosed = '20331CACA2C171BC51A90CA4BD776AE2CA16B9E6D599AC1A3D46F2BAC1470213'
+    SourceHalfClosed = '582A84AFDC446FEE4B0EACF662A02869570A2C9263267A390F2AC41806D59839'
     NativeOpen = '238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511'
     NativeOpenBaseline = '3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59'
-    NativeClosed = '1F8A50A5907D6BD926ECC4F93CD83064D8F1C862FCA457773E48FB3AFE172331'
-    NativeHalfClosed = '44339755E917FED67A41F8D6D2D9116EA8367106FA2E664BBC38F2E421AC0682'
+    NativeClosed = '62840545A2B6E241CF6FCE0C551617E9C8B40D35C170E7D3DDB40C9385A8F811'
+    NativeHalfClosed = '37200E62A1E2B37B00FE799FD03EB06E12D2D3906944F4F1B2B9AA00EDBF0152'
     Contour = 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65'
 }
 foreach ($name in @('Source','Seed','Mask','Authority'))

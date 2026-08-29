@@ -57,12 +57,10 @@ $closedEyeGeometry=@{
     SubpixelFactor=8
     CurveSegments=256
     Left=@{P0=@(46.00,118.80);P1=@(52.750,124.40);P2=@(59.50,119.40)}
-    Right=@{P0=@(81.103203,125.60);P1=@(86.353203,131.55);P2=@(91.603203,126.50)}
+    Right=@{P0=@(90.75,125.90);P1=@(96.10,133.80);P2=@(101.00,126.30)}
 }
-$rightEyeBlankGeometry=@{P0=@(89.00,125.60);P1=@(94.250,131.55);P2=@(99.50,126.50)}
-$rightHalfClosedGeometry=@{P0=@(85.051602,125.60);P1=@(90.301602,131.55);P2=@(95.551602,126.50)}
-$screenRightLidSourceOffsetX=-8
-$screenRightHalfSourceOffsetX=-4
+$rightEyeBlankGeometry=@{P0=@(90.75,125.90);P1=@(96.10,133.80);P2=@(101.00,126.30)}
+$rightHalfClosedGeometry=@{P0=@(90.75,125.90);P1=@(96.10,133.80);P2=@(101.00,126.30)}
 $frozenForegroundHairRuns=@(
     '114:97-100','115:98-103','116:101-105','117:103-106','118:104-106',
     '119:104-106','120:104-106','121:104-106','122:104-106','123:104-106',
@@ -70,8 +68,6 @@ $frozenForegroundHairRuns=@(
     '129:104-106','130:104-106','131:104-106','132:104-106','133:103-105',
     '134:103-104','135:103-103','136:102-103','137:102-103','138:101-102',
     '139:101-102','140:101-101','141:100-101','142:99-100','143:99-100')
-$shiftedForegroundHairRuns=@(
-    '125:83-83','126:83-84','127:83-85','128:83-85','129:84-85','130:85-85')
 $halfClosedViewerLeftOffset=-0.75
 $halfClosedViewerRightOffset=0.50
 
@@ -93,25 +89,9 @@ function New-CoordinateMask([string[]]$Runs,[int]$Width,[int]$Height)
     return $mask
 }
 
-function New-TranslatedCoordinateMask(
-    [string[]]$Runs,[int]$Width,[int]$Height,[int]$OffsetX)
-{
-    $mask=[bool[]]::new($Width*$Height)
-    foreach($encodedRun in $Runs)
-    {
-        $run=ConvertFrom-CoordinateRun $encodedRun
-        foreach($sourceX in $run.StartX..$run.EndX)
-        {
-            $x=$sourceX+$OffsetX
-            if($x-ge0-and$x-lt$Width){$mask[($run.Y*$Width)+$x]=$true}
-        }
-    }
-    return $mask
-}
-
 function Restore-FrozenForegroundHair([Drawing.Bitmap]$Frame,[Drawing.Bitmap]$Open)
 {
-    foreach($encodedRun in @($frozenForegroundHairRuns)+@($shiftedForegroundHairRuns))
+    foreach($encodedRun in $frozenForegroundHairRuns)
     {
         $run=ConvertFrom-CoordinateRun $encodedRun
         foreach($x in $run.StartX..$run.EndX)
@@ -262,8 +242,7 @@ function New-ClosedEyeFrame([Drawing.Bitmap]$Open,[Drawing.Bitmap]$FaceSource)
         }
         $lidColor=$Open.GetPixel(43,118)
         $leftMask=New-CoordinateMask $leftEyeStencilRuns $closed.Width $closed.Height
-        $rightMask=New-TranslatedCoordinateMask $rightEyeStencilRuns `
-            $closed.Width $closed.Height $screenRightLidSourceOffsetX
+        $rightMask=New-CoordinateMask $rightEyeStencilRuns $closed.Width $closed.Height
         Add-SubpixelQuadraticCurve $closed $leftMask $closedEyeGeometry.Left $lidColor `
             ([double]$closedEyeGeometry.StrokeWidth) ([int]$closedEyeGeometry.SubpixelFactor) `
             ([int]$closedEyeGeometry.CurveSegments)
@@ -287,17 +266,13 @@ function New-HalfClosedEyeFrame([Drawing.Bitmap]$Open,[Drawing.Bitmap]$FaceSourc
             @{Runs=$leftEyeStencilRuns;MinimumX=43;MaximumX=64;MinimumY=114;MaximumY=135
                 TopLeftX=42;TopLeftY=137;TopRightX=66;TopRightY=136
                 BottomLeftX=48;BottomLeftY=143;BottomRightX=64;BottomRightY=143
-                ContentOffsetX=0
                 Geometry=(Move-EyeGeometryVertically $closedEyeGeometry.Left $halfClosedViewerLeftOffset)
                 BlankGeometry=(Move-EyeGeometryVertically $closedEyeGeometry.Left $halfClosedViewerLeftOffset)},
             @{Runs=$rightEyeStencilRuns;MinimumX=86;MaximumX=106;MinimumY=114;MaximumY=143
                 TopLeftX=65;TopLeftY=134;TopRightX=106;TopRightY=142
                 BottomLeftX=86;BottomLeftY=144;BottomRightX=106;BottomRightY=144
-                ContentOffsetX=$screenRightHalfSourceOffsetX
                 Geometry=(Move-EyeGeometryVertically $rightHalfClosedGeometry $halfClosedViewerRightOffset)
                 BlankGeometry=(Move-EyeGeometryVertically $rightEyeBlankGeometry $halfClosedViewerRightOffset)})
-        $canonicalOuterHairMask=New-CoordinateMask $frozenForegroundHairRuns `
-            $halfClosed.Width $halfClosed.Height
         foreach($eye in $eyes)
         {
             foreach($encodedRun in $eye.Runs)
@@ -307,33 +282,17 @@ function New-HalfClosedEyeFrame([Drawing.Bitmap]$Open,[Drawing.Bitmap]$FaceSourc
                 {
                     $curveY=Get-QuadraticCurveYAtX $eye.BlankGeometry ([double]$x+0.5) `
                         ([int]$closedEyeGeometry.CurveSegments)
-                    if($eye.ContentOffsetX-eq0)
-                    {
-                        if(([double]$run.Y+0.5)-gt$curveY){continue}
-                        $face=Get-BilinearFaceColor $FaceSource $x $run.Y $eye
-                        $alpha=$halfClosed.GetPixel($x,$run.Y).A
-                        $halfClosed.SetPixel($x,$run.Y,[Drawing.Color]::FromArgb(
-                            $alpha,$face.R,$face.G,$face.B))
-                        continue
-                    }
-
+                    if(([double]$run.Y+0.5)-gt$curveY){continue}
                     $face=Get-BilinearFaceColor $FaceSource $x $run.Y $eye
                     $alpha=$halfClosed.GetPixel($x,$run.Y).A
                     $halfClosed.SetPixel($x,$run.Y,[Drawing.Color]::FromArgb(
                         $alpha,$face.R,$face.G,$face.B))
-                    if(([double]$run.Y+0.5)-le$curveY-or
-                        $canonicalOuterHairMask[($run.Y*$halfClosed.Width)+$x])
-                    {continue}
-                    $destinationX=$x+[int]$eye.ContentOffsetX
-                    if($destinationX-ge0-and$destinationX-lt$halfClosed.Width)
-                    {$halfClosed.SetPixel($destinationX,$run.Y,$Open.GetPixel($x,$run.Y))}
                 }
             }
         }
         $lidColor=$Open.GetPixel(43,118)
         $leftMask=New-CoordinateMask $leftEyeStencilRuns $halfClosed.Width $halfClosed.Height
-        $rightMask=New-TranslatedCoordinateMask $rightEyeStencilRuns `
-            $halfClosed.Width $halfClosed.Height $screenRightHalfSourceOffsetX
+        $rightMask=New-CoordinateMask $rightEyeStencilRuns $halfClosed.Width $halfClosed.Height
         Add-SubpixelQuadraticCurve $halfClosed $leftMask $eyes[0].Geometry $lidColor `
             ([double]$closedEyeGeometry.StrokeWidth) ([int]$closedEyeGeometry.SubpixelFactor) `
             ([int]$closedEyeGeometry.CurveSegments)
