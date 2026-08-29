@@ -738,9 +738,10 @@ function Assert-EyeAndMouthContract(
             "$($eye.Name) closed curve is horizontally misaligned with its canonical aperture (aperture=$($aperture.CenterX), curve=$($curve.CenterX))."
         Assert-True ([Math]::Abs($curve.CenterY-$aperture.CenterY)-le0.60) `
             "$($eye.Name) closed curve is vertically misaligned with its canonical aperture (aperture=$($aperture.CenterY), curve=$($curve.CenterY))."
-        Assert-True ($curve.VisibleWidth-ge$aperture.VisibleWidth-and
-            $curve.VisibleWidth-le($aperture.VisibleWidth+3)) `
-            "$($eye.Name) closed curve does not cover roughly the visible aperture width (aperture=$($aperture.VisibleWidth), curve=$($curve.VisibleWidth), bounds=$($curve.Bounds))."
+        $minimumInsetWidth=[int][Math]::Ceiling($aperture.VisibleWidth*0.50)
+        Assert-True ($curve.VisibleWidth-ge$minimumInsetWidth-and
+            $curve.VisibleWidth-le$aperture.VisibleWidth) `
+            "$($eye.Name) closed curve exceeds its hair-framed aperture after the source endpoint-clearance contract (aperture=$($aperture.VisibleWidth), curve=$($curve.VisibleWidth), bounds=$($curve.Bounds))."
         Assert-Equal 1 $curve.Components `
             "$($eye.Name) closed curve is not one connected native component."
         Assert-True ($curve.Dip-ge0.75-and$curve.Dip-le1.15) `
@@ -928,12 +929,12 @@ $expectedHashes = [ordered]@{
     Authority = 'DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
     SourceOpen = 'D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF'
     SourceOpenBaseline = '8F542A4F1B2671789BD7CD4980D890BF96CFCC9DADBC9D4E61963CCE2D384CCB'
-    SourceClosed = 'F06D8C7F97F597BCFC26DB2A9106E7974619098B2DABC6B8018F97BEEA1FA850'
-    SourceHalfClosed = 'DE6CFFA2B09629B53726673D0D800F1387276E8CA110A1024247FCC2942A584B'
+    SourceClosed = 'FBF8FAE02A6D8A80498A687C204A52F6991E6E6EE9A5A4ADBDCA1CD0507CAB2F'
+    SourceHalfClosed = '5EA7B851B59D1E93F557C223F31CF09EBB584BD8BF7723CAF756C4FEBA988FA6'
     NativeOpen = '238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511'
     NativeOpenBaseline = '3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59'
-    NativeClosed = '5DDF2F59A063817C6373A232CA37566EEBD7BFB3475702031B64F0EA981561BB'
-    NativeHalfClosed = '6B3FF731B4AB6E3781AD10598AB3A7BAEDFEA2DB7D4D130357E8642C9FD9AFFC'
+    NativeClosed = 'BF723702A880AF155E68945D109AB414F5984D63B21240F9D11851C9D959D54C'
+    NativeHalfClosed = '6BA677D7F6E78F349816740FEE0A734D7FAC21409D90A5EB9FE564F4761AD45C'
     Contour = 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65'
 }
 foreach ($name in @('Source','Seed','Mask','Authority'))

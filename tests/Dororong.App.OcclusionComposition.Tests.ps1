@@ -21,6 +21,12 @@ function Get-PurpleEyePixelCount(
     return $count
 }
 
+function Get-OpticalInk([Drawing.Color]$Pixel)
+{
+    $luminance = (0.2126 * $Pixel.R) + (0.7152 * $Pixel.G) + (0.0722 * $Pixel.B)
+    return 1.0 - ($luminance / 255.0)
+}
+
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $sourcePath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical-source.png'
 $maskPath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-body-region-mask.png'
@@ -77,22 +83,41 @@ try
     }
     Assert-Equal 85 $frozenCoordinateCount 'Frozen foreground-hair coordinate count changed.'
 
+    # A closed lid must disappear behind the surrounding bangs instead of
+    # touching their dark outline.  These source-space probes sit immediately
+    # inside the four hair boundaries that frame the two visible eye openings.
+    # High optical ink here makes the lid and hair read as one hooked stroke at
+    # the final 96 px size.
+    foreach ($probe in @(
+        @{ Name='viewer-left outer'; X=44; Y=119 },
+        @{ Name='viewer-left inner'; X=62; Y=120 },
+        @{ Name='viewer-right inner'; X=87; Y=127 },
+        @{ Name='viewer-right outer'; X=103; Y=126 }))
+    {
+        $ink = Get-OpticalInk $sourceClosed.GetPixel($probe.X,$probe.Y)
+        if ($ink -ge 0.60)
+        {
+            $failures.Add("$($probe.Name) closed lid touches foreground hair at " +
+                "($($probe.X),$($probe.Y)); opticalInk=$ink.")
+        }
+    }
+
     $leftOpen = Get-PurpleEyePixelCount $nativeOpen 16 30 46 61
     $leftHalf = Get-PurpleEyePixelCount $nativeHalf 16 30 46 61
     $rightOpen = Get-PurpleEyePixelCount $nativeOpen 34 48 46 63
     $rightHalf = Get-PurpleEyePixelCount $nativeHalf 34 48 46 63
     Assert-Equal 24 $leftOpen 'Viewer-left canonical purple-eye count changed.'
     Assert-Equal 40 $rightOpen 'Viewer-right canonical purple-eye count changed.'
-    if ($leftHalf -ne 8)
-    { $failures.Add("Viewer-left half-close purple count is not candidate D. Expected '8', observed '$leftHalf'.") }
-    if ($rightHalf -ne 14)
-    { $failures.Add("Viewer-right half-close purple count is not candidate D. Expected '14', observed '$rightHalf'.") }
+    if ($leftHalf -ne 10)
+    { $failures.Add("Viewer-left inset-lid half-close purple count changed. Expected '10', observed '$leftHalf'.") }
+    if ($rightHalf -ne 17)
+    { $failures.Add("Viewer-right inset-lid half-close purple count changed. Expected '17', observed '$rightHalf'.") }
     $leftRatio = [double]$leftHalf / $leftOpen
     $rightRatio = [double]$rightHalf / $rightOpen
-    if ($leftRatio -ne 0.3333333333333333)
-    { $failures.Add("Viewer-left half-close ratio changed. Expected '0.3333333333333333', observed '$leftRatio'.") }
-    if ($rightRatio -ne 0.35)
-    { $failures.Add("Viewer-right half-close ratio changed. Expected '0.35', observed '$rightRatio'.") }
+    if ($leftRatio -ne ([double]10 / 24))
+    { $failures.Add("Viewer-left half-close ratio changed. Expected '$([double]10 / 24)', observed '$leftRatio'.") }
+    if ($rightRatio -ne ([double]17 / 40))
+    { $failures.Add("Viewer-right half-close ratio changed. Expected '$([double]17 / 40)', observed '$rightRatio'.") }
     if ([Math]::Abs($leftRatio - $rightRatio) -gt 0.08)
     { $failures.Add("Candidate D half-close imbalance exceeds 0.08: left=$leftRatio right=$rightRatio.") }
     if ($failures.Count -gt 0) { throw ($failures -join [Environment]::NewLine) }
@@ -103,4 +128,4 @@ finally
     { if ($null -ne $bitmap) { $bitmap.Dispose() } }
 }
 
-Write-Output 'OCCLUSION COMPOSITION PASS: 85 frozen foreground-hair source coordinates stay canonical in half/full close and candidate D ratios are 8/24 and 14/40.'
+Write-Output 'OCCLUSION COMPOSITION PASS: 85 frozen foreground-hair coordinates stay canonical, four closed-lid endpoints clear the surrounding hair, and inset-lid half ratios are 10/24 and 17/40.'

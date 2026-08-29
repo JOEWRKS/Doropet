@@ -2,7 +2,7 @@
 
 **Goal:** Replace the failed symmetric lid-table treatment with independently fitted left/right closed eyes, then remove the abrupt open/closed swap with one deterministic half-closed frame.
 
-**Current boundary:** Exact attempt-3 closed asset `D0C0BE25471A92D65948132CE6154BA8AF56FF1F59FCDB8D0C4EDF64B206747A` and the later attempt-1 blink artifact at clean HEAD `612f252f7f75a301c275212f4dd4185d6b75023f` remain `FAIL`. Do not treat their hashes, coordinate tests, static review, or captured frames as visual acceptance.
+**Current boundary:** Exact attempt-3 closed asset `D0C0BE25471A92D65948132CE6154BA8AF56FF1F59FCDB8D0C4EDF64B206747A`, the later attempt-1 blink artifact at clean HEAD `612f252f7f75a301c275212f4dd4185d6b75023f`, and Task 7's first live occlusion artifact at HEAD `9ee97edc8dd71d183bcd48a23196014383d14929` remain `FAIL`. The last artifact preserved the foreground-hair bytes but let both closed-lid endpoints touch the surrounding dark hair/face outlines after resize, so the result still read as one hooked stroke. The working-tree endpoint-clearance correction has primary static/live evidence but not yet direct user acceptance.
 
 ## Evidence-backed diagnosis
 
@@ -85,10 +85,18 @@ For each candidate, record normalized remaining-purple ratios per eye, the ratio
 
 ## Task 6 — Integrate occlusion-correct composition and readable timing
 
-Use TDD. Before production changes, make the rejected current generator fail because it mutates frozen foreground-hair coordinates and its half-close ratios differ by `0.20`. Integrate the selected Task 5 D/E/F offset pair and frozen foreground-hair ownership into the source-first generator. Both half and full close must follow the same compositing order: canonical face/eye base, state-specific eye blank/lid, then exact foreground-hair restoration before the existing proxy-aware single resize.
+Use TDD. Before production changes, make the rejected current generator fail because it mutates frozen foreground-hair coordinates and its half-close ratios differ by `0.20`. Integrate the selected Task 5 D/E/F offset pair and frozen foreground-hair ownership into the source-first generator. Both half and full close must follow the same compositing order: canonical face/eye base, state-specific eye blank/lid, then exact foreground-hair restoration before the existing proxy-aware single resize. Task 8 later narrows the lid span while retaining those vertical offsets; its updated half-close ratios supersede the original D counts without changing the compositing order or timing.
 
 Update IDLE to a `0.26s` sequence at the existing two-second phase: half-close for `0.08s`, full-close for `0.10s`, and half-open for `0.08s`. Focused tests must prove each half state spans at least two 33ms render ticks, SLEEP remains full closed, and all other states reset to canonical. Preserve the accepted open frame and body art exactly. Run the focused hair/half/timing checks plus ExactArt, BodyMask, ContinuousAuthority, SubpixelOutline, SleepPose, RuntimeComposition, Core, and Release build, then obtain an independent task review.
 
 ## Task 7 — New exact artifact and live occlusion observation
 
 From the reviewed clean Task 6 HEAD, run fresh verification and one new attempt-specific publish; never overwrite the rejected attempt-1 artifact or evidence. Launch the exact new executable once and capture a stable-IDLE sequence. Inspect the full frame and an eye crop for: unchanged foreground hair across open/half/full states; lids remaining visually behind hair; balanced half-close progress; readable half-frame dwell; full-close `⌣` geometry; and clean open return. User acceptance, sustained SLEEP breathing, and click-only wake remain separate verdicts.
+
+## Task 8 — Inset closed lids from the hair silhouette
+
+Task 7 live inspection exposed a stricter defect than byte-preserving hair restoration: the full-close curves still ran from one dark hair boundary to the other, so antialiasing joined each lid to the surrounding silhouette. Treat the user's rejection as authoritative. Add a failing source-space regression at the four hair-adjacent lid endpoints, then inset each independent curve from its surrounding hair while keeping its final native center aligned, preserving the established shallow `⌣`, vertical asymmetry, foreground-hair bytes, one-resize pipeline, non-eye/alpha invariants, and blink timing.
+
+The corrected source controls are viewer-left `P0=(46.00,118.80)`, `P1=(52.750,124.40)`, `P2=(59.50,119.40)` and viewer-right `P0=(89.00,125.60)`, `P1=(94.250,131.55)`, `P2=(99.50,126.50)`. The four clearance probes `(44,119)`, `(62,120)`, `(87,127)`, and `(103,126)` must remain below `0.60` optical ink in the full-close source. Final native curves must remain connected, no wider than their hair-framed apertures, and retain a `0.75..1.15px` downward-center dip. The shortened half layer is accepted when both eyes remain balanced and readable; its deterministic native purple counts are `10/24` and `17/40`.
+
+Fresh working-tree evidence records source/native closed hashes `FBF8FAE02A6D8A80498A687C204A52F6991E6E6EE9A5A4ADBDCA1CD0507CAB2F` / `BF723702A880AF155E68945D109AB414F5984D63B21240F9D11851C9D959D54C` and source/native half hashes `5EA7B851B59D1E93F557C223F31CF09EBB584BD8BF7723CAF756C4FEBA988FA6` / `6BA677D7F6E78F349816740FEE0A734D7FAC21409D90A5EB9FE564F4761AD45C`. ExactArt measured connected native widths `8 / 7` and dips `0.9024 / 0.9175`, and exited `0`. A fresh exact executable was captured at frames `79 → 82 → 87 → 91 → 92`; primary inspection sees clean open/half/full/half/open continuity and visible gaps between both lids and the surrounding hair. Direct user acceptance, sustained SLEEP breathing, and click-only wake remain `UNVERIFIED`.
