@@ -119,7 +119,7 @@ function Assert-SourceCandidateContract(
                     "$Label alpha-zero RGB hygiene failed at ($x,$y)."
             }
             if ($Mask.GetPixel($x,$y).R -eq 0 -and
-                (-not $AllowEyeChanges -or -not (Test-InSourceEyeRegion $x $y)))
+                (-not $AllowEyeChanges -or -not (Test-InSourceStateRegion $x $y)))
             {
                 Assert-Equal $sourcePixel.ToArgb() $candidatePixel.ToArgb() `
                     "$Label protected mask-zero artwork changed at ($x,$y)."
@@ -438,6 +438,8 @@ $script:FrozenForegroundHairRuns=@(
     '129:104-106','130:104-106','131:104-106','132:104-106','133:103-105',
     '134:103-104','135:103-103','136:102-103','137:102-103','138:101-102',
     '139:101-102','140:101-101','141:100-101','142:99-100','143:99-100')
+$script:ShiftedForegroundHairRuns=@(
+    '125:83-83','126:83-84','127:83-85','128:83-85','129:84-85','130:85-85')
 
 $script:ReviewedSourceEyeChangeKeys=[Collections.Generic.HashSet[string]]::new(
     [StringComparer]::Ordinal)
@@ -460,23 +462,49 @@ foreach($encodedRun in @(
     {$null=$script:ReviewedSourceEyeChangeKeys.Add("$x,$y")}
 }
 
-foreach($encodedRun in $script:FrozenForegroundHairRuns)
+foreach($encodedRun in @(
+    '124:81-81','125:80-83','126:80-84','127:80-85',
+    '128:82-85','129:83-85','130:84-85'))
+{
+    $parts=$encodedRun.Split(':');$y=[int]$parts[0];$bounds=$parts[1].Split('-')
+    foreach($x in ([int]$bounds[0])..([int]$bounds[1]))
+    {$null=$script:ReviewedSourceEyeChangeKeys.Add("$x,$y")}
+}
+
+foreach($encodedRun in @($script:FrozenForegroundHairRuns)+@($script:ShiftedForegroundHairRuns))
 {
     $parts=$encodedRun.Split(':');$y=[int]$parts[0];$bounds=$parts[1].Split('-')
     foreach($x in ([int]$bounds[0])..([int]$bounds[1]))
     {
         Assert-True $script:ReviewedSourceEyeChangeKeys.Remove("$x,$y") `
-            "Frozen foreground-hair coordinate ($x,$y) was not in the reviewed eye stencil."
+            "Foreground-hair coordinate ($x,$y) was not in the reviewed eye/lid support."
     }
 }
 
 function Test-InSourceEyeRegion([int]$X,[int]$Y)
 {return $script:ReviewedSourceEyeChangeKeys.Contains("$X,$Y")}
 
+$script:ReviewedSourceStateChangeKeys=[Collections.Generic.HashSet[string]]::new(
+    $script:ReviewedSourceEyeChangeKeys,[StringComparer]::Ordinal)
+foreach($encodedRun in @(
+    '114:92-100','115:89-103','116:86-105','117:86-106','118:86-106','119:86-106',
+    '120:86-106','121:86-106','122:86-106','123:86-106','124:86-106','125:86-106',
+    '126:86-106','127:86-106','128:86-106','129:86-106','130:86-106','131:86-106',
+    '132:86-106','133:87-105','134:88-104','135:90-103','136:93-103','137:86-103',
+    '138:86-102','139:88-102','140:89-101','141:99-101','142:99-100','143:99-100'))
+{
+    $parts=$encodedRun.Split(':');$y=[int]$parts[0];$bounds=$parts[1].Split('-')
+    foreach($x in ([int]$bounds[0])..([int]$bounds[1]))
+    {$null=$script:ReviewedSourceStateChangeKeys.Add("$($x-4),$y")}
+}
+
+function Test-InSourceStateRegion([int]$X,[int]$Y)
+{return $script:ReviewedSourceStateChangeKeys.Contains("$X,$Y")}
+
 function Test-InNativeEyeFilterSupport([int]$X,[int]$Y)
 {
     return ($X -ge 16 -and $X -le 30 -and $Y -ge 46 -and $Y -le 61) -or
-        ($X -ge 34 -and $X -le 48 -and $Y -ge 46 -and $Y -le 63)
+        ($X -ge 31 -and $X -le 48 -and $Y -ge 46 -and $Y -le 63)
 }
 
 function Assert-ProxyInputEqualityOutsideEyes(
@@ -486,7 +514,7 @@ function Assert-ProxyInputEqualityOutsideEyes(
     {
         for($x=0;$x-lt$Open.Width;$x++)
         {
-            if(Test-InSourceEyeRegion $x $y){continue}
+            if(Test-InSourceStateRegion $x $y){continue}
             Assert-Equal $Open.GetPixel($x,$y).ToArgb() $Closed.GetPixel($x,$y).ToArgb() `
                 "$Label open/closed resize-proxy input differs outside eye regions at ($x,$y)."
         }
@@ -574,7 +602,7 @@ function New-IndependentEyeBlank([Drawing.Bitmap]$Open,[Drawing.Bitmap]$FaceSour
                 }
             }
         }
-        foreach($encodedRun in $script:FrozenForegroundHairRuns)
+        foreach($encodedRun in @($script:FrozenForegroundHairRuns)+@($script:ShiftedForegroundHairRuns))
         {
             $parts=$encodedRun.Split(':');$y=[int]$parts[0];$bounds=$parts[1].Split('-')
             foreach($x in ([int]$bounds[0])..([int]$bounds[1]))
@@ -702,9 +730,9 @@ function Assert-SourceEyeChangeContract(
                 "Detached forbidden #FADCE0 eye patch exists at source ($x,$y)."
         }
     }
-    Assert-Equal 860 $script:ReviewedSourceEyeChangeKeys.Count `
+    Assert-Equal 873 $script:ReviewedSourceEyeChangeKeys.Count `
         'Independent reviewed eye/lid membership count changed.'
-    Assert-Equal 860 $observedChanges.Count `
+    Assert-Equal 873 $observedChanges.Count `
         'Observed source open/closed eye/lid change count changed.'
     Assert-True $script:ReviewedSourceEyeChangeKeys.SetEquals($observedChanges) `
         'Observed source open/closed changes do not equal the independent reviewed eye/lid membership.'
@@ -734,8 +762,17 @@ function Assert-EyeAndMouthContract(
             $eye.StartX $eye.EndX $eye.StartY $eye.EndY
         $curve=Measure-NativeClosedEyeCurve $NativeBlank $NativeClosed $eye.Name `
             $eye.StartX $eye.EndX $eye.StartY $eye.EndY
-        Assert-True ([Math]::Abs($curve.CenterX-$aperture.CenterX)-le0.60) `
-            "$($eye.Name) closed curve is horizontally misaligned with its canonical aperture (aperture=$($aperture.CenterX), curve=$($curve.CenterX))."
+        if($eye.Name-eq'viewer-right')
+        {
+            $requestedCenterX=36.8180538802584
+            Assert-True ([Math]::Abs($curve.CenterX-$requestedCenterX)-le0.01) `
+                "$($eye.Name) closed curve did not move exactly three native pixels left from the user-rejected 39.8180538802584 center (target=$requestedCenterX, curve=$($curve.CenterX))."
+        }
+        else
+        {
+            Assert-True ([Math]::Abs($curve.CenterX-$aperture.CenterX)-le0.60) `
+                "$($eye.Name) closed curve is horizontally misaligned with its canonical aperture (aperture=$($aperture.CenterX), curve=$($curve.CenterX))."
+        }
         Assert-True ([Math]::Abs($curve.CenterY-$aperture.CenterY)-le0.60) `
             "$($eye.Name) closed curve is vertically misaligned with its canonical aperture (aperture=$($aperture.CenterY), curve=$($curve.CenterY))."
         $minimumInsetWidth=[int][Math]::Ceiling($aperture.VisibleWidth*0.50)
@@ -929,12 +966,12 @@ $expectedHashes = [ordered]@{
     Authority = 'DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
     SourceOpen = 'D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF'
     SourceOpenBaseline = '8F542A4F1B2671789BD7CD4980D890BF96CFCC9DADBC9D4E61963CCE2D384CCB'
-    SourceClosed = 'FBF8FAE02A6D8A80498A687C204A52F6991E6E6EE9A5A4ADBDCA1CD0507CAB2F'
-    SourceHalfClosed = '5EA7B851B59D1E93F557C223F31CF09EBB584BD8BF7723CAF756C4FEBA988FA6'
+    SourceClosed = '842035A880C30B79694AEC0D481374293A9DA4722410642EFD171ACD490099BD'
+    SourceHalfClosed = 'CD7F8C114CAE3B303AC9D986122AF61DCD1AFCF0DC624FA3D819950052B67B0D'
     NativeOpen = '238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511'
     NativeOpenBaseline = '3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59'
-    NativeClosed = 'BF723702A880AF155E68945D109AB414F5984D63B21240F9D11851C9D959D54C'
-    NativeHalfClosed = '6BA677D7F6E78F349816740FEE0A734D7FAC21409D90A5EB9FE564F4761AD45C'
+    NativeClosed = '1F8A50A5907D6BD926ECC4F93CD83064D8F1C862FCA457773E48FB3AFE172331'
+    NativeHalfClosed = '44339755E917FED67A41F8D6D2D9116EA8367106FA2E664BBC38F2E421AC0682'
     Contour = 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65'
 }
 foreach ($name in @('Source','Seed','Mask','Authority'))

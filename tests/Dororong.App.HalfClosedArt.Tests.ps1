@@ -60,8 +60,8 @@ foreach ($path in @(
         "Half-closed generator contract is missing '$path'."
 }
 
-$expectedSourceHalfHash = '5EA7B851B59D1E93F557C223F31CF09EBB584BD8BF7723CAF756C4FEBA988FA6'
-$expectedNativeHalfHash = '6BA677D7F6E78F349816740FEE0A734D7FAC21409D90A5EB9FE564F4761AD45C'
+$expectedSourceHalfHash = 'CD7F8C114CAE3B303AC9D986122AF61DCD1AFCF0DC624FA3D819950052B67B0D'
+$expectedNativeHalfHash = '44339755E917FED67A41F8D6D2D9116EA8367106FA2E664BBC38F2E421AC0682'
 Assert-Equal $expectedSourceHalfHash `
     (Get-FileHash -Algorithm SHA256 -LiteralPath $sourceHalfPath).Hash `
     'The deterministic source half-closed frame changed.'
@@ -91,6 +91,22 @@ foreach ($encodedRun in @(
     foreach ($x in ([int]$bounds[0])..([int]$bounds[1]))
     {
         $null = $allowedSourceChanges.Add("$x,$y")
+    }
+}
+
+foreach ($encodedRun in @(
+    '114:92-100','115:89-103','116:86-105','117:86-106','118:86-106','119:86-106',
+    '120:86-106','121:86-106','122:86-106','123:86-106','124:86-106','125:86-106',
+    '126:86-106','127:86-106','128:86-106','129:86-106','130:86-106','131:86-106',
+    '132:86-106','133:87-105','134:88-104','135:90-103','136:93-103','137:86-103',
+    '138:86-102','139:88-102','140:89-101','141:99-101','142:99-100','143:99-100'))
+{
+    $parts = $encodedRun.Split(':')
+    $y = [int]$parts[0]
+    $bounds = $parts[1].Split('-')
+    foreach ($x in ([int]$bounds[0])..([int]$bounds[1]))
+    {
+        $null = $allowedSourceChanges.Add("$($x-4),$y")
     }
 }
 
@@ -158,7 +174,7 @@ try
             if ($open.ToArgb() -eq $half.ToArgb()) { continue }
             $nativeHalfChanges++
             $insideFilter = ($x-ge16-and$x-le30-and$y-ge46-and$y-le61) -or `
-                ($x-ge34-and$x-le48-and$y-ge46-and$y-le63)
+                ($x-ge31-and$x-le48-and$y-ge46-and$y-le63)
             Assert-True $insideFilter `
                 "Native half-close change escaped scaled eye filter support at ($x,$y)."
         }

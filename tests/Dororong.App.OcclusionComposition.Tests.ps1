@@ -49,6 +49,8 @@ $frozenHairRuns = @(
     '129:104-106','130:104-106','131:104-106','132:104-106','133:103-105',
     '134:103-104','135:103-103','136:102-103','137:102-103','138:101-102',
     '139:101-102','140:101-101','141:100-101','142:99-100','143:99-100')
+$shiftedHairRuns = @(
+    '125:83-83','126:83-84','127:83-85','128:83-85','129:84-85','130:85-85')
 $runPayload = [Text.Encoding]::UTF8.GetBytes($frozenHairRuns -join "`n")
 $runHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($runPayload))
 Assert-Equal '8655F6B4897707D4B79A3523116ADD3A392BD2EE0AFEA903D825424F21FE1987' `
@@ -66,7 +68,7 @@ try
 
     $failures = [Collections.Generic.List[string]]::new()
     $frozenCoordinateCount = 0
-    foreach ($encodedRun in $frozenHairRuns)
+    foreach ($encodedRun in @($frozenHairRuns)+@($shiftedHairRuns))
     {
         $parts = $encodedRun.Split(':')
         $y = [int]$parts[0]
@@ -81,7 +83,7 @@ try
             { $failures.Add("Full-close changed frozen foreground hair at ($x,$y).") }
         }
     }
-    Assert-Equal 85 $frozenCoordinateCount 'Frozen foreground-hair coordinate count changed.'
+    Assert-Equal 97 $frozenCoordinateCount 'Frozen foreground-hair coordinate count changed.'
 
     # A closed lid must disappear behind the surrounding bangs instead of
     # touching their dark outline.  These source-space probes sit immediately
@@ -110,14 +112,14 @@ try
     Assert-Equal 40 $rightOpen 'Viewer-right canonical purple-eye count changed.'
     if ($leftHalf -ne 10)
     { $failures.Add("Viewer-left inset-lid half-close purple count changed. Expected '10', observed '$leftHalf'.") }
-    if ($rightHalf -ne 17)
-    { $failures.Add("Viewer-right inset-lid half-close purple count changed. Expected '17', observed '$rightHalf'.") }
+    if ($rightHalf -ne 14)
+    { $failures.Add("Viewer-right translated half-close purple count changed. Expected '14', observed '$rightHalf'.") }
     $leftRatio = [double]$leftHalf / $leftOpen
     $rightRatio = [double]$rightHalf / $rightOpen
     if ($leftRatio -ne ([double]10 / 24))
     { $failures.Add("Viewer-left half-close ratio changed. Expected '$([double]10 / 24)', observed '$leftRatio'.") }
-    if ($rightRatio -ne ([double]17 / 40))
-    { $failures.Add("Viewer-right half-close ratio changed. Expected '$([double]17 / 40)', observed '$rightRatio'.") }
+    if ($rightRatio -ne ([double]14 / 40))
+    { $failures.Add("Viewer-right half-close ratio changed. Expected '$([double]14 / 40)', observed '$rightRatio'.") }
     if ([Math]::Abs($leftRatio - $rightRatio) -gt 0.08)
     { $failures.Add("Candidate D half-close imbalance exceeds 0.08: left=$leftRatio right=$rightRatio.") }
     if ($failures.Count -gt 0) { throw ($failures -join [Environment]::NewLine) }
@@ -128,4 +130,4 @@ finally
     { if ($null -ne $bitmap) { $bitmap.Dispose() } }
 }
 
-Write-Output 'OCCLUSION COMPOSITION PASS: 85 frozen foreground-hair coordinates stay canonical, four closed-lid endpoints clear the surrounding hair, and inset-lid half ratios are 10/24 and 17/40.'
+Write-Output 'OCCLUSION COMPOSITION PASS: 97 foreground-hair coordinates stay canonical, four closed-lid endpoints clear the surrounding hair, and progressive full-face half ratios are 10/24 and 14/40.'
