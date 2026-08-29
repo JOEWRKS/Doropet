@@ -210,3 +210,29 @@ Use strict TDD and integrate Task 14 candidate B as the native `96x96` closed-fa
 - Remove fractional IDLE/SLEEP vertical scaling; breathing may use whole-pixel vertical translation only. WALK, CURIOUS, STARTLED, CLICK_REACTION, DRAGGED, state priority, input behavior, and body artwork remain unchanged.
 - Remove obsolete half-close resources and procedural closed-eye generation remnants. Keep only deterministic native authored runtime assets and tests that check their exact/protected identities, distinctness, iris stability, sequence mapping, SLEEP mapping, and no fractional IDLE/SLEEP scaling.
 - Before publish or launch, run focused tests, protected-art suites, Core tests, and Release build, then obtain an independent review against base `a94a1b4012d9f5134e63762f2d1175eb32e70c90`. Any reviewer finding is fixed and re-reviewed. Only a clean review permits one new attempt-specific publish and exact runtime observation.
+
+Task 15 was later rejected by direct user observation of exact runtime commit `2ea39edb864c7b939e97880a9fc40408d9dc7236`, published at `artifacts/repro/stage-a-native-blink-attempt-1/` and run as PID `36744`. A bounded 240-frame actual-desktop capture preserved under `verification/live-blink-user-fail-diagnostic-1/` reproduces the defect repeatedly. The 25%-open frame leaves disconnected purple horizontal remnants, and the closed screen-right lid sits four native rows below the screen-left lid, so the two eyes read as different expressions. Static/test PASS is withdrawn for motion acceptance; the exact live blink verdict is `FAIL`.
+
+## Task 17 — Author coherent native blink-family candidates
+
+Replace the failed construction method at scratch-candidate level before touching tracked product assets.
+
+- Start from the exact canonical `96x96` open face. Freeze exactly three complete `open / 70% / 25% / closed` native candidate families before rendering; no fourth candidate or one-by-one tuning is allowed.
+- Do not create intermediate faces by copying all closed pixels through a horizontal Y cutoff. Every state has an explicit whole-face eye plan: eyelid curve, face fill, eye white, iris, and hair occlusion are authored together on the native grid.
+- Preserve canonical hair, mouth, face boundary, decoration, body, alpha, and every pixel outside the two reviewed eye repair regions byte-identically. Canonical foreground hair remains in front of the eyes.
+- The two eyelids use the same shallow downward-center `⌣` language and comparable visible width/depth. Their final native vertical centers differ by no more than two rows, replacing the rejected four-row split while respecting the canonical open-eye offset.
+- At 70%, any retained purple eye content remains a compact connected eye mass at least two pixels tall, not a detached one-row stripe. At 25%, no purple iris residue remains; the near-closed state is a coherent pair of lids one native row above or lighter than the final closed pair.
+- Across open → 70% → 25% → closed, neither eye moves horizontally, lid motion is monotonic downward, foreground-hair contact does not appear, and no frame introduces a second disconnected dark eye mark.
+- Produce native full-sprite sequence sheets and nearest-neighbor face crops for all three complete families. Primary inspection selects one complete family or stops without integration. No tracked product/test/presenter changes occur in this task.
+
+## Task 18 — Integrate, review, and verify the selected blink family
+
+The user approved retiring iris-bearing `70% / 25%` interpolation after every Task 17 family reproduced a detached purple block/dot at native size. Use strict TDD against the rejected Task 15 assets before production changes.
+
+- The failing regression must catch the actual defect: both rejected transition assets retain purple eye content, the rejected closed pair has a four-row vertical-center split, and the old playback requires two iris-bearing intermediate resources.
+- Remove `dororong-eyes-70-open.png` and `dororong-eyes-25-open.png` plus their row-cutoff authoring path. Add exactly one complete native `dororong-blink-squint.png` face and one corrected complete native closed face.
+- Squint and closed contain no purple iris residue and no eye-white islands. Each eye contains one connected shallow downward-center `⌣` lid, with no second dark mark or 8-neighbor foreground-hair contact. The final left/right lid vertical centers differ by no more than two native rows. Squint uses the same fixed horizontal anchors as closed and sits exactly one native row above it.
+- Preserve the canonical open sprite and every pixel outside the reviewed eye repair regions byte-identically. Restore canonical foreground hair last so it remains visibly in front.
+- IDLE playback becomes `open → squint → squint → closed → closed → squint → squint → open` at 33ms probes, keeping the overall blink window readable while removing malformed interpolation. SLEEP continuously uses the same corrected closed face. Horizontal eye movement, fractional IDLE/SLEEP scaling, and unrelated behavior/input/body changes remain forbidden.
+- Generate exact native and nearest-neighbor `open / squint / closed` evidence and inspect it before commit. Run focused art/motion tests, protected-art suites, Core tests, Release build, and independent task review. Only after a clean review may one new attempt-specific publish replace PID `36744`, following exact PID/path/start/command/lineage checks.
+- Capture the actual desktop sequence again and inspect the exact runtime at native context and enlarged face crop. The fix is not accepted unless the original purple remnant, mismatched lid height, and malformed reverse-opening are absent; direct user acceptance remains required.

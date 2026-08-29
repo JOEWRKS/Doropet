@@ -20,17 +20,15 @@ $paths=[ordered]@{
     SubpixelTest=Join-Path $repositoryRoot 'tests/Dororong.App.SubpixelOutline.Tests.ps1'
     ExactArtTest=Join-Path $repositoryRoot 'tests/Dororong.App.ExactArt.Tests.ps1'
     Generator=$PSCommandPath
-    Authored70=Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-eyes-70-open.png'
-    Authored25=Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-eyes-25-open.png'
+    AuthoredSquint=Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-blink-squint.png'
     AuthoredClosed=Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-closed-eyes.png'
 }
 $expectedInputHashes=[ordered]@{
     Source='F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504'
     Seed='E256F3DC28929A49624C6308F77C994F061240CB7D2C9E80780AAD4A300C0779'
     Mask='D08B3A941C662F1CBC55C486C13FD4C6CD8901DA9CD5CF8512509698219FE46F'
-    Authored70='26300935CA7F86AC0B78A240C9B4F7818A2814E57A1041B25B324DF1F0B0CEAC'
-    Authored25='9115B9AE003FD26E8191084C3232760985A9ED43E098C33C739B2A755857D99B'
-    AuthoredClosed='4E12486A490EB134D8405259CB4DF6A847733559133CA9801DC506E292AEFD8E'
+    AuthoredSquint='CE77E5AEA5AEB4EAEFEBE28ABE1FEBEC51729546FD71C8B9FA713F809B05FFA5'
+    AuthoredClosed='DE4D8DAD77521C1F720D0A25984897AA1B4FFF5CB6F5E427627DBCB2263E68DD'
 }
 $authorityIdentity='DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
 $ownershipIdentity='30945B766547723F9860941DEB70C74465912E2604E5EDADBBB69E91C78D708D'
@@ -110,7 +108,7 @@ function Copy-AuthoredAsset([string]$Source,[string]$Destination)
 New-Item -ItemType Directory -Force -Path $OutputDirectory|Out-Null
 if($EvidenceDirectory){New-Item -ItemType Directory -Force -Path $EvidenceDirectory|Out-Null}
 $raw=$null;$source=$null;$seed=$null;$mask=$null;$open=$null;$openProxy=$null
-$nativeOpen=$null;$nativeBaseline=$null;$authored70=$null;$authored25=$null;$authoredClosed=$null
+$nativeOpen=$null;$nativeBaseline=$null;$authoredSquint=$null;$authoredClosed=$null
 try
 {
     $raw=[Drawing.Bitmap]::new($paths.Source)
@@ -138,8 +136,7 @@ try
     $openProxy=New-DororongResizeProxy $open $fill $proxyComponents
     $nativeOpen=Resize-DororongPremultiplied96 $openProxy
     Save-Png $nativeOpen (Join-Path $OutputDirectory 'dororong-canonical.png')
-    Copy-AuthoredAsset $paths.Authored70 (Join-Path $OutputDirectory 'dororong-eyes-70-open.png')
-    Copy-AuthoredAsset $paths.Authored25 (Join-Path $OutputDirectory 'dororong-eyes-25-open.png')
+    Copy-AuthoredAsset $paths.AuthoredSquint (Join-Path $OutputDirectory 'dororong-blink-squint.png')
     Copy-AuthoredAsset $paths.AuthoredClosed (Join-Path $OutputDirectory 'dororong-closed-eyes.png')
 
     if($EvidenceDirectory)
@@ -149,15 +146,12 @@ try
         Save-Png $open (Join-Path $EvidenceDirectory 'source-open-candidate.png')
         Save-Png $nativeBaseline (Join-Path $EvidenceDirectory 'native-open-baseline.png')
         Save-Png $nativeOpen (Join-Path $EvidenceDirectory 'native-open-candidate.png')
-        Copy-AuthoredAsset $paths.Authored70 (Join-Path $EvidenceDirectory 'native-eyes-70-open-candidate.png')
-        Copy-AuthoredAsset $paths.Authored25 (Join-Path $EvidenceDirectory 'native-eyes-25-open-candidate.png')
+        Copy-AuthoredAsset $paths.AuthoredSquint (Join-Path $EvidenceDirectory 'native-squint-candidate.png')
         Copy-AuthoredAsset $paths.AuthoredClosed (Join-Path $EvidenceDirectory 'native-closed-candidate.png')
         Save-NearestNeighborEvidence $nativeOpen (Join-Path $EvidenceDirectory 'native-open-nearest-8x.png')
-        $authored70=[Drawing.Bitmap]::new($paths.Authored70)
-        $authored25=[Drawing.Bitmap]::new($paths.Authored25)
+        $authoredSquint=[Drawing.Bitmap]::new($paths.AuthoredSquint)
         $authoredClosed=[Drawing.Bitmap]::new($paths.AuthoredClosed)
-        Save-NearestNeighborEvidence $authored70 (Join-Path $EvidenceDirectory 'native-eyes-70-open-nearest-8x.png')
-        Save-NearestNeighborEvidence $authored25 (Join-Path $EvidenceDirectory 'native-eyes-25-open-nearest-8x.png')
+        Save-NearestNeighborEvidence $authoredSquint (Join-Path $EvidenceDirectory 'native-squint-nearest-8x.png')
         Save-NearestNeighborEvidence $authoredClosed (Join-Path $EvidenceDirectory 'native-closed-nearest-8x.png')
     }
 
@@ -167,11 +161,11 @@ try
     Write-Output "GENERATOR INPUT source=$($preHashes.Source) seed=$($preHashes.Seed) mask=$($preHashes.Mask) ownership=$ownershipIdentity authority=$authorityIdentity constants=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.Constants).Hash) sourceRasterModule=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.SourceRasterModule).Hash) subpixelModule=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.SubpixelModule).Hash) ownershipConstants=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.OwnershipConstants).Hash) ownershipModule=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.OwnershipModule).Hash) subpixelTest=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.SubpixelTest).Hash) exactArtTest=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.ExactArtTest).Hash) generator=$((Get-FileHash -Algorithm SHA256 -LiteralPath $paths.Generator).Hash)"
     Write-Output "GENERATOR GEOMETRY factor=$($constants.SubpixelFactor) width=$widthText halfWidth=$halfText eMultiplier=$($constants.ExposedCoverageMultiplier) cMultiplier=$($constants.ContinuationCoverageMultiplier) outlineRgb=$($outline.R),$($outline.G),$($outline.B) segments=$(@($contour.Segments).Count) exposed=$($contour.ExposedSegmentCount) continuations=$($contour.ContinuationSegmentCount) contourHash=$(Get-DororongCanonicalContourHash $contour) endpoints=$endpointText eligibleSeeds=$($fill.EligibleSeedCount)"
     Write-Output "GENERATOR PROXY proxyComponents=$($proxyComponents.Count) proxyPixels=$proxyPixelCount proxyHash=$($membership.Hash) proxyOpen=$(Get-BitmapPngHash $openProxy)"
-    Write-Output "GENERATOR OUTPUT sourceOpen=$(Get-BitmapPngHash $open) nativeOpen=$(Get-BitmapPngHash $nativeOpen) authored70=$($preHashes.Authored70) authored25=$($preHashes.Authored25) authoredClosed=$($preHashes.AuthoredClosed) resizeOpen=1 authoredNativeCopies=3"
+    Write-Output "GENERATOR OUTPUT sourceOpen=$(Get-BitmapPngHash $open) nativeOpen=$(Get-BitmapPngHash $nativeOpen) authoredSquint=$($preHashes.AuthoredSquint) authoredClosed=$($preHashes.AuthoredClosed) resizeOpen=1 authoredNativeCopies=2"
 }
 finally
 {
-    foreach($bitmap in @($authoredClosed,$authored25,$authored70,$nativeBaseline,
+    foreach($bitmap in @($authoredClosed,$authoredSquint,$nativeBaseline,
         $nativeOpen,$openProxy,$open,$mask,$seed,$source,$raw))
     {if($null-ne$bitmap){$bitmap.Dispose()}}
     foreach($name in $expectedInputHashes.Keys)

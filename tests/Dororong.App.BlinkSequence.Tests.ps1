@@ -53,22 +53,16 @@ function Render-State(
         $State,$origin,$facing,$Phase,$false,$null))
 }
 
-# Each intermediate occupies 0.04 seconds in the existing two-second IDLE phase,
-# so it is observable for at least one 33ms render tick. Full close occupies 0.08
-# seconds, which covers two 33ms ticks.
+# Each lid-only state occupies 0.08 seconds in the existing two-second IDLE
+# phase, so squint and full close each cover two 33ms render probes.
 $idleCases = @(
     @{ Phase = 0.649999; Frame = 'dororong-canonical.png'; Label = 'before blink' },
-    @{ Phase = 0.650000; Frame = 'dororong-eyes-70-open.png'; Label = 'first 70-percent entry' },
-    @{ Phase = 0.666500; Frame = 'dororong-eyes-70-open.png'; Label = 'first 70-percent 33ms probe' },
-    @{ Phase = 0.670000; Frame = 'dororong-eyes-25-open.png'; Label = 'first 25-percent entry' },
-    @{ Phase = 0.686500; Frame = 'dororong-eyes-25-open.png'; Label = 'first 25-percent 33ms probe' },
+    @{ Phase = 0.650000; Frame = 'dororong-blink-squint.png'; Label = 'first squint entry' },
+    @{ Phase = 0.666500; Frame = 'dororong-blink-squint.png'; Label = 'first squint 33ms probe' },
     @{ Phase = 0.690000; Frame = 'dororong-closed-eyes.png'; Label = 'full-close entry' },
     @{ Phase = 0.706500; Frame = 'dororong-closed-eyes.png'; Label = 'full-close first 33ms probe' },
-    @{ Phase = 0.723000; Frame = 'dororong-closed-eyes.png'; Label = 'full-close second 33ms probe' },
-    @{ Phase = 0.730000; Frame = 'dororong-eyes-25-open.png'; Label = 'second 25-percent entry' },
-    @{ Phase = 0.746500; Frame = 'dororong-eyes-25-open.png'; Label = 'second 25-percent 33ms probe' },
-    @{ Phase = 0.750000; Frame = 'dororong-eyes-70-open.png'; Label = 'second 70-percent entry' },
-    @{ Phase = 0.766500; Frame = 'dororong-eyes-70-open.png'; Label = 'second 70-percent 33ms probe' },
+    @{ Phase = 0.730000; Frame = 'dororong-blink-squint.png'; Label = 'second squint entry' },
+    @{ Phase = 0.746500; Frame = 'dororong-blink-squint.png'; Label = 'second squint 33ms probe' },
     @{ Phase = 0.770000; Frame = 'dororong-canonical.png'; Label = 'after blink' })
 
 $idleFailures = [Collections.Generic.List[string]]::new()
@@ -105,4 +99,4 @@ foreach ($otherState in @(
     Assert-Frame $image 'dororong-canonical.png' "$otherState reset at blink phase"
 }
 
-Write-Output 'BLINK SEQUENCE PASS: IDLE maps open/70%/25%/closed/25%/70%/open with one 33ms tick per intermediate and two closed ticks; IDLE uses whole-pixel translation without scaling, SLEEP stays closed, and other states reset to canonical.'
+Write-Output 'BLINK SEQUENCE PASS: 33ms probes map IDLE to open/squint/squint/closed/closed/squint/squint/open; IDLE uses whole-pixel translation without scaling, SLEEP stays closed, and other states reset to canonical.'

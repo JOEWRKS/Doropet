@@ -44,8 +44,7 @@ $paths=[ordered]@{
     Source=Join-Path $assetRoot 'dororong-canonical-source.png'
     Mask=Join-Path $assetRoot 'dororong-body-region-mask.png'
     Open=Join-Path $assetRoot 'dororong-canonical.png'
-    Open70=Join-Path $assetRoot 'dororong-eyes-70-open.png'
-    Open25=Join-Path $assetRoot 'dororong-eyes-25-open.png'
+    Squint=Join-Path $assetRoot 'dororong-blink-squint.png'
     Closed=Join-Path $assetRoot 'dororong-closed-eyes.png'
     Generator=Join-Path $repositoryRoot 'tools/Generate-CanonicalArt.ps1'
 }
@@ -53,35 +52,37 @@ $expected=[ordered]@{
     Source='F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504'
     Mask='D08B3A941C662F1CBC55C486C13FD4C6CD8901DA9CD5CF8512509698219FE46F'
     Open='238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511'
-    Open70='26300935CA7F86AC0B78A240C9B4F7818A2814E57A1041B25B324DF1F0B0CEAC'
-    Open25='9115B9AE003FD26E8191084C3232760985A9ED43E098C33C739B2A755857D99B'
-    Closed='4E12486A490EB134D8405259CB4DF6A847733559133CA9801DC506E292AEFD8E'
+    Squint='CE77E5AEA5AEB4EAEFEBE28ABE1FEBEC51729546FD71C8B9FA713F809B05FFA5'
+    Closed='DE4D8DAD77521C1F720D0A25984897AA1B4FFF5CB6F5E427627DBCB2263E68DD'
     SourceOpen='D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF'
     SourceBaseline='8F542A4F1B2671789BD7CD4980D890BF96CFCC9DADBC9D4E61963CCE2D384CCB'
     NativeBaseline='3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59'
 }
-foreach($name in @('Source','Mask','Open','Open70','Open25','Closed'))
+foreach($name in @('Source','Mask','Open','Squint','Closed'))
 {Assert-Equal $expected[$name] (Get-FileHash -Algorithm SHA256 -LiteralPath $paths[$name]).Hash "Pinned $name identity changed."}
 Assert-True (-not(Test-Path -LiteralPath (Join-Path $assetRoot 'dororong-half-closed-eyes.png'))) `
     'The obsolete half-closed runtime asset returned.'
+Assert-True (-not(Test-Path -LiteralPath (Join-Path $assetRoot 'dororong-eyes-70-open.png'))) `
+    'The obsolete 70-percent iris-bearing runtime asset returned.'
+Assert-True (-not(Test-Path -LiteralPath (Join-Path $assetRoot 'dororong-eyes-25-open.png'))) `
+    'The obsolete 25-percent iris-bearing runtime asset returned.'
 
-$runRoot=Join-Path $repositoryRoot ".superpowers/sdd/2026-08-29-dororong-stage-a-eye-geometry-blink-recovery/task-15-exact-art/$([Guid]::NewGuid().ToString('N'))"
+$runRoot=Join-Path $repositoryRoot ".superpowers/sdd/2026-08-29-dororong-stage-a-eye-geometry-blink-recovery/task-18-exact-art/$([Guid]::NewGuid().ToString('N'))"
 $outputDirectory=Join-Path $runRoot 'output'
 $evidenceDirectory=Join-Path $runRoot 'evidence'
 $generatorOutput=& pwsh -NoProfile -File $paths.Generator -SourcePath $paths.Source `
     -BodyMaskPath $paths.Mask -OutputDirectory $outputDirectory -EvidenceDirectory $evidenceDirectory 2>&1
 Assert-Equal 0 $LASTEXITCODE "Canonical/authored-state export failed: $($generatorOutput-join[Environment]::NewLine)"
 $generatorText=$generatorOutput-join[Environment]::NewLine
-Assert-True $generatorText.Contains('resizeOpen=1 authoredNativeCopies=3',[StringComparison]::Ordinal) `
-    'Generator did not report one canonical resize plus three authored-native copies.'
+Assert-True $generatorText.Contains('resizeOpen=1 authoredNativeCopies=2',[StringComparison]::Ordinal) `
+    'Generator did not report one canonical resize plus two authored-native copies.'
 
-$expectedOutput=@('dororong-canonical.png','dororong-closed-eyes.png','dororong-eyes-25-open.png','dororong-eyes-70-open.png')|Sort-Object
+$expectedOutput=@('dororong-blink-squint.png','dororong-canonical.png','dororong-closed-eyes.png')|Sort-Object
 $actualOutput=@(Get-ChildItem -LiteralPath $outputDirectory -File|Sort-Object Name|ForEach-Object Name)
 Assert-Equal ($expectedOutput-join'|') ($actualOutput-join'|') 'Export output surface changed.'
 $expectedEvidence=@(
     'native-closed-candidate.png','native-closed-nearest-8x.png',
-    'native-eyes-25-open-candidate.png','native-eyes-25-open-nearest-8x.png',
-    'native-eyes-70-open-candidate.png','native-eyes-70-open-nearest-8x.png',
+    'native-squint-candidate.png','native-squint-nearest-8x.png',
     'native-open-baseline.png','native-open-candidate.png','native-open-nearest-8x.png',
     'source-open-baseline.png','source-open-candidate.png')|Sort-Object
 $actualEvidence=@(Get-ChildItem -LiteralPath $evidenceDirectory -File|Sort-Object Name|ForEach-Object Name)
@@ -90,8 +91,7 @@ Assert-Equal ($expectedEvidence-join'|') ($actualEvidence-join'|') `
 
 foreach($mapping in @(
     @{Product=$paths.Open;Export=Join-Path $outputDirectory 'dororong-canonical.png';Evidence=Join-Path $evidenceDirectory 'native-open-candidate.png'},
-    @{Product=$paths.Open70;Export=Join-Path $outputDirectory 'dororong-eyes-70-open.png';Evidence=Join-Path $evidenceDirectory 'native-eyes-70-open-candidate.png'},
-    @{Product=$paths.Open25;Export=Join-Path $outputDirectory 'dororong-eyes-25-open.png';Evidence=Join-Path $evidenceDirectory 'native-eyes-25-open-candidate.png'},
+    @{Product=$paths.Squint;Export=Join-Path $outputDirectory 'dororong-blink-squint.png';Evidence=Join-Path $evidenceDirectory 'native-squint-candidate.png'},
     @{Product=$paths.Closed;Export=Join-Path $outputDirectory 'dororong-closed-eyes.png';Evidence=Join-Path $evidenceDirectory 'native-closed-candidate.png'}))
 {
     $hash=(Get-FileHash -Algorithm SHA256 -LiteralPath $mapping.Product).Hash
@@ -111,8 +111,7 @@ try
 {
     foreach($entry in @(
         @{Native='native-open-candidate.png';Nearest='native-open-nearest-8x.png';Label='open'},
-        @{Native='native-eyes-70-open-candidate.png';Nearest='native-eyes-70-open-nearest-8x.png';Label='70-percent'},
-        @{Native='native-eyes-25-open-candidate.png';Nearest='native-eyes-25-open-nearest-8x.png';Label='25-percent'},
+        @{Native='native-squint-candidate.png';Nearest='native-squint-nearest-8x.png';Label='squint'},
         @{Native='native-closed-candidate.png';Nearest='native-closed-nearest-8x.png';Label='closed'}))
     {
         $native=[Drawing.Bitmap]::new((Join-Path $evidenceDirectory $entry.Native));$bitmaps.Add($native)
@@ -168,8 +167,7 @@ function Render-State([Dororong.Core.Behavior.PetState]$State,[double]$Phase)
 }
 foreach($case in @(
     @{State=$state::Idle;Phase=0.1;Frame='dororong-canonical.png';Label='Idle open'},
-    @{State=$state::Idle;Phase=0.66;Frame='dororong-eyes-70-open.png';Label='Idle 70'},
-    @{State=$state::Idle;Phase=0.68;Frame='dororong-eyes-25-open.png';Label='Idle 25'},
+    @{State=$state::Idle;Phase=0.66;Frame='dororong-blink-squint.png';Label='Idle closing squint'},
     @{State=$state::Idle;Phase=0.70;Frame='dororong-closed-eyes.png';Label='Idle closed'},
     @{State=$state::Sleep;Phase=0.25;Frame='dororong-closed-eyes.png';Label='Sleep'}))
 {
@@ -178,4 +176,4 @@ foreach($case in @(
     {Assert-Equal 1.0 ([double]$scale.ScaleY) "$($case.Label) used fractional vertical scale."}
 }
 
-Write-Output "EXACT ART PASS: canonical=$($expected.Open) 70=$($expected.Open70) 25=$($expected.Open25) closed=$($expected.Closed); authored-native export/evidence, exact nearest-neighbor states, 96-DPI presentation, alpha hit testing, and state mapping passed."
+Write-Output "EXACT ART PASS: canonical=$($expected.Open) squint=$($expected.Squint) closed=$($expected.Closed); authored-native export/evidence, exact nearest-neighbor states, 96-DPI presentation, alpha hit testing, and state mapping passed."

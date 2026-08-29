@@ -15,8 +15,7 @@ public sealed class BodyPressEventArgs(PointD localPosition) : EventArgs
 public partial class DororongPresenter : UserControl
 {
     private static readonly BitmapImage CanonicalFrame = LoadFrame("dororong-canonical.png");
-    private static readonly BitmapImage Eyes70OpenFrame = LoadFrame("dororong-eyes-70-open.png");
-    private static readonly BitmapImage Eyes25OpenFrame = LoadFrame("dororong-eyes-25-open.png");
+    private static readonly BitmapImage BlinkSquintFrame = LoadFrame("dororong-blink-squint.png");
     private static readonly BitmapImage ClosedEyesFrame = LoadFrame("dororong-closed-eyes.png");
 
     public DororongPresenter()
@@ -40,25 +39,17 @@ public partial class DororongPresenter : UserControl
         {
             case PetState.Idle:
                 BodyTranslateTransform.Y = Math.Round(-cycle);
-                if (p is >= 0.65 and < 0.67)
+                if (p is >= 0.65 and < 0.69)
                 {
-                    DororongImage.Source = Eyes70OpenFrame;
-                }
-                else if (p is >= 0.67 and < 0.69)
-                {
-                    DororongImage.Source = Eyes25OpenFrame;
+                    DororongImage.Source = BlinkSquintFrame;
                 }
                 else if (p is >= 0.69 and < 0.73)
                 {
                     DororongImage.Source = ClosedEyesFrame;
                 }
-                else if (p is >= 0.73 and < 0.75)
+                else if (p is >= 0.73 and < 0.77)
                 {
-                    DororongImage.Source = Eyes25OpenFrame;
-                }
-                else if (p is >= 0.75 and < 0.77)
-                {
-                    DororongImage.Source = Eyes70OpenFrame;
+                    DororongImage.Source = BlinkSquintFrame;
                 }
 
                 break;

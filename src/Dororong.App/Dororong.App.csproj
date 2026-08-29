@@ -6,8 +6,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\dororong-canonical.png" />
-    <Resource Include="Assets\dororong-eyes-70-open.png" />
-    <Resource Include="Assets\dororong-eyes-25-open.png" />
+    <Resource Include="Assets\dororong-blink-squint.png" />
     <Resource Include="Assets\dororong-closed-eyes.png" />
     <None Include="Assets\dororong-canonical-source.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
