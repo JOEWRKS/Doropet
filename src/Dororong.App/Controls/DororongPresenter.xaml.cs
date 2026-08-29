@@ -15,7 +15,8 @@ public sealed class BodyPressEventArgs(PointD localPosition) : EventArgs
 public partial class DororongPresenter : UserControl
 {
     private static readonly BitmapImage CanonicalFrame = LoadFrame("dororong-canonical.png");
-    private static readonly BitmapImage HalfClosedEyesFrame = LoadFrame("dororong-half-closed-eyes.png");
+    private static readonly BitmapImage Eyes70OpenFrame = LoadFrame("dororong-eyes-70-open.png");
+    private static readonly BitmapImage Eyes25OpenFrame = LoadFrame("dororong-eyes-25-open.png");
     private static readonly BitmapImage ClosedEyesFrame = LoadFrame("dororong-closed-eyes.png");
 
     public DororongPresenter()
@@ -38,18 +39,26 @@ public partial class DororongPresenter : UserControl
         switch (snapshot.State)
         {
             case PetState.Idle:
-                BodyScaleTransform.ScaleY = 1 + (0.025 * cycle);
-                if (p is >= 0.65 and < 0.69)
+                BodyTranslateTransform.Y = Math.Round(-cycle);
+                if (p is >= 0.65 and < 0.67)
                 {
-                    DororongImage.Source = HalfClosedEyesFrame;
+                    DororongImage.Source = Eyes70OpenFrame;
                 }
-                else if (p is >= 0.69 and < 0.74)
+                else if (p is >= 0.67 and < 0.69)
+                {
+                    DororongImage.Source = Eyes25OpenFrame;
+                }
+                else if (p is >= 0.69 and < 0.73)
                 {
                     DororongImage.Source = ClosedEyesFrame;
                 }
-                else if (p is >= 0.74 and < 0.78)
+                else if (p is >= 0.73 and < 0.75)
                 {
-                    DororongImage.Source = HalfClosedEyesFrame;
+                    DororongImage.Source = Eyes25OpenFrame;
+                }
+                else if (p is >= 0.75 and < 0.77)
+                {
+                    DororongImage.Source = Eyes70OpenFrame;
                 }
 
                 break;
@@ -86,9 +95,7 @@ public partial class DororongPresenter : UserControl
                 break;
 
             case PetState.Sleep:
-                BodyScaleTransform.ScaleX = 1 + (0.012 * cycle);
-                BodyScaleTransform.ScaleY = 0.90 + (0.012 * cycle);
-                BodyTranslateTransform.Y = 6 - cycle;
+                BodyTranslateTransform.Y = 6 - Math.Round(cycle);
                 DororongImage.Source = ClosedEyesFrame;
                 break;
 

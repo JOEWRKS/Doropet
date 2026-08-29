@@ -39,6 +39,8 @@ Add-Type -Path $appAssemblyPath
 
 $presenter = [Dororong.App.Controls.DororongPresenter]::new()
 $image = [System.Windows.Controls.Image]$presenter.FindName('DororongImage')
+$scale = $presenter.FindName('BodyScaleTransform')
+$translation = $presenter.FindName('BodyTranslateTransform')
 $state = [Dororong.Core.Behavior.PetState]
 $facing = [Dororong.Core.Behavior.FacingDirection]::Right
 $origin = [Dororong.Core.Geometry.PointD]::new(0, 0)
@@ -51,26 +53,44 @@ function Render-State(
         $State,$origin,$facing,$Phase,$false,$null))
 }
 
-# The 0.65..0.78 phase window is 0.26 seconds in the existing two-second IDLE phase.
-# Both half states persist for 0.08 seconds, which covers at least two 33ms render ticks.
+# Each intermediate occupies 0.04 seconds in the existing two-second IDLE phase,
+# so it is observable for at least one 33ms render tick. Full close occupies 0.08
+# seconds, which covers two 33ms ticks.
 $idleCases = @(
     @{ Phase = 0.649999; Frame = 'dororong-canonical.png'; Label = 'before blink' },
-    @{ Phase = 0.650000; Frame = 'dororong-half-closed-eyes.png'; Label = 'first half-frame entry' },
-    @{ Phase = 0.683000; Frame = 'dororong-half-closed-eyes.png'; Label = 'first half-frame second 33ms tick' },
-    @{ Phase = 0.689999; Frame = 'dororong-half-closed-eyes.png'; Label = 'first half-frame exit probe' },
+    @{ Phase = 0.650000; Frame = 'dororong-eyes-70-open.png'; Label = 'first 70-percent entry' },
+    @{ Phase = 0.666500; Frame = 'dororong-eyes-70-open.png'; Label = 'first 70-percent 33ms probe' },
+    @{ Phase = 0.670000; Frame = 'dororong-eyes-25-open.png'; Label = 'first 25-percent entry' },
+    @{ Phase = 0.686500; Frame = 'dororong-eyes-25-open.png'; Label = 'first 25-percent 33ms probe' },
     @{ Phase = 0.690000; Frame = 'dororong-closed-eyes.png'; Label = 'full-close entry' },
-    @{ Phase = 0.720000; Frame = 'dororong-closed-eyes.png'; Label = 'full-close second 33ms tick' },
-    @{ Phase = 0.739999; Frame = 'dororong-closed-eyes.png'; Label = 'full-close exit probe' },
-    @{ Phase = 0.740000; Frame = 'dororong-half-closed-eyes.png'; Label = 'second half-frame entry' },
-    @{ Phase = 0.773000; Frame = 'dororong-half-closed-eyes.png'; Label = 'second half-frame second 33ms tick' },
-    @{ Phase = 0.779999; Frame = 'dororong-half-closed-eyes.png'; Label = 'second half-frame exit probe' },
-    @{ Phase = 0.780000; Frame = 'dororong-canonical.png'; Label = 'after blink' })
+    @{ Phase = 0.706500; Frame = 'dororong-closed-eyes.png'; Label = 'full-close first 33ms probe' },
+    @{ Phase = 0.723000; Frame = 'dororong-closed-eyes.png'; Label = 'full-close second 33ms probe' },
+    @{ Phase = 0.730000; Frame = 'dororong-eyes-25-open.png'; Label = 'second 25-percent entry' },
+    @{ Phase = 0.746500; Frame = 'dororong-eyes-25-open.png'; Label = 'second 25-percent 33ms probe' },
+    @{ Phase = 0.750000; Frame = 'dororong-eyes-70-open.png'; Label = 'second 70-percent entry' },
+    @{ Phase = 0.766500; Frame = 'dororong-eyes-70-open.png'; Label = 'second 70-percent 33ms probe' },
+    @{ Phase = 0.770000; Frame = 'dororong-canonical.png'; Label = 'after blink' })
 
+$idleFailures = [Collections.Generic.List[string]]::new()
 foreach ($case in $idleCases)
 {
     Render-State $state::Idle $case.Phase
-    Assert-Frame $image $case.Frame "IDLE $($case.Label) phase=$($case.Phase)"
+    $actualFrame = $image.Source.ToString()
+    if (-not $actualFrame.EndsWith($case.Frame, [StringComparison]::OrdinalIgnoreCase))
+    {
+        $idleFailures.Add("IDLE $($case.Label) phase=$($case.Phase) did not use $($case.Frame); observed '$actualFrame'.")
+    }
+    if ([double]$scale.ScaleX -ne 1.0)
+    { $idleFailures.Add("IDLE $($case.Label) scaled horizontally; observed '$([double]$scale.ScaleX)'.") }
+    if ([double]$scale.ScaleY -ne 1.0)
+    { $idleFailures.Add("IDLE $($case.Label) scaled vertically; observed '$([double]$scale.ScaleY)'.") }
+    $translateY = [double]$translation.Y
+    if ($translateY -lt -1.0 -or $translateY -gt 1.0 -or $translateY -ne [Math]::Round($translateY))
+    {
+        $idleFailures.Add("IDLE $($case.Label) breathing is not bounded to whole-pixel vertical translation; observed '$translateY'.")
+    }
 }
+if ($idleFailures.Count -gt 0) { throw ($idleFailures -join [Environment]::NewLine) }
 
 foreach ($phase in @(0.25, 0.75))
 {
@@ -85,4 +105,4 @@ foreach ($otherState in @(
     Assert-Frame $image 'dororong-canonical.png' "$otherState reset at blink phase"
 }
 
-Write-Output 'BLINK SEQUENCE PASS: IDLE maps open/half/closed/half/open across 0.65..0.78 with two 33ms ticks per half state; SLEEP stays closed and every other state resets to canonical.'
+Write-Output 'BLINK SEQUENCE PASS: IDLE maps open/70%/25%/closed/25%/70%/open with one 33ms tick per intermediate and two closed ticks; IDLE uses whole-pixel translation without scaling, SLEEP stays closed, and other states reset to canonical.'

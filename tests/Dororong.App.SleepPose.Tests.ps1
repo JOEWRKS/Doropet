@@ -89,11 +89,11 @@ $lowScaleY = [double]$scale.ScaleY
 $lowTranslateY = [double]$translation.Y
 $lowFrame = $image.Source.ToString()
 
-Assert-Near 1.012 $highScaleX 0.000001 'SLEEP expansion phase ScaleX changed.'
-Assert-Near 0.912 $highScaleY 0.000001 'SLEEP expansion phase ScaleY changed.'
+Assert-Near 1.0 $highScaleX 0.000001 'SLEEP expansion phase ScaleX changed.'
+Assert-Near 1.0 $highScaleY 0.000001 'SLEEP expansion phase ScaleY changed.'
 Assert-Near 5.0 $highTranslateY 0.000001 'SLEEP expansion phase vertical position changed.'
-Assert-Near 0.988 $lowScaleX 0.000001 'SLEEP contraction phase ScaleX changed.'
-Assert-Near 0.888 $lowScaleY 0.000001 'SLEEP contraction phase ScaleY changed.'
+Assert-Near 1.0 $lowScaleX 0.000001 'SLEEP contraction phase ScaleX changed.'
+Assert-Near 1.0 $lowScaleY 0.000001 'SLEEP contraction phase ScaleY changed.'
 Assert-Near 7.0 $lowTranslateY 0.000001 'SLEEP contraction phase vertical position changed.'
 Assert-Equal $true $highFrame.EndsWith('dororong-closed-eyes.png', [StringComparison]::OrdinalIgnoreCase) `
     'SLEEP expansion phase did not use dororong-closed-eyes.png.'
@@ -117,4 +117,4 @@ foreach ($wakeCase in $wakeCases)
     Assert-Near $wakeCase.TranslateY ([double]$translation.Y) 0.000001 "$($wakeCase.State) retained a SLEEP vertical offset."
 }
 
-Write-Output 'SLEEP POSE PASS: expansion/contraction breathing, closed-eyes frame selection, and wake-state pose reset passed.'
+Write-Output 'SLEEP POSE PASS: whole-pixel translation-only breathing, corrected closed-frame selection, and wake-state pose reset passed.'

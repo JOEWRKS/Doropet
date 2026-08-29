@@ -122,3 +122,91 @@ The initial A/B/C position batch and D/E/F depth batch were rejected at native `
 Remove the translated-coordinate mask, `-8/-4` offsets, content-copy branch, and the old expanded source/native test allowances. The exact reviewed source eye-change membership is `860` coordinates. Half-close keeps both eyes stationary, leaves `10/24` and `17/40` purple pixels respectively, and constrains the screen-right lower-iris centroid change to at most `0.50px`; observed change is about `0.34px`. Preserve the canonical open hash `238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511` and the existing foreground-hair ownership.
 
 Selected deterministic identities are source/native full-close `20331CACA2C171BC51A90CA4BD776AE2CA16B9E6D599AC1A3D46F2BAC1470213` / `62840545A2B6E241CF6FCE0C551617E9C8B40D35C170E7D3DDB40C9385A8F811` and source/native half-close `582A84AFDC446FEE4B0EACF662A02869570A2C9263267A390F2AC41806D59839` / `37200E62A1E2B37B00FE799FD03EB06E12D2D3906944F4F1B2B9AA00EDBF0152`. Clean commit `19cf6c48937076522db38a3a1c81d8b6d72fa606` received one framework-dependent publish at `artifacts/repro/stage-a-natural-face-attempt-1/`; EXE/App/Core SHA-256 are `5073528B...D3C7` / `FD2FB32E...EF2A` / `BEFD7272...AAB4`, and embedded open/half/full bytes match the selected runtime asset hashes. Stale PID `22088` was stopped only after exact PID/path/start/command/parent readback. The new exact executable runs as PID `56644`; its manifest is `artifacts/repro/stage-a-natural-face-attempt-1/verification/task-10-runtime-manifest.json`. Computer Use reported that the transparent WPF app did not expose a targetable window, so automatic capture is `UNVERIFIED` and no automated PASS is inferred. Directly observe a stable IDLE `open → half → full → half → open` sequence next. Static or automated PASS does not replace direct user acceptance.
+
+Task 10 was later rejected by direct live user observation. The user classified both the stationary full-close face and the closing/opening motion as `FAIL`; its exact artifact remains historical evidence and is not an accepted baseline.
+
+## Task 11 — Whole-face blink states and raster-stable playback
+
+Replace the repeatedly failed clipped-eye treatment without changing the canonical open frame, body outline, behavior-state priority, input behavior, or phase-1 provenance.
+
+Static facial-state requirements:
+
+- Restore the user's explicit screen-right-eye correction: the character's left closed eye is placed `3px` left of the rejected native center `39.8180538802584`, targeting `36.8180538802584` at `96x96` within the previously frozen `0.01px` measurement tolerance.
+- Build each expression as a complete face state derived from the canonical source. Draw each complete eyelid as a downward-center `⌣` behind the foreground bang, then restore the canonical foreground hair last. Do not clip or inset the eyelid merely to avoid the hair silhouette.
+- The two final visible lids must use the same visual language: comparable stroke weight, readable curvature, and comparable width after their different hair occlusion. The screen-right result must not collapse into the current six-pixel V-like mark.
+- Preserve the canonical open frame, mouth, face boundary, hair, decorations, body, alpha, and non-eye pixels. Do not use image generation or a separately painted runtime-only PNG.
+
+Motion requirements:
+
+- Replace the single reused half-close asset with two distinct whole-face transition states representing approximately `70%` and `25%` openness.
+- Keep both irises stationary in the face; the transition masks them vertically while independently positioned eyelids descend. Do not translate or copy the eye content horizontally.
+- IDLE plays `open → 70% → 25% → closed → 25% → 70% → open`; the closed state remains for two `33ms` ticks and each intermediate is distinct and observable for at least one tick.
+- Remove runtime fractional vertical scaling from IDLE and SLEEP because WPF `HighQuality` scaling resamples the one-pixel facial strokes. Preserve subtle breathing with bounded vertical translation instead. WALK, CURIOUS, STARTLED, CLICK_REACTION, and DRAGGED behavior remain unchanged.
+- SLEEP continuously uses the same corrected closed face and the raster-stable breathing motion.
+
+Verification requirements:
+
+- Use TDD: the current Task 10 implementation must first fail focused checks for the screen-right target, complete behind-hair construction, whole-eye centroid stability, two distinct transition assets, the seven-step mapping, and absence of IDLE/SLEEP fractional vertical scaling.
+- Generate native `96x96` and nearest-neighbor enlarged open/70%/25%/closed evidence, inspect the exact produced assets, then run the focused art/motion tests, existing protected-art suites, Core tests, and Release build.
+- Obtain independent task review. Publish only once to a new attempt-specific path from the reviewed clean product commit, launch only after exact process identity checks, and inspect the actual WPF result. Direct user acceptance remains the final visual authority; no automated/static result can upgrade a live rejection.
+
+Task 11 stopped without a commit after every bounded procedural candidate failed the combined visible-lid, hair-separation, and placement checks. No Task 11 runtime artifact was published or launched. The user approved replacing procedural eye generation with directly authored final-resolution face states.
+
+## Task 12 — Direct native whole-face sprite states
+
+Treat the final `96x96` facial sprites themselves as the editable source of truth. Do not use image generation, source-scale Bézier fitting, translated masks, optical-centroid calibration, or a separately generated runtime derivative.
+
+Static candidate stage:
+
+- Start from the exact canonical open `96x96` sprite. Every candidate is a complete full-sprite clone whose only changed pixels are inside the two reviewed eye/face repair regions; hair, mouth, face boundary, decoration, body, alpha, and every other pixel remain byte-identical.
+- Author exactly three closed-face candidates directly on the native pixel grid. Use the user's `3px left` instruction as a geometric pixel placement for the screen-right eyelid, not as a weighted visible-ink calculation.
+- Each eye must read as a shallow downward-center `⌣` at native size. The screen-right eye may be partially covered by the canonical bang, but its exposed stroke must remain readable, must not touch the hair in 8-neighbor connectivity, and must use the same stroke weight and visual language as the screen-left eye.
+- Produce a frozen native full-sprite sheet and nearest-neighbor eye crops. Complete all three candidates before selection. Do not modify tracked product assets or presenter code during the candidate stage.
+- Primary visual inspection selects one candidate. If none is selectable, stop without a fourth candidate.
+
+Integration stage after selection:
+
+- Replace the procedural closed-eye product asset with the selected native whole-face sprite source.
+- Author distinct native `70%` and `25%` whole-face transition sprites from the canonical open and selected closed states. Preserve stationary iris coordinates, balanced normalized openness, canonical foreground hair, and unchanged non-eye pixels.
+- Keep the Task 11 seven-step IDLE mapping and raster-stable whole-pixel IDLE/SLEEP breathing changes, while removing obsolete procedural eye-generation and old half-close assets/tests.
+- Use TDD for asset identity, protected-region invariants, transition balance, seven-step frame mapping, and absence of fractional IDLE/SLEEP scale. Native appearance remains a separate visual gate.
+- Run the focused art/motion tests, protected-art suites, Core tests, Release build, independent review, one new attempt-specific publish, exact runtime identity checks, and actual WPF observation. Direct user acceptance remains required.
+
+Task 12's first direct native A/B/C batch was rejected because exact three-column-left placement plus unchanged canonical hair reduced the screen-right closed eye to a J/hook. The user selected natural visible-eye shape over the fixed `3px` value. The numerical left-shift target is no longer an acceptance requirement.
+
+## Task 13 — Natural native closed-face selection
+
+Create a new bounded direct-native batch with natural visible shape as the authority.
+
+- Preserve the exact canonical open sprite, hair, mouth, face boundary, decoration, body, alpha, and all pixels outside the reviewed eye repair regions.
+- Remove every open-iris remnant inside both repaired eye regions; no purple pixel may survive in a fully closed state.
+- Author exactly three complete `96x96` closed-face candidates directly on the final native grid. Candidate positions may vary by at most one native column around the canonical visible screen-right eye mass; there is no fixed `3px` or optical-centroid target.
+- Both final eyes must read as shallow downward-center `⌣` marks at native size, use comparable widths, depths, and stroke weight, remain disconnected from foreground hair in 8-neighbor connectivity, and preserve a face-color gap where the hair ends and lid begins.
+- Freeze all three pixel plans before rendering. Produce native full-sprite and nearest-neighbor eye-crop sheets, complete the batch before ranking, and make no tracked product changes during selection.
+- Primary native-first visual inspection selects one candidate. If none is selectable, stop without a fourth candidate.
+- After selection, a separate integration task authors the native 70%/25% states, integrates the seven-step mapping and whole-pixel breathing, removes procedural eye-generation remnants, and performs the full verification/review/runtime sequence.
+
+Task 13's batch was rejected. It incorrectly treated purple open-iris pixels near `(37,54)-(38,55)` as protected hair and anchored the right lid around `x=34..35`. Exact canonical measurement establishes the visible right iris at `x=36..43`, center `39.65`; the retained purple cluster is eye content, not hair.
+
+## Task 14 — Corrected native eye ownership and anchor batch
+
+Run one corrected direct-native A/B/C batch using the measured canonical eye rather than the obsolete broad hair heuristic.
+
+- Classify every canonical purple pixel inside the right repair region as eye content and remove it in the closed state. Foreground-hair protection includes only canonical hair pixels that are non-purple and structurally connected to hair outside the repair region.
+- Anchor the natural screen-right lid around the measured visible iris bounds `x=36..43`, center `39.65`, with candidate visible spans limited to `x=37..45`. Preserve at least one face-color pixel of separation from canonical hair.
+- Freeze exactly three shallow one-native-pixel-dip `⌣` plans before rendering: candidates differ only by right-lid start/width within the allowed span. The screen-left closed eye stays fixed across the batch.
+- Preserve alpha and every pixel outside the two reviewed eye repair regions exactly; remove all purple eye remnants; require one connected visible component per lid and no 8-neighbor hair contact.
+- Produce native full-sprite and nearest-neighbor eye-crop sheets. Primary native-first inspection selects one or stops without another candidate. No tracked product changes occur during the batch.
+
+Task 14 candidate B is the primary-selected closed face. At native size its right lid remains a readable shallow `⌣`, keeps a face-color gap from the foreground bang, and avoids the point-like result in A and the left-crowded spacing in C. Structural evidence records zero purple residue, zero protected-hair/outside-region/alpha changes, one connected component per lid, and no hair contact. Candidate B is the only authoritative Task 14 output; A and C remain rejected scratch evidence.
+
+## Task 15 — Integrate selected native face states and raster-stable blink
+
+Use strict TDD and integrate Task 14 candidate B as the native `96x96` closed-face source of truth. Do not reuse Task 11's rejected closed geometry or restore the retired exact `3px` target.
+
+- Preserve the canonical open sprite and every protected pixel outside the reviewed eye repair regions byte-identically.
+- Author distinct native whole-face `70%` and `25%` open sprites between the canonical open face and selected B. Keep both irises horizontally stationary; closure is vertical masking/lid progression only. Preserve canonical foreground hair in front and remove purple residue only where the closing eyelid covers eye content.
+- Map IDLE to `open → 70% → 25% → closed → closed → 25% → 70% → open` at 33ms ticks. SLEEP continuously uses the selected closed face.
+- Remove fractional IDLE/SLEEP vertical scaling; breathing may use whole-pixel vertical translation only. WALK, CURIOUS, STARTLED, CLICK_REACTION, DRAGGED, state priority, input behavior, and body artwork remain unchanged.
+- Remove obsolete half-close resources and procedural closed-eye generation remnants. Keep only deterministic native authored runtime assets and tests that check their exact/protected identities, distinctness, iris stability, sequence mapping, SLEEP mapping, and no fractional IDLE/SLEEP scaling.
+- Before publish or launch, run focused tests, protected-art suites, Core tests, and Release build, then obtain an independent review against base `a94a1b4012d9f5134e63762f2d1175eb32e70c90`. Any reviewer finding is fixed and re-reviewed. Only a clean review permits one new attempt-specific publish and exact runtime observation.
