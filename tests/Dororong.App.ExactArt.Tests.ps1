@@ -431,6 +431,14 @@ function Assert-SourceBodyEquality(
     }
 }
 
+$script:FrozenForegroundHairRuns=@(
+    '114:97-100','115:98-103','116:101-105','117:103-106','118:104-106',
+    '119:104-106','120:104-106','121:104-106','122:104-106','123:104-106',
+    '124:104-106','125:104-106','126:104-106','127:104-106','128:104-106',
+    '129:104-106','130:104-106','131:104-106','132:104-106','133:103-105',
+    '134:103-104','135:103-103','136:102-103','137:102-103','138:101-102',
+    '139:101-102','140:101-101','141:100-101','142:99-100','143:99-100')
+
 $script:ReviewedSourceEyeChangeKeys=[Collections.Generic.HashSet[string]]::new(
     [StringComparer]::Ordinal)
 foreach($encodedRun in @(
@@ -450,6 +458,16 @@ foreach($encodedRun in @(
     $parts=$encodedRun.Split(':');$y=[int]$parts[0];$bounds=$parts[1].Split('-')
     foreach($x in ([int]$bounds[0])..([int]$bounds[1]))
     {$null=$script:ReviewedSourceEyeChangeKeys.Add("$x,$y")}
+}
+
+foreach($encodedRun in $script:FrozenForegroundHairRuns)
+{
+    $parts=$encodedRun.Split(':');$y=[int]$parts[0];$bounds=$parts[1].Split('-')
+    foreach($x in ([int]$bounds[0])..([int]$bounds[1]))
+    {
+        Assert-True $script:ReviewedSourceEyeChangeKeys.Remove("$x,$y") `
+            "Frozen foreground-hair coordinate ($x,$y) was not in the reviewed eye stencil."
+    }
 }
 
 function Test-InSourceEyeRegion([int]$X,[int]$Y)
@@ -555,6 +573,12 @@ function New-IndependentEyeBlank([Drawing.Bitmap]$Open,[Drawing.Bitmap]$FaceSour
                         $alpha,$face.R,$face.G,$face.B))
                 }
             }
+        }
+        foreach($encodedRun in $script:FrozenForegroundHairRuns)
+        {
+            $parts=$encodedRun.Split(':');$y=[int]$parts[0];$bounds=$parts[1].Split('-')
+            foreach($x in ([int]$bounds[0])..([int]$bounds[1]))
+            {$blank.SetPixel($x,$y,$Open.GetPixel($x,$y))}
         }
         return $blank
     }
@@ -678,9 +702,9 @@ function Assert-SourceEyeChangeContract(
                 "Detached forbidden #FADCE0 eye patch exists at source ($x,$y)."
         }
     }
-    Assert-Equal 945 $script:ReviewedSourceEyeChangeKeys.Count `
+    Assert-Equal 860 $script:ReviewedSourceEyeChangeKeys.Count `
         'Independent reviewed eye/lid membership count changed.'
-    Assert-Equal 945 $observedChanges.Count `
+    Assert-Equal 860 $observedChanges.Count `
         'Observed source open/closed eye/lid change count changed.'
     Assert-True $script:ReviewedSourceEyeChangeKeys.SetEquals($observedChanges) `
         'Observed source open/closed changes do not equal the independent reviewed eye/lid membership.'
@@ -750,7 +774,7 @@ function Assert-EyeAndMouthContract(
 
     foreach ($eye in @(
         @{ Name='left'; Lower=@('20,55','22,56','25,55') },
-        @{ Name='right'; Lower=@('42,56','43,58','42,60') }))
+        @{ Name='right'; Lower=@('38,59','40,59','41,59') }))
     {
         foreach ($probe in $eye.Lower)
         {
@@ -904,12 +928,12 @@ $expectedHashes = [ordered]@{
     Authority = 'DDF749007995B3F03781A3A51467013F406C5F7A2AA0480212523A79EF31F17F'
     SourceOpen = 'D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF'
     SourceOpenBaseline = '8F542A4F1B2671789BD7CD4980D890BF96CFCC9DADBC9D4E61963CCE2D384CCB'
-    SourceClosed = '7FE167DBD0419A4A91457D60388824C6DA5913E93DCF9DC25957716959995B89'
-    SourceHalfClosed = '4C97041A3D9F0AB75EDA8D681E4CDCFA716FE1DEF7636876D320DEFFF56AD35B'
+    SourceClosed = 'F06D8C7F97F597BCFC26DB2A9106E7974619098B2DABC6B8018F97BEEA1FA850'
+    SourceHalfClosed = 'DE6CFFA2B09629B53726673D0D800F1387276E8CA110A1024247FCC2942A584B'
     NativeOpen = '238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511'
     NativeOpenBaseline = '3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59'
-    NativeClosed = '9DEEE528E19D412FC1BA4CC2FD83E507DCFBA3ED13268836BB72B0717C9D2238'
-    NativeHalfClosed = '3F69D0D5C00DA5767D30AA1B58B3FE782296109AF0934DA9469654D214C14E52'
+    NativeClosed = '5DDF2F59A063817C6373A232CA37566EEBD7BFB3475702031B64F0EA981561BB'
+    NativeHalfClosed = '6B3FF731B4AB6E3781AD10598AB3A7BAEDFEA2DB7D4D130357E8642C9FD9AFFC'
     Contour = 'A29D007B699A16B555FE5133854E832FEFD8409EA85F2FECE3EEA97BF444FD65'
 }
 foreach ($name in @('Source','Seed','Mask','Authority'))
@@ -983,11 +1007,11 @@ if(-not[string]::IsNullOrWhiteSpace($EyeOnlyOpenPath)-or
         $eyeOpenProxy=New-IndependentResizeProxy $eyeOpen $eyeFill $eyeComponents
         $eyeClosedProxy=New-IndependentResizeProxy $eyeClosed $eyeFill $eyeComponents
         $eyeBlank=New-IndependentEyeBlank $eyeOpen $eyeSource
-        Assert-Equal '4DCFA02B90809A64AE7908CF6228388B2DEE88D97EBD4CE54F236721D97DAD45' `
+        Assert-Equal '7B101AAAD51934C16894271EB63BBF5D930EA858C99D98A2E127C920FF95C173' `
             (Get-BitmapPixelHash $eyeBlank) 'Independent eye-only source blank pixels changed.'
         $eyeBlankProxy=New-IndependentResizeProxy $eyeBlank $eyeFill $eyeComponents
         $eyeNativeBlank=Resize-DororongPremultiplied96 $eyeBlankProxy
-        Assert-Equal 'F7E8F8B6C789A9F4AF1A7393DB369C5378B0FD53E4260A13837FF6F1D4493206' `
+        Assert-Equal 'F00905180F90166A6A061A8290E6DB8F4BD3EDB9DE0535BC5B3A7549F071C6AF' `
             (Get-BitmapPixelHash $eyeNativeBlank) 'Independent eye-only native blank pixels changed.'
         Assert-ProxyInputEqualityOutsideEyes $eyeOpenProxy $eyeClosedProxy 'Eye-only independent proxy'
         $eyeDirectNativeOpen=Resize-DororongPremultiplied96 $eyeOpenProxy
@@ -1204,11 +1228,11 @@ try
     $sourceClosedProxy=New-IndependentResizeProxy $sourceClosed $direct.FillField $proxyComponents
     $sourceHalfClosedProxy=New-IndependentResizeProxy $sourceHalfClosed $direct.FillField $proxyComponents
     $sourceEyeBlank=New-IndependentEyeBlank $sourceOpen $source
-    Assert-Equal '4DCFA02B90809A64AE7908CF6228388B2DEE88D97EBD4CE54F236721D97DAD45' `
+    Assert-Equal '7B101AAAD51934C16894271EB63BBF5D930EA858C99D98A2E127C920FF95C173' `
         (Get-BitmapPixelHash $sourceEyeBlank) 'Independent source eye blank pixels changed.'
     $sourceEyeBlankProxy=New-IndependentResizeProxy $sourceEyeBlank $direct.FillField $proxyComponents
     $nativeEyeBlank=Resize-DororongPremultiplied96 $sourceEyeBlankProxy
-    Assert-Equal 'F7E8F8B6C789A9F4AF1A7393DB369C5378B0FD53E4260A13837FF6F1D4493206' `
+    Assert-Equal 'F00905180F90166A6A061A8290E6DB8F4BD3EDB9DE0535BC5B3A7549F071C6AF' `
         (Get-BitmapPixelHash $nativeEyeBlank) 'Independent native eye blank pixels changed.'
     Assert-ProxyInputEqualityOutsideEyes $sourceOpenProxy $sourceClosedProxy 'Canonical resize proxy'
     Assert-ProxyInputEqualityOutsideEyes $sourceOpenProxy $sourceHalfClosedProxy `
@@ -1436,7 +1460,7 @@ $presenter.Render([Dororong.Core.Behavior.PetSnapshot]::new(
     $stateType::Sleep,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,0.1,$false,$null))
 Assert-Frame $image 'dororong-closed-eyes.png' 'Sleep'
 $presenter.Render([Dororong.Core.Behavior.PetSnapshot]::new(
-    $stateType::Idle,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,0.68,$false,$null))
+    $stateType::Idle,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,0.70,$false,$null))
 Assert-Frame $image 'dororong-closed-eyes.png' 'Idle blink'
 $presenter.Render([Dororong.Core.Behavior.PetSnapshot]::new(
     $stateType::Idle,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,0.66,$false,$null))

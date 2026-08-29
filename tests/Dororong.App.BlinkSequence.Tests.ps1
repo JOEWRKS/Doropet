@@ -51,18 +51,20 @@ function Render-State(
         $State,$origin,$facing,$Phase,$false,$null))
 }
 
-# The 0.65..0.74 phase window is 0.18 seconds in the existing two-second IDLE phase.
-# Mutating either edge or omitting either half frame must fail one of these literal probes.
+# The 0.65..0.78 phase window is 0.26 seconds in the existing two-second IDLE phase.
+# Both half states persist for 0.08 seconds, which covers at least two 33ms render ticks.
 $idleCases = @(
     @{ Phase = 0.649999; Frame = 'dororong-canonical.png'; Label = 'before blink' },
     @{ Phase = 0.650000; Frame = 'dororong-half-closed-eyes.png'; Label = 'first half-frame entry' },
-    @{ Phase = 0.674999; Frame = 'dororong-half-closed-eyes.png'; Label = 'first half-frame exit probe' },
-    @{ Phase = 0.675000; Frame = 'dororong-closed-eyes.png'; Label = 'full-close entry' },
-    @{ Phase = 0.695000; Frame = 'dororong-closed-eyes.png'; Label = 'full-close middle' },
-    @{ Phase = 0.715000; Frame = 'dororong-closed-eyes.png'; Label = 'full-close exit probe' },
-    @{ Phase = 0.715001; Frame = 'dororong-half-closed-eyes.png'; Label = 'second half-frame entry' },
-    @{ Phase = 0.740000; Frame = 'dororong-half-closed-eyes.png'; Label = 'second half-frame exit probe' },
-    @{ Phase = 0.740001; Frame = 'dororong-canonical.png'; Label = 'after blink' })
+    @{ Phase = 0.683000; Frame = 'dororong-half-closed-eyes.png'; Label = 'first half-frame second 33ms tick' },
+    @{ Phase = 0.689999; Frame = 'dororong-half-closed-eyes.png'; Label = 'first half-frame exit probe' },
+    @{ Phase = 0.690000; Frame = 'dororong-closed-eyes.png'; Label = 'full-close entry' },
+    @{ Phase = 0.720000; Frame = 'dororong-closed-eyes.png'; Label = 'full-close second 33ms tick' },
+    @{ Phase = 0.739999; Frame = 'dororong-closed-eyes.png'; Label = 'full-close exit probe' },
+    @{ Phase = 0.740000; Frame = 'dororong-half-closed-eyes.png'; Label = 'second half-frame entry' },
+    @{ Phase = 0.773000; Frame = 'dororong-half-closed-eyes.png'; Label = 'second half-frame second 33ms tick' },
+    @{ Phase = 0.779999; Frame = 'dororong-half-closed-eyes.png'; Label = 'second half-frame exit probe' },
+    @{ Phase = 0.780000; Frame = 'dororong-canonical.png'; Label = 'after blink' })
 
 foreach ($case in $idleCases)
 {
@@ -83,4 +85,4 @@ foreach ($otherState in @(
     Assert-Frame $image 'dororong-canonical.png' "$otherState reset at blink phase"
 }
 
-Write-Output 'BLINK SEQUENCE PASS: IDLE maps open/half/closed/half/open across 0.65..0.74; SLEEP stays closed and every other state resets to canonical.'
+Write-Output 'BLINK SEQUENCE PASS: IDLE maps open/half/closed/half/open across 0.65..0.78 with two 33ms ticks per half state; SLEEP stays closed and every other state resets to canonical.'

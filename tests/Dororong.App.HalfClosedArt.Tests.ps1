@@ -60,8 +60,8 @@ foreach ($path in @(
         "Half-closed generator contract is missing '$path'."
 }
 
-$expectedSourceHalfHash = '4C97041A3D9F0AB75EDA8D681E4CDCFA716FE1DEF7636876D320DEFFF56AD35B'
-$expectedNativeHalfHash = '3F69D0D5C00DA5767D30AA1B58B3FE782296109AF0934DA9469654D214C14E52'
+$expectedSourceHalfHash = 'DE6CFFA2B09629B53726673D0D800F1387276E8CA110A1024247FCC2942A584B'
+$expectedNativeHalfHash = '6B3FF731B4AB6E3781AD10598AB3A7BAEDFEA2DB7D4D130357E8642C9FD9AFFC'
 Assert-Equal $expectedSourceHalfHash `
     (Get-FileHash -Algorithm SHA256 -LiteralPath $sourceHalfPath).Hash `
     'The deterministic source half-closed frame changed.'

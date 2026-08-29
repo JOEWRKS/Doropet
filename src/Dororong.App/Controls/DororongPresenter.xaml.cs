@@ -39,15 +39,15 @@ public partial class DororongPresenter : UserControl
         {
             case PetState.Idle:
                 BodyScaleTransform.ScaleY = 1 + (0.025 * cycle);
-                if (p is >= 0.65 and < 0.675)
+                if (p is >= 0.65 and < 0.69)
                 {
                     DororongImage.Source = HalfClosedEyesFrame;
                 }
-                else if (p is >= 0.675 and <= 0.715)
+                else if (p is >= 0.69 and < 0.74)
                 {
                     DororongImage.Source = ClosedEyesFrame;
                 }
-                else if (p is > 0.715 and <= 0.74)
+                else if (p is >= 0.74 and < 0.78)
                 {
                     DororongImage.Source = HalfClosedEyesFrame;
                 }
