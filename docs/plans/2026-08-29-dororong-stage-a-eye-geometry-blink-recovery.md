@@ -20,7 +20,7 @@
 - Preserve the exact canonical open frame and every non-eye/alpha pixel.
 - Keep the source-first deterministic art pipeline; no image-generation redraw and no independently painted runtime-only PNG.
 - Treat viewer-left and viewer-right eyes as separate shapes with separate anchors, widths, heights, and curve controls.
-- Treat the canonical front hair as a foreground occlusion layer over every eye state. Any reviewed bang-fill, bang-outline, or antialias pixel inside an eye stencil must remain byte-identical to the canonical open frame after eye blanking, lid drawing, proxy substitution, and resize.
+- Treat the canonical front hair as a foreground occlusion layer over every eye state. Any reviewed bang-fill, bang-outline, or antialias pixel inside an eye stencil must be restored byte-identically from the canonical open source after eye blanking and lid drawing, before the existing single resize. At native size, require visible foreground continuity and no lid ink over that hair; do not require byte-identical projected pixels after resampling changed neighboring eye pixels.
 - Judge candidates at native 96x96 first. Enlargement is diagnostic only.
 - Do not change core behavior states, priority, SLEEP timing, click/drag semantics, window input behavior, or phase-1 provenance.
 - Do not publish into `artifacts/publish/win-x64`, push, create a PR, or merge.
@@ -73,17 +73,19 @@ Any direct user rejection overrides automated, static, reviewer, or primary-agen
 
 Work from clean rejected HEAD `612f252f7f75a301c275212f4dd4185d6b75023f` without tracked production/test/document edits. Derive a deterministic reviewed foreground-hair mask from the canonical open source, limited to bang fill, outline, and antialias pixels that visibly continue into hair outside the two eye stencils. Freeze the exact coordinate runs and a content hash before generating candidates. The mask must not claim iris, sclera, face, cheek, or mouth pixels.
 
-Generate exactly three scratch-only half-close candidates in one batch. Every candidate must use the accepted independent full-close curves, blank/draw only behind the frozen foreground hair, and restore the frozen hair pixels from canonical open after lid drawing. Use these predeclared independent source offsets without changing them mid-batch:
+The initial A/B/C batch was invalid because PowerShell produced three-element point arrays instead of adding the requested Y offsets. One bounded correction rerun proved the fixed math reached the requested offsets, but all three corrected candidates remained too open: A measured `0.7083 / 0.5750`, while B and C measured `0.6667 / 0.6250`. Preserve both rejected batches and do not select from them.
 
-- candidate A: viewer-left `-4.0px`, viewer-right `-2.0px`;
-- candidate B: viewer-left `-3.75px`, viewer-right `-2.25px`;
-- candidate C: viewer-left `-3.5px`, viewer-right `-2.5px`.
+Generate exactly three new scratch-only half-close candidates in one fixed D/E/F batch. Every candidate must use the accepted independent full-close curves, blank/draw only behind the frozen foreground hair, and restore the frozen hair pixels from canonical open after lid drawing. The observed direction is now established: a negative offset moves the lid upward and retains more iris; a positive offset moves it downward and retains less. Use these predeclared narrowed source offsets without changing them mid-batch:
 
-For each candidate, record normalized remaining-purple ratios per eye, the ratio difference, exact foreground-hair preservation at source and native layers, connected lid geometry, alpha/non-eye invariants, and native open/half/full plus 8x eye diagnostics. Rank at native size first. A selectable candidate must keep each eye's normalized remaining-purple ratio between `0.30` and `0.42`, keep the left/right ratio difference at or below `0.08`, and show no lid ink over a frozen foreground-hair coordinate. The primary agent selects or rejects after inspecting the complete batch.
+- candidate D: viewer-left `-0.75px`, viewer-right `+0.50px`;
+- candidate E: viewer-left `-1.00px`, viewer-right `+0.75px`;
+- candidate F: viewer-left `-1.25px`, viewer-right `+1.00px`.
+
+For each candidate, record normalized remaining-purple ratios per eye, the ratio difference, exact foreground-hair preservation at the source layer, visible foreground continuity at native size, connected lid geometry, alpha/non-eye invariants, and native open/half/full plus 8x eye diagnostics. Rank at native size first. A selectable candidate must keep each eye's normalized remaining-purple ratio between `0.30` and `0.42`, keep the left/right ratio difference at or below `0.08`, preserve every frozen source-hair coordinate exactly, and show no lid ink over the hair in the native image. The primary agent selects or rejects after inspecting the complete batch.
 
 ## Task 6 — Integrate occlusion-correct composition and readable timing
 
-Use TDD. Before production changes, make the rejected current generator fail because it mutates frozen foreground-hair coordinates and its half-close ratios differ by `0.20`. Integrate the selected Task 5 offsets and frozen foreground-hair ownership into the source-first generator. Both half and full close must follow the same compositing order: canonical face/eye base, state-specific eye blank/lid, then exact foreground-hair restoration before the existing proxy-aware single resize.
+Use TDD. Before production changes, make the rejected current generator fail because it mutates frozen foreground-hair coordinates and its half-close ratios differ by `0.20`. Integrate the selected Task 5 D/E/F offset pair and frozen foreground-hair ownership into the source-first generator. Both half and full close must follow the same compositing order: canonical face/eye base, state-specific eye blank/lid, then exact foreground-hair restoration before the existing proxy-aware single resize.
 
 Update IDLE to a `0.26s` sequence at the existing two-second phase: half-close for `0.08s`, full-close for `0.10s`, and half-open for `0.08s`. Focused tests must prove each half state spans at least two 33ms render ticks, SLEEP remains full closed, and all other states reset to canonical. Preserve the accepted open frame and body art exactly. Run the focused hair/half/timing checks plus ExactArt, BodyMask, ContinuousAuthority, SubpixelOutline, SleepPose, RuntimeComposition, Core, and Release build, then obtain an independent task review.
 
