@@ -147,6 +147,12 @@ $wakeCases = @(
 
 foreach ($wakeCase in $wakeCases)
 {
+    $presenter.Render((New-Snapshot $state::Sleep 0.5))
+    Assert-Near 1.012 ([double]$breathingScale.ScaleX) 0.000001 `
+        "$($wakeCase.State) reset precondition did not start from peak SLEEP breathing ScaleX."
+    Assert-Near 1.012 ([double]$breathingScale.ScaleY) 0.000001 `
+        "$($wakeCase.State) reset precondition did not start from peak SLEEP breathing ScaleY."
+
     $presenter.Render((New-Snapshot $wakeCase.State $wakeCase.Phase $wakeCase.GrabOffset))
     Assert-Frame $image 'dororong-canonical.png' $wakeCase.State.ToString()
     Assert-Near $wakeCase.ScaleX ([double]$scale.ScaleX) 0.000001 "$($wakeCase.State) ScaleX retained a SLEEP transform."
