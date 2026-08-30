@@ -149,4 +149,4 @@ foreach ($wakeCase in $wakeCases)
     Assert-Near $wakeCase.TranslateY ([double]$translation.Y) 0.000001 "$($wakeCase.State) retained a SLEEP vertical offset."
 }
 
-Write-Output 'SLEEP POSE PASS: whole-pixel translation-only breathing, corrected closed-frame selection, and wake-state pose reset passed.'
+Write-Output 'SLEEP POSE PASS: continuous bounded translation-only breathing, corrected closed-frame selection, and wake-state pose reset passed.'
