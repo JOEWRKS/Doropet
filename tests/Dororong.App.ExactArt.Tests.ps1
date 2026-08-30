@@ -169,7 +169,7 @@ foreach($case in @(
     @{State=$state::Idle;Phase=0.1;Frame='dororong-canonical.png';Label='Idle open'},
     @{State=$state::Idle;Phase=0.66;Frame='dororong-blink-squint.png';Label='Idle closing squint'},
     @{State=$state::Idle;Phase=0.70;Frame='dororong-closed-eyes.png';Label='Idle closed'},
-    @{State=$state::Sleep;Phase=0.25;Frame='dororong-closed-eyes.png';Label='Sleep'}))
+    @{State=$state::Sleep;Phase=0.25;Frame='dororong-sleep.png';Label='Settled sleep'}))
 {
     Render-State $case.State $case.Phase;Assert-Frame $image $case.Frame $case.Label
     if($case.State-eq$state::Idle-or$case.State-eq$state::Sleep)

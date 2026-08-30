@@ -78,7 +78,7 @@ if ($idleFailures.Count -gt 0) { throw ($idleFailures -join [Environment]::NewLi
 foreach ($phase in @(0.25, 0.75))
 {
     Render-State $state::Sleep $phase
-    Assert-Frame $image 'dororong-closed-eyes.png' "SLEEP phase=$phase"
+    Assert-Frame $image 'dororong-sleep.png' "SLEEP settled phase=$phase"
 }
 
 foreach ($otherState in @(
@@ -88,4 +88,4 @@ foreach ($otherState in @(
     Assert-Frame $image 'dororong-canonical.png' "$otherState reset at blink phase"
 }
 
-Write-Output 'BLINK SEQUENCE PASS: existing IDLE phase thresholds map to open/squint/squint/closed/closed/squint/squint/open; SLEEP stays closed, and other states reset to canonical.'
+Write-Output 'BLINK SEQUENCE PASS: existing IDLE phase thresholds map to open/squint/squint/closed/closed/squint/squint/open; settled SLEEP stays loaf, and other states reset to canonical.'

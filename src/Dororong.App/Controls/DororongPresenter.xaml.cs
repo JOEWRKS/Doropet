@@ -17,6 +17,16 @@ public partial class DororongPresenter : UserControl
     private static readonly BitmapImage CanonicalFrame = LoadFrame("dororong-canonical.png");
     private static readonly BitmapImage BlinkSquintFrame = LoadFrame("dororong-blink-squint.png");
     private static readonly BitmapImage ClosedEyesFrame = LoadFrame("dororong-closed-eyes.png");
+    private static readonly BitmapImage SleepFrame = LoadFrame("dororong-sleep.png");
+    private static readonly BitmapImage SleepCrouchClosedFrame = LoadFrame("dororong-sleep-crouch-closed.png");
+    private static readonly BitmapImage SleepCrouchSquintFrame = LoadFrame("dororong-sleep-crouch-squint.png");
+    private static readonly BitmapImage SleepTuckClosedFrame = LoadFrame("dororong-sleep-tuck-closed.png");
+    private static readonly BitmapImage SleepTuckSquintFrame = LoadFrame("dororong-sleep-tuck-squint.png");
+
+    private PetState? _lastRenderedState;
+    private bool _sleepEntryComplete;
+    private PetState? _wakeBridgeState;
+    private bool _wakeBridgeComplete;
 
     public DororongPresenter()
     {
@@ -32,6 +42,29 @@ public partial class DororongPresenter : UserControl
         var p = Math.Clamp(snapshot.Phase, 0, 1);
         var cycle = Math.Sin(p * Math.PI * 2);
         var bounce = Math.Sin(p * Math.PI);
+        var wokeFromSettledSleep =
+            _lastRenderedState == PetState.Sleep &&
+            _sleepEntryComplete;
+
+        if (snapshot.State == PetState.Sleep && _lastRenderedState != PetState.Sleep)
+        {
+            _sleepEntryComplete = false;
+            _wakeBridgeState = null;
+            _wakeBridgeComplete = false;
+        }
+        else if (snapshot.State != PetState.Sleep && _lastRenderedState == PetState.Sleep)
+        {
+            _sleepEntryComplete = false;
+            _wakeBridgeState = wokeFromSettledSleep && SupportsWakeBridge(snapshot.State)
+                ? snapshot.State
+                : null;
+            _wakeBridgeComplete = !wokeFromSettledSleep;
+        }
+        else if (snapshot.State != PetState.Sleep && snapshot.State != _lastRenderedState)
+        {
+            _wakeBridgeState = null;
+            _wakeBridgeComplete = false;
+        }
 
         ResetPose();
 
@@ -86,12 +119,88 @@ public partial class DororongPresenter : UserControl
                 break;
 
             case PetState.Sleep:
-                ApplyBreathing(p);
-                DororongImage.Source = ClosedEyesFrame;
+                ApplySleepPose(snapshot.Phase);
                 break;
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(snapshot), snapshot.State, "Unknown pet state.");
+        }
+
+        ApplyWakeBridge(snapshot.State, p);
+        _lastRenderedState = snapshot.State;
+    }
+
+    private static bool SupportsWakeBridge(PetState state) =>
+        state is PetState.Curious or PetState.Startled or PetState.ClickReaction;
+
+    private void ApplySleepPose(double phase)
+    {
+        if (_sleepEntryComplete)
+        {
+            ApplySettledSleep(phase);
+            return;
+        }
+
+        if (phase < 0.0225)
+        {
+            DororongImage.Source = BlinkSquintFrame;
+        }
+        else if (phase < 0.045)
+        {
+            DororongImage.Source = ClosedEyesFrame;
+        }
+        else if (phase < 0.070)
+        {
+            DororongImage.Source = SleepCrouchClosedFrame;
+        }
+        else if (phase < 0.100)
+        {
+            DororongImage.Source = SleepTuckClosedFrame;
+        }
+        else if (phase < 0.135)
+        {
+            DororongImage.Source = SleepFrame;
+        }
+        else
+        {
+            _sleepEntryComplete = true;
+            ApplySettledSleep(phase);
+        }
+    }
+
+    private void ApplySettledSleep(double phase)
+    {
+        DororongImage.Source = SleepFrame;
+        DororongImage.RenderTransformOrigin = new Point(0.435630, 0.854167);
+        ApplyBreathing((phase - 0.135 + 1) % 1);
+    }
+
+    private void ApplyWakeBridge(PetState state, double phase)
+    {
+        if (_wakeBridgeState != state || _wakeBridgeComplete)
+        {
+            return;
+        }
+
+        var (firstLimit, secondLimit) = state switch
+        {
+            PetState.Curious => (0.05625, 0.1125),
+            PetState.Startled => (0.06, 0.12),
+            PetState.ClickReaction => (0.09, 0.18),
+            _ => throw new ArgumentOutOfRangeException(nameof(state), state, "Unsupported wake bridge state.")
+        };
+
+        if (phase < firstLimit)
+        {
+            DororongImage.Source = SleepTuckSquintFrame;
+        }
+        else if (phase < secondLimit)
+        {
+            DororongImage.Source = SleepCrouchSquintFrame;
+        }
+        else
+        {
+            _wakeBridgeComplete = true;
         }
     }
 
@@ -128,6 +237,7 @@ public partial class DororongPresenter : UserControl
         BodyTranslateTransform.Y = 0;
         ImageBreathingScaleTransform.ScaleX = 1;
         ImageBreathingScaleTransform.ScaleY = 1;
+        DororongImage.RenderTransformOrigin = new Point(0.428987, 0.916667);
         DororongImage.Source = CanonicalFrame;
     }
 

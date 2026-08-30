@@ -8,6 +8,11 @@
     <Resource Include="Assets\dororong-canonical.png" />
     <Resource Include="Assets\dororong-blink-squint.png" />
     <Resource Include="Assets\dororong-closed-eyes.png" />
+    <Resource Include="Assets\dororong-sleep.png" />
+    <Resource Include="Assets\dororong-sleep-crouch-closed.png" />
+    <Resource Include="Assets\dororong-sleep-crouch-squint.png" />
+    <Resource Include="Assets\dororong-sleep-tuck-closed.png" />
+    <Resource Include="Assets\dororong-sleep-tuck-squint.png" />
     <None Include="Assets\dororong-canonical-source.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
