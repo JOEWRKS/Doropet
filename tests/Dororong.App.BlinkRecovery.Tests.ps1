@@ -57,10 +57,10 @@ if (-not (Test-Path -LiteralPath $squintPath -PathType Leaf))
 }
 
 if ((Test-Path -LiteralPath $squintPath) -and (Get-FileHash -LiteralPath $squintPath -Algorithm SHA256).Hash -ne
-    'AE2ECC443279153F7174B05E4DAD1E3491BE0232E25F7DDA3E6BFD1174B12F50')
+    '2A733093AC35B9678CBB90833272498C7BE755F77A574271DAE64FCE80FC90E2')
 { $failures.Add('The runtime squint is not the supplied half-close frame.') }
 if ((Get-FileHash -LiteralPath $closedPath -Algorithm SHA256).Hash -ne
-    'D3C88F3546FABD487C679C8822FD1F52AF8AC5052132A11D57370AC86E514FFA')
+    '0D20EED5873A7E4277D6ED539474D875C9B8DF79998B1EFD74F46AA87662F488')
 { $failures.Add('The runtime closed face is not the supplied full-close frame.') }
 
 # Only the generated closed eyes belong to the expression state. The canonical

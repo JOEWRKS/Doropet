@@ -28,19 +28,22 @@ $cases = @(
         Label = 'Open'
         Asset = Join-Path $assetRoot 'dororong-canonical.png'
         Reference = Join-Path $fixtureRoot 'dororong-user-authored-open-reference.png'
+        AssetHash = '699348D1973709F228D843341AC5312AA7F449D57B9BFC76576256231E259A78'
         ReferenceHash = '699348D1973709F228D843341AC5312AA7F449D57B9BFC76576256231E259A78'
     },
     @{
         Label = 'Half-close'
         Asset = Join-Path $assetRoot 'dororong-blink-squint.png'
         Reference = Join-Path $fixtureRoot 'dororong-user-authored-half-reference.png'
-        ReferenceHash = 'AE2ECC443279153F7174B05E4DAD1E3491BE0232E25F7DDA3E6BFD1174B12F50'
+        AssetHash = '2A733093AC35B9678CBB90833272498C7BE755F77A574271DAE64FCE80FC90E2'
+        ReferenceHash = '2A733093AC35B9678CBB90833272498C7BE755F77A574271DAE64FCE80FC90E2'
     },
     @{
         Label = 'Full-close'
         Asset = Join-Path $assetRoot 'dororong-closed-eyes.png'
         Reference = Join-Path $fixtureRoot 'dororong-user-authored-closed-reference.png'
-        ReferenceHash = 'D3C88F3546FABD487C679C8822FD1F52AF8AC5052132A11D57370AC86E514FFA'
+        AssetHash = '0D20EED5873A7E4277D6ED539474D875C9B8DF79998B1EFD74F46AA87662F488'
+        ReferenceHash = '0D20EED5873A7E4277D6ED539474D875C9B8DF79998B1EFD74F46AA87662F488'
     })
 
 Add-Type -AssemblyName System.Drawing
@@ -49,6 +52,8 @@ try
 {
     foreach ($case in $cases)
     {
+        Assert-Equal $case.AssetHash (Get-FileHash -Algorithm SHA256 -LiteralPath $case.Asset).Hash `
+            "$($case.Label) runtime frame does not have the supplied native-96 eye pixels."
         Assert-Equal $case.ReferenceHash (Get-FileHash -Algorithm SHA256 -LiteralPath $case.Reference).Hash `
             "$($case.Label) user-authored reference identity changed."
         $reference = [Drawing.Bitmap]::new($case.Reference); $bitmaps.Add($reference)
