@@ -102,8 +102,6 @@ function Get-RenderedVisibleGeometry(
     $bitmap.CopyPixels($pixels, $stride, 0)
 
     [double]$weight = 0
-    [double]$weightedX = 0
-    [double]$weightedY = 0
     $minimumX = 144
     $minimumY = 144
     $maximumX = -1
@@ -123,8 +121,6 @@ function Get-RenderedVisibleGeometry(
             $maximumX = [Math]::Max($maximumX, $x)
             $maximumY = [Math]::Max($maximumY, $y)
             $weight += $alpha
-            $weightedX += ($x + 0.5) * $alpha
-            $weightedY += ($y + 0.5) * $alpha
         }
     }
 
@@ -136,42 +132,51 @@ function Get-RenderedVisibleGeometry(
     return [pscustomobject]@{
         Width = $maximumX - $minimumX + 1
         Height = $maximumY - $minimumY + 1
-        CentroidX = $weightedX / $weight
-        CentroidY = $weightedY / $weight
+        MaximumY = $maximumY
     }
 }
 
 $failures = [Collections.Generic.List[string]]::new()
 
+if ([Math]::Abs([double]$image.RenderTransformOrigin.X - 0.428987) -gt 0.0000001 -or
+    [Math]::Abs([double]$image.RenderTransformOrigin.Y - 0.916667) -gt 0.0000001)
+{
+    $failures.Add(
+        "IDLE breathing origin must use the visible horizontal center and foot baseline '0.428987,0.916667'; observed '$($image.RenderTransformOrigin.X),$($image.RenderTransformOrigin.Y)'.")
+}
+
 $presenter.Render((New-Snapshot $state::Idle 0.0))
 $restingGeometry = Get-RenderedVisibleGeometry $presenter
-$presenter.Render((New-Snapshot $state::Idle 0.5))
+$presenter.Render((New-Snapshot $state::Idle 0.405))
 $peakGeometry = Get-RenderedVisibleGeometry $presenter
-$centroidDeltaX = $peakGeometry.CentroidX - $restingGeometry.CentroidX
-$centroidDeltaY = $peakGeometry.CentroidY - $restingGeometry.CentroidY
-if ($peakGeometry.Width -le $restingGeometry.Width)
+$widthGrowth = $peakGeometry.Width - $restingGeometry.Width
+$heightGrowth = $peakGeometry.Height - $restingGeometry.Height
+$footBaselineDelta = $peakGeometry.MaximumY - $restingGeometry.MaximumY
+if ($widthGrowth -le 0)
 {
     $failures.Add("Peak IDLE rendered width did not grow. Rest='$($restingGeometry.Width)', peak='$($peakGeometry.Width)'.")
 }
-if ($peakGeometry.Height -le $restingGeometry.Height)
+if ($heightGrowth -le 0)
 {
     $failures.Add("Peak IDLE rendered height did not grow. Rest='$($restingGeometry.Height)', peak='$($peakGeometry.Height)'.")
 }
-if ([Math]::Abs($centroidDeltaX) -gt 0.1)
+if ($widthGrowth -le $heightGrowth)
 {
-    $failures.Add("Peak IDLE growth moved the rendered alpha-weighted visible centroid horizontally by '$centroidDeltaX' px.")
+    $failures.Add("Peak IDLE directional breathing did not grow more in width than height. Width growth='$widthGrowth' px, height growth='$heightGrowth' px.")
 }
-if ([Math]::Abs($centroidDeltaY) -gt 0.1)
+if ([Math]::Abs($footBaselineDelta) -gt 1)
 {
-    $failures.Add("Peak IDLE growth moved the rendered alpha-weighted visible centroid vertically by '$centroidDeltaY' px.")
+    $failures.Add("Peak IDLE directional breathing moved the visible foot baseline by '$footBaselineDelta' px; expected at most one raster pixel.")
 }
 
 $idleCases = @(
-    @{ Name = 'start'; Phase = 0.0; BreathingScale = 1.0; Frame = 'dororong-canonical.png' },
-    @{ Name = 'expansion'; Phase = 0.25; BreathingScale = 1.0282842712474618; Frame = 'dororong-canonical.png' },
-    @{ Name = 'peak'; Phase = 0.5; BreathingScale = 1.04; Frame = 'dororong-canonical.png' },
-    @{ Name = 'return'; Phase = 0.75; BreathingScale = 1.0282842712474618; Frame = 'dororong-blink-squint.png' },
-    @{ Name = 'end'; Phase = 1.0; BreathingScale = 1.0; Frame = 'dororong-canonical.png' }
+    @{ Name = 'start'; Phase = 0.0; ScaleX = 1.0; ScaleY = 1.0; Frame = 'dororong-canonical.png' },
+    @{ Name = 'inhale midpoint'; Phase = 0.19; ScaleX = 1.012; ScaleY = 1.006; Frame = 'dororong-canonical.png' },
+    @{ Name = 'hold entry'; Phase = 0.38; ScaleX = 1.024; ScaleY = 1.012; Frame = 'dororong-canonical.png' },
+    @{ Name = 'hold midpoint'; Phase = 0.405; ScaleX = 1.024; ScaleY = 1.012; Frame = 'dororong-canonical.png' },
+    @{ Name = 'hold exit'; Phase = 0.43; ScaleX = 1.024; ScaleY = 1.012; Frame = 'dororong-canonical.png' },
+    @{ Name = 'exhale midpoint'; Phase = 0.715; ScaleX = 1.012; ScaleY = 1.006; Frame = 'dororong-closed-eyes.png' },
+    @{ Name = 'return'; Phase = 1.0; ScaleX = 1.0; ScaleY = 1.0; Frame = 'dororong-canonical.png' }
 )
 
 foreach ($idleCase in $idleCases)
@@ -190,17 +195,25 @@ foreach ($idleCase in $idleCases)
     {
         $failures.Add("IDLE $($idleCase.Name) phase moved the whole body vertically; observed '$([double]$translation.Y)'.")
     }
-    if ([Math]::Abs([double]$breathingScale.ScaleX - $idleCase.BreathingScale) -gt 0.000001 -or
-        [Math]::Abs([double]$breathingScale.ScaleY - $idleCase.BreathingScale) -gt 0.000001)
+    if ([Math]::Abs([double]$breathingScale.ScaleX - $idleCase.ScaleX) -gt 0.000001 -or
+        [Math]::Abs([double]$breathingScale.ScaleY - $idleCase.ScaleY) -gt 0.000001)
     {
-        $failures.Add("IDLE $($idleCase.Name) phase expected uniform image scale '$($idleCase.BreathingScale)'; observed '$([double]$breathingScale.ScaleX),$([double]$breathingScale.ScaleY)'.")
+        $failures.Add("IDLE $($idleCase.Name) phase expected directional image scale '$($idleCase.ScaleX),$($idleCase.ScaleY)'; observed '$([double]$breathingScale.ScaleX),$([double]$breathingScale.ScaleY)'.")
     }
 }
 
 $translatedSampleCount = 0
-$minimumSampleScale = [double]::PositiveInfinity
-$maximumSampleScale = [double]::NegativeInfinity
-$previousScale = $null
+$minimumSampleScaleX = [double]::PositiveInfinity
+$maximumSampleScaleX = [double]::NegativeInfinity
+$minimumSampleScaleY = [double]::PositiveInfinity
+$maximumSampleScaleY = [double]::NegativeInfinity
+$previousScaleX = $null
+$previousScaleY = $null
+$increasingSampleCount = 0
+$decreasingSampleCount = 0
+$peakHoldSampleCount = 0
+$scaleXContinuityFailure = $false
+$scaleYContinuityFailure = $false
 for ($tick = 0; $tick -le 250; $tick++)
 {
     $phase = ($tick * 0.016) / 4.0
@@ -210,35 +223,62 @@ for ($tick = 0; $tick -le 250; $tick++)
         $translatedSampleCount++
     }
 
-    $currentScale = [double]$breathingScale.ScaleX
-    $minimumSampleScale = [Math]::Min($minimumSampleScale, $currentScale)
-    $maximumSampleScale = [Math]::Max($maximumSampleScale, $currentScale)
-    if ([Math]::Abs($currentScale - [double]$breathingScale.ScaleY) -gt 0.000001)
+    $currentScaleX = [double]$breathingScale.ScaleX
+    $currentScaleY = [double]$breathingScale.ScaleY
+    $minimumSampleScaleX = [Math]::Min($minimumSampleScaleX, $currentScaleX)
+    $maximumSampleScaleX = [Math]::Max($maximumSampleScaleX, $currentScaleX)
+    $minimumSampleScaleY = [Math]::Min($minimumSampleScaleY, $currentScaleY)
+    $maximumSampleScaleY = [Math]::Max($maximumSampleScaleY, $currentScaleY)
+    if ([Math]::Abs($currentScaleX - 1.024) -le 0.000000001 -and
+        [Math]::Abs($currentScaleY - 1.012) -le 0.000000001)
     {
-        $failures.Add("IDLE tick $tick stretched the image non-uniformly.")
-        break
+        $peakHoldSampleCount++
     }
-    if ($null -ne $previousScale -and [Math]::Abs($currentScale - [double]$previousScale) -gt 0.000503)
+    if ($null -ne $previousScaleX)
     {
-        $failures.Add("IDLE tick $tick exceeded the 16 ms adjacent breathing-scale continuity limit; observed '$([Math]::Abs($currentScale - [double]$previousScale))'.")
-        break
+        $scaleXDelta = $currentScaleX - [double]$previousScaleX
+        $scaleYDelta = $currentScaleY - [double]$previousScaleY
+        if ([Math]::Abs($scaleXDelta) -gt 0.000381 -and -not $scaleXContinuityFailure)
+        {
+            $failures.Add("IDLE tick $tick exceeded the 16 ms adjacent ScaleX continuity limit; observed '$([Math]::Abs($scaleXDelta))'.")
+            $scaleXContinuityFailure = $true
+        }
+        if ([Math]::Abs($scaleYDelta) -gt 0.000191 -and -not $scaleYContinuityFailure)
+        {
+            $failures.Add("IDLE tick $tick exceeded the 16 ms adjacent ScaleY continuity limit; observed '$([Math]::Abs($scaleYDelta))'.")
+            $scaleYContinuityFailure = $true
+        }
+        if ($scaleXDelta -gt 0.000000001) { $increasingSampleCount++ }
+        elseif ($scaleXDelta -lt -0.000000001) { $decreasingSampleCount++ }
     }
-    $previousScale = $currentScale
+    $previousScaleX = $currentScaleX
+    $previousScaleY = $currentScaleY
 }
 if ($translatedSampleCount -gt 0)
 {
     $failures.Add("IDLE whole-body Y translation was nonzero in '$translatedSampleCount' of 251 samples over four seconds.")
 }
-if ([Math]::Abs($minimumSampleScale - 1.0) -gt 0.000001 -or
-    [Math]::Abs($maximumSampleScale - 1.04) -gt 0.000001)
+if ([Math]::Abs($minimumSampleScaleX - 1.0) -gt 0.000001 -or
+    [Math]::Abs($maximumSampleScaleX - 1.024) -gt 0.000001 -or
+    [Math]::Abs($minimumSampleScaleY - 1.0) -gt 0.000001 -or
+    [Math]::Abs($maximumSampleScaleY - 1.012) -gt 0.000001)
 {
-    $failures.Add("IDLE sampled image scale did not span '1.0..1.04'; observed '$minimumSampleScale..$maximumSampleScale'.")
+    $failures.Add("IDLE sampled directional scale did not span X '1.0..1.024' and Y '1.0..1.012'; observed X '$minimumSampleScaleX..$maximumSampleScaleX', Y '$minimumSampleScaleY..$maximumSampleScaleY'.")
+}
+if ($peakHoldSampleCount -ne 13)
+{
+    $failures.Add("IDLE did not preserve the 0.38..0.43 full-inhale hold across the 16 ms samples; expected 13 peak samples, observed '$peakHoldSampleCount'.")
+}
+if ($increasingSampleCount -ge $decreasingSampleCount)
+{
+    $failures.Add("IDLE inhale was not shorter than exhale; observed '$increasingSampleCount' increasing samples and '$decreasingSampleCount' decreasing samples.")
 }
 
-$presenter.Render((New-Snapshot $state::Idle 0.5))
-if ([Math]::Abs([double]$breathingScale.ScaleX - 1.04) -gt 0.000001)
+$presenter.Render((New-Snapshot $state::Idle 0.405))
+if ([Math]::Abs([double]$breathingScale.ScaleX - 1.024) -gt 0.000001 -or
+    [Math]::Abs([double]$breathingScale.ScaleY - 1.012) -gt 0.000001)
 {
-    $failures.Add("Curious reset precondition did not start from peak IDLE image scale; observed '$([double]$breathingScale.ScaleX)'.")
+    $failures.Add("Curious reset precondition did not start from peak IDLE directional scale; observed '$([double]$breathingScale.ScaleX),$([double]$breathingScale.ScaleY)'.")
 }
 $presenter.Render((New-Snapshot $state::Curious 0.25))
 try
@@ -261,7 +301,7 @@ if ($failures.Count -gt 0)
     throw ($failures -join [Environment]::NewLine)
 }
 
-Write-Output ("IDLE POSE PASS: visible-center continuous image growth over four seconds, " +
+Write-Output ("IDLE POSE PASS: asymmetric foot-anchored directional breathing over four seconds, " +
     "rendered bounds=$($restingGeometry.Width)x$($restingGeometry.Height)->$($peakGeometry.Width)x$($peakGeometry.Height), " +
-    "centroid delta=($([Math]::Round($centroidDeltaX, 6)),$([Math]::Round($centroidDeltaY, 6))) px, " +
+    "foot-baseline delta=$footBaselineDelta px, inhale/exhale samples=$increasingSampleCount/$decreasingSampleCount, " +
     'zero body Y across 251 samples, canonical idle frame, and non-IDLE pose reset passed.')

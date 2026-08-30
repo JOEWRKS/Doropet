@@ -38,8 +38,7 @@ public partial class DororongPresenter : UserControl
         switch (snapshot.State)
         {
             case PetState.Idle:
-                ImageBreathingScaleTransform.ScaleX = 1 + (0.04 * bounce);
-                ImageBreathingScaleTransform.ScaleY = 1 + (0.04 * bounce);
+                ApplyBreathing(p);
                 if (p is >= 0.65 and < 0.69)
                 {
                     DororongImage.Source = BlinkSquintFrame;
@@ -87,14 +86,37 @@ public partial class DororongPresenter : UserControl
                 break;
 
             case PetState.Sleep:
-                ImageBreathingScaleTransform.ScaleX = 1 + (0.04 * bounce);
-                ImageBreathingScaleTransform.ScaleY = 1 + (0.04 * bounce);
+                ApplyBreathing(p);
                 DororongImage.Source = ClosedEyesFrame;
                 break;
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(snapshot), snapshot.State, "Unknown pet state.");
         }
+    }
+
+    private void ApplyBreathing(double phase)
+    {
+        var amount = GetBreathingAmount(phase);
+        ImageBreathingScaleTransform.ScaleX = 1 + (0.024 * amount);
+        ImageBreathingScaleTransform.ScaleY = 1 + (0.012 * amount);
+    }
+
+    private static double GetBreathingAmount(double phase)
+    {
+        if (phase < 0.38)
+        {
+            var inhaleProgress = phase / 0.38;
+            return inhaleProgress * inhaleProgress * (3 - (2 * inhaleProgress));
+        }
+
+        if (phase <= 0.43)
+        {
+            return 1;
+        }
+
+        var exhaleProgress = (phase - 0.43) / 0.57;
+        return 1 - (exhaleProgress * exhaleProgress * (3 - (2 * exhaleProgress)));
     }
 
     private void ResetPose()

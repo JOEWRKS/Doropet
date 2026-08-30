@@ -82,7 +82,7 @@ function New-Snapshot(
         $GrabOffset)
 }
 
-function Get-RenderedAlphaWeightedCentroid(
+function Get-RenderedVisibleGeometry(
     [Dororong.App.Controls.DororongPresenter]$Presenter)
 {
     $size = [System.Windows.Size]::new(144, 144)
@@ -103,8 +103,10 @@ function Get-RenderedAlphaWeightedCentroid(
     $bitmap.CopyPixels($pixels, $stride, 0)
 
     [double]$weight = 0
-    [double]$weightedX = 0
-    [double]$weightedY = 0
+    $minimumX = 144
+    $minimumY = 144
+    $maximumX = -1
+    $maximumY = -1
     for ($y = 0; $y -lt 144; $y++)
     {
         for ($x = 0; $x -lt 144; $x++)
@@ -115,9 +117,11 @@ function Get-RenderedAlphaWeightedCentroid(
                 continue
             }
 
+            $minimumX = [Math]::Min($minimumX, $x)
+            $minimumY = [Math]::Min($minimumY, $y)
+            $maximumX = [Math]::Max($maximumX, $x)
+            $maximumY = [Math]::Max($maximumY, $y)
             $weight += $alpha
-            $weightedX += ($x + 0.5) * $alpha
-            $weightedY += ($y + 0.5) * $alpha
         }
     }
 
@@ -127,28 +131,41 @@ function Get-RenderedAlphaWeightedCentroid(
     }
 
     return [pscustomobject]@{
-        X = $weightedX / $weight
-        Y = $weightedY / $weight
+        Width = $maximumX - $minimumX + 1
+        Height = $maximumY - $minimumY + 1
+        MaximumY = $maximumY
     }
 }
 
+Assert-Near 0.428987 ([double]$image.RenderTransformOrigin.X) 0.0000001 `
+    'SLEEP breathing origin did not use the visible horizontal center.'
+Assert-Near 0.916667 ([double]$image.RenderTransformOrigin.Y) 0.0000001 `
+    'SLEEP breathing origin did not use the visible foot baseline.'
+
 $presenter.Render((New-Snapshot $state::Sleep 0.0))
-$restingCentroid = Get-RenderedAlphaWeightedCentroid $presenter
-$presenter.Render((New-Snapshot $state::Sleep 0.5))
-$peakCentroid = Get-RenderedAlphaWeightedCentroid $presenter
-$centroidDeltaX = $peakCentroid.X - $restingCentroid.X
-$centroidDeltaY = $peakCentroid.Y - $restingCentroid.Y
-Assert-Near 0.0 $centroidDeltaX 0.1 `
-    'Peak SLEEP growth moved the rendered alpha-weighted visible centroid horizontally.'
-Assert-Near 0.0 $centroidDeltaY 0.1 `
-    'Peak SLEEP growth moved the rendered alpha-weighted visible centroid vertically.'
+$restingGeometry = Get-RenderedVisibleGeometry $presenter
+$presenter.Render((New-Snapshot $state::Sleep 0.405))
+$peakGeometry = Get-RenderedVisibleGeometry $presenter
+$widthGrowth = $peakGeometry.Width - $restingGeometry.Width
+$heightGrowth = $peakGeometry.Height - $restingGeometry.Height
+$footBaselineDelta = $peakGeometry.MaximumY - $restingGeometry.MaximumY
+if ($widthGrowth -le $heightGrowth)
+{
+    throw "Peak SLEEP directional breathing did not grow more in width than height. Width growth='$widthGrowth' px, height growth='$heightGrowth' px."
+}
+if ([Math]::Abs($footBaselineDelta) -gt 1)
+{
+    throw "Peak SLEEP directional breathing moved the visible foot baseline by '$footBaselineDelta' px; expected at most one raster pixel."
+}
 
 $sleepCases = @(
-    @{ Name = 'start'; Phase = 0.0; BreathingScale = 1.0 },
-    @{ Name = 'expansion'; Phase = 0.25; BreathingScale = 1.0282842712474618 },
-    @{ Name = 'peak'; Phase = 0.5; BreathingScale = 1.04 },
-    @{ Name = 'return'; Phase = 0.75; BreathingScale = 1.0282842712474618 },
-    @{ Name = 'end'; Phase = 1.0; BreathingScale = 1.0 }
+    @{ Name = 'start'; Phase = 0.0; ScaleX = 1.0; ScaleY = 1.0 },
+    @{ Name = 'inhale midpoint'; Phase = 0.19; ScaleX = 1.012; ScaleY = 1.006 },
+    @{ Name = 'hold entry'; Phase = 0.38; ScaleX = 1.024; ScaleY = 1.012 },
+    @{ Name = 'hold midpoint'; Phase = 0.405; ScaleX = 1.024; ScaleY = 1.012 },
+    @{ Name = 'hold exit'; Phase = 0.43; ScaleX = 1.024; ScaleY = 1.012 },
+    @{ Name = 'exhale midpoint'; Phase = 0.715; ScaleX = 1.012; ScaleY = 1.006 },
+    @{ Name = 'return'; Phase = 1.0; ScaleX = 1.0; ScaleY = 1.0 }
 )
 
 foreach ($sleepCase in $sleepCases)
@@ -158,13 +175,17 @@ foreach ($sleepCase in $sleepCases)
     Assert-Near 1.0 ([double]$scale.ScaleX) 0.000001 "SLEEP $($sleepCase.Name) phase changed body ScaleX."
     Assert-Near 1.0 ([double]$scale.ScaleY) 0.000001 "SLEEP $($sleepCase.Name) phase changed body ScaleY."
     Assert-Near 0.0 ([double]$translation.Y) 0.000001 "SLEEP $($sleepCase.Name) phase moved the whole body vertically."
-    Assert-Near $sleepCase.BreathingScale ([double]$breathingScale.ScaleX) 0.000001 `
+    Assert-Near $sleepCase.ScaleX ([double]$breathingScale.ScaleX) 0.000001 `
         "SLEEP $($sleepCase.Name) phase breathing ScaleX changed."
-    Assert-Near $sleepCase.BreathingScale ([double]$breathingScale.ScaleY) 0.000001 `
+    Assert-Near $sleepCase.ScaleY ([double]$breathingScale.ScaleY) 0.000001 `
         "SLEEP $($sleepCase.Name) phase breathing ScaleY changed."
 }
 
-$sleepBreathingScales = [System.Collections.Generic.List[double]]::new()
+$sleepBreathingScalesX = [System.Collections.Generic.List[double]]::new()
+$sleepBreathingScalesY = [System.Collections.Generic.List[double]]::new()
+$increasingSampleCount = 0
+$decreasingSampleCount = 0
+$peakHoldSampleCount = 0
 for ($tick = 0; $tick -le 250; $tick++)
 {
     $phase = ($tick * 0.016) / 4.0
@@ -174,28 +195,48 @@ for ($tick = 0; $tick -le 250; $tick++)
     Assert-Near 1.0 ([double]$scale.ScaleX) 0.000001 "SLEEP tick $tick changed body ScaleX."
     Assert-Near 1.0 ([double]$scale.ScaleY) 0.000001 "SLEEP tick $tick changed body ScaleY."
     Assert-Near 0.0 ([double]$translation.Y) 0.000001 "SLEEP tick $tick moved the whole body vertically."
-    Assert-Near ([double]$breathingScale.ScaleX) ([double]$breathingScale.ScaleY) 0.000001 `
-        "SLEEP tick $tick stretched the image non-uniformly."
-
-    $sleepBreathingScales.Add([double]$breathingScale.ScaleX)
-    if ($sleepBreathingScales.Count -gt 1)
+    $sleepBreathingScalesX.Add([double]$breathingScale.ScaleX)
+    $sleepBreathingScalesY.Add([double]$breathingScale.ScaleY)
+    if ([Math]::Abs([double]$breathingScale.ScaleX - 1.024) -le 0.000000001 -and
+        [Math]::Abs([double]$breathingScale.ScaleY - 1.012) -le 0.000000001)
     {
-        $adjacentDelta = [Math]::Abs(
-            $sleepBreathingScales[$sleepBreathingScales.Count - 1] -
-            $sleepBreathingScales[$sleepBreathingScales.Count - 2])
-        if ($adjacentDelta -gt 0.000503)
+        $peakHoldSampleCount++
+    }
+    if ($sleepBreathingScalesX.Count -gt 1)
+    {
+        $scaleXDelta =
+            $sleepBreathingScalesX[$sleepBreathingScalesX.Count - 1] -
+            $sleepBreathingScalesX[$sleepBreathingScalesX.Count - 2]
+        $scaleYDelta =
+            $sleepBreathingScalesY[$sleepBreathingScalesY.Count - 1] -
+            $sleepBreathingScalesY[$sleepBreathingScalesY.Count - 2]
+        if ([Math]::Abs($scaleXDelta) -gt 0.000381)
         {
-            throw "SLEEP tick $tick exceeded the 16 ms adjacent breathing-scale continuity limit. Expected <= '0.000503', observed '$adjacentDelta'."
+            throw "SLEEP tick $tick exceeded the 16 ms adjacent ScaleX continuity limit. Expected <= '0.000381', observed '$([Math]::Abs($scaleXDelta))'."
         }
+        if ([Math]::Abs($scaleYDelta) -gt 0.000191)
+        {
+            throw "SLEEP tick $tick exceeded the 16 ms adjacent ScaleY continuity limit. Expected <= '0.000191', observed '$([Math]::Abs($scaleYDelta))'."
+        }
+        if ($scaleXDelta -gt 0.000000001) { $increasingSampleCount++ }
+        elseif ($scaleXDelta -lt -0.000000001) { $decreasingSampleCount++ }
     }
 
-    if ([double]$breathingScale.ScaleX -lt 1.0 -or [double]$breathingScale.ScaleX -gt 1.04)
+    if ([double]$breathingScale.ScaleX -lt 1.0 -or [double]$breathingScale.ScaleX -gt 1.024 -or
+        [double]$breathingScale.ScaleY -lt 1.0 -or [double]$breathingScale.ScaleY -gt 1.012)
     {
-        throw "SLEEP tick $tick left the breathing-scale bounds. Expected '1.0..1.04', observed '$($breathingScale.ScaleX)'."
+        throw "SLEEP tick $tick left the directional breathing-scale bounds. Expected X '1.0..1.024' and Y '1.0..1.012', observed '$($breathingScale.ScaleX),$($breathingScale.ScaleY)'."
     }
+}
+Assert-Equal 13 $peakHoldSampleCount `
+    'SLEEP did not preserve the 0.38..0.43 full-inhale hold across the 16 ms samples.'
+if ($increasingSampleCount -ge $decreasingSampleCount)
+{
+    throw "SLEEP inhale was not shorter than exhale; observed '$increasingSampleCount' increasing samples and '$decreasingSampleCount' decreasing samples."
 }
 
 $wakeCases = @(
+    @{ State = $state::Walk; Phase = 0.25; GrabOffset = $null; ScaleX = 1.0; ScaleY = 1.0; Rotation = 0.0; TranslateY = -4.0 },
     @{ State = $state::Curious; Phase = 0.25; GrabOffset = $null; ScaleX = 1.0; ScaleY = 1.0; Rotation = 7.0; TranslateY = 0.0 },
     @{ State = $state::Startled; Phase = 0.25; GrabOffset = $null; ScaleX = 1.12727922061358; ScaleY = 0.901005050633883; Rotation = 0.0; TranslateY = 0.0 },
     @{ State = $state::ClickReaction; Phase = 0.5; GrabOffset = $null; ScaleX = 1.0; ScaleY = 1.0; Rotation = 0.0; TranslateY = -10.0 },
@@ -204,10 +245,10 @@ $wakeCases = @(
 
 foreach ($wakeCase in $wakeCases)
 {
-    $presenter.Render((New-Snapshot $state::Sleep 0.5))
-    Assert-Near 1.04 ([double]$breathingScale.ScaleX) 0.000001 `
+    $presenter.Render((New-Snapshot $state::Sleep 0.405))
+    Assert-Near 1.024 ([double]$breathingScale.ScaleX) 0.000001 `
         "$($wakeCase.State) reset precondition did not start from peak SLEEP breathing ScaleX."
-    Assert-Near 1.04 ([double]$breathingScale.ScaleY) 0.000001 `
+    Assert-Near 1.012 ([double]$breathingScale.ScaleY) 0.000001 `
         "$($wakeCase.State) reset precondition did not start from peak SLEEP breathing ScaleY."
 
     $presenter.Render((New-Snapshot $wakeCase.State $wakeCase.Phase $wakeCase.GrabOffset))
@@ -222,6 +263,7 @@ foreach ($wakeCase in $wakeCases)
         "$($wakeCase.State) retained SLEEP breathing ScaleY."
 }
 
-Write-Output ("SLEEP POSE PASS: visible-center continuous image growth over four seconds, " +
-    "rendered-centroid delta=($([Math]::Round($centroidDeltaX, 6)),$([Math]::Round($centroidDeltaY, 6))) px, " +
-    'fixed body baseline, closed-frame selection, and wake-state pose reset passed.')
+Write-Output ("SLEEP POSE PASS: asymmetric foot-anchored directional breathing over four seconds, " +
+    "rendered bounds=$($restingGeometry.Width)x$($restingGeometry.Height)->$($peakGeometry.Width)x$($peakGeometry.Height), " +
+    "foot-baseline delta=$footBaselineDelta px, inhale/exhale samples=$increasingSampleCount/$decreasingSampleCount, " +
+    'zero body Y, closed-frame selection, and every non-breathing pose reset passed.')
