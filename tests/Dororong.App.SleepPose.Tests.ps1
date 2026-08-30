@@ -46,18 +46,27 @@ $scale = $presenter.FindName('BodyScaleTransform')
 $rotation = $presenter.FindName('BodyRotateTransform')
 $translation = $presenter.FindName('BodyTranslateTransform')
 $image = [System.Windows.Controls.Image]$presenter.FindName('DororongImage')
+$breathingScale = $presenter.FindName('ImageBreathingScaleTransform')
 
 foreach ($namedPart in @(
     @{ Name = 'BodyScaleTransform'; Value = $scale },
     @{ Name = 'BodyRotateTransform'; Value = $rotation },
     @{ Name = 'BodyTranslateTransform'; Value = $translation },
-    @{ Name = 'DororongImage'; Value = $image }))
+    @{ Name = 'DororongImage'; Value = $image },
+    @{ Name = 'ImageBreathingScaleTransform'; Value = $breathingScale }))
 {
     if ($null -eq $namedPart.Value)
     {
         throw "$($namedPart.Name) was not found in the presenter namescope."
     }
 }
+
+Assert-Equal $true ([Object]::ReferenceEquals($image.RenderTransform, $breathingScale)) `
+    'The dedicated breathing scale was not applied directly to the authored image.'
+Assert-Near 0.5 ([double]$image.RenderTransformOrigin.X) 0.000001 `
+    'The image breathing scale was not horizontally centered.'
+Assert-Near 1.0 ([double]$image.RenderTransformOrigin.Y) 0.000001 `
+    'The image breathing scale was not anchored to the bottom edge.'
 
 $state = [Dororong.Core.Behavior.PetState]
 $facing = [Dororong.Core.Behavior.FacingDirection]::Right
@@ -77,59 +86,56 @@ function New-Snapshot(
         $GrabOffset)
 }
 
-$presenter.Render((New-Snapshot $state::Sleep 0.25))
-$highScaleX = [double]$scale.ScaleX
-$highScaleY = [double]$scale.ScaleY
-$highTranslateY = [double]$translation.Y
-$highFrame = $image.Source.ToString()
+$sleepCases = @(
+    @{ Name = 'start'; Phase = 0.0; BreathingScale = 1.0 },
+    @{ Name = 'expansion'; Phase = 0.25; BreathingScale = 1.0084852813742386 },
+    @{ Name = 'peak'; Phase = 0.5; BreathingScale = 1.012 },
+    @{ Name = 'return'; Phase = 0.75; BreathingScale = 1.0084852813742386 },
+    @{ Name = 'end'; Phase = 1.0; BreathingScale = 1.0 }
+)
 
-$presenter.Render((New-Snapshot $state::Sleep 0.75))
-$lowScaleX = [double]$scale.ScaleX
-$lowScaleY = [double]$scale.ScaleY
-$lowTranslateY = [double]$translation.Y
-$lowFrame = $image.Source.ToString()
-
-Assert-Near 1.0 $highScaleX 0.000001 'SLEEP expansion phase ScaleX changed.'
-Assert-Near 1.0 $highScaleY 0.000001 'SLEEP expansion phase ScaleY changed.'
-Assert-Near 5.0 $highTranslateY 0.000001 'SLEEP expansion phase vertical position changed.'
-Assert-Near 1.0 $lowScaleX 0.000001 'SLEEP contraction phase ScaleX changed.'
-Assert-Near 1.0 $lowScaleY 0.000001 'SLEEP contraction phase ScaleY changed.'
-Assert-Near 7.0 $lowTranslateY 0.000001 'SLEEP contraction phase vertical position changed.'
-Assert-Equal $true $highFrame.EndsWith('dororong-closed-eyes.png', [StringComparison]::OrdinalIgnoreCase) `
-    'SLEEP expansion phase did not use dororong-closed-eyes.png.'
-Assert-Equal $true $lowFrame.EndsWith('dororong-closed-eyes.png', [StringComparison]::OrdinalIgnoreCase) `
-    'SLEEP contraction phase did not use dororong-closed-eyes.png.'
-
-$sleepTranslateYs = [System.Collections.Generic.List[double]]::new()
-for ($tick = 0; $tick -lt 73; $tick++)
+foreach ($sleepCase in $sleepCases)
 {
-    $phase = ($tick * 0.033) / 2.4
+    $presenter.Render((New-Snapshot $state::Sleep $sleepCase.Phase))
+    Assert-Frame $image 'dororong-closed-eyes.png' "SLEEP $($sleepCase.Name) phase"
+    Assert-Near 1.0 ([double]$scale.ScaleX) 0.000001 "SLEEP $($sleepCase.Name) phase changed body ScaleX."
+    Assert-Near 1.0 ([double]$scale.ScaleY) 0.000001 "SLEEP $($sleepCase.Name) phase changed body ScaleY."
+    Assert-Near 0.0 ([double]$translation.Y) 0.000001 "SLEEP $($sleepCase.Name) phase moved the whole body vertically."
+    Assert-Near $sleepCase.BreathingScale ([double]$breathingScale.ScaleX) 0.000001 `
+        "SLEEP $($sleepCase.Name) phase breathing ScaleX changed."
+    Assert-Near $sleepCase.BreathingScale ([double]$breathingScale.ScaleY) 0.000001 `
+        "SLEEP $($sleepCase.Name) phase breathing ScaleY changed."
+}
+
+$sleepBreathingScales = [System.Collections.Generic.List[double]]::new()
+for ($tick = 0; $tick -le 150; $tick++)
+{
+    $phase = ($tick * 0.016) / 2.4
     $presenter.Render((New-Snapshot $state::Sleep $phase))
     Assert-Equal $true $image.Source.ToString().EndsWith('dororong-closed-eyes.png', [StringComparison]::OrdinalIgnoreCase) `
         "SLEEP tick $tick did not use dororong-closed-eyes.png."
-    Assert-Near 1.0 ([double]$scale.ScaleX) 0.000001 "SLEEP tick $tick changed ScaleX."
-    Assert-Near 1.0 ([double]$scale.ScaleY) 0.000001 "SLEEP tick $tick changed ScaleY."
+    Assert-Near 1.0 ([double]$scale.ScaleX) 0.000001 "SLEEP tick $tick changed body ScaleX."
+    Assert-Near 1.0 ([double]$scale.ScaleY) 0.000001 "SLEEP tick $tick changed body ScaleY."
+    Assert-Near 0.0 ([double]$translation.Y) 0.000001 "SLEEP tick $tick moved the whole body vertically."
+    Assert-Near ([double]$breathingScale.ScaleX) ([double]$breathingScale.ScaleY) 0.000001 `
+        "SLEEP tick $tick stretched the image non-uniformly."
 
-    $sleepTranslateYs.Add([double]$translation.Y)
-    if ($sleepTranslateYs.Count -gt 1)
+    $sleepBreathingScales.Add([double]$breathingScale.ScaleX)
+    if ($sleepBreathingScales.Count -gt 1)
     {
-        $adjacentDelta = [Math]::Abs($sleepTranslateYs[$sleepTranslateYs.Count - 1] - $sleepTranslateYs[$sleepTranslateYs.Count - 2])
-        if ($adjacentDelta -gt 0.1)
+        $adjacentDelta = [Math]::Abs(
+            $sleepBreathingScales[$sleepBreathingScales.Count - 1] -
+            $sleepBreathingScales[$sleepBreathingScales.Count - 2])
+        if ($adjacentDelta -gt 0.000252)
         {
-            throw "SLEEP tick $tick exceeded the adjacent TranslateY continuity limit. Expected <= '0.1', observed '$adjacentDelta'."
+            throw "SLEEP tick $tick exceeded the 16 ms adjacent breathing-scale continuity limit. Expected <= '0.000252', observed '$adjacentDelta'."
         }
     }
 
-    if ([double]$translation.Y -lt 5.0 -or [double]$translation.Y -gt 7.0)
+    if ([double]$breathingScale.ScaleX -lt 1.0 -or [double]$breathingScale.ScaleX -gt 1.012)
     {
-        throw "SLEEP tick $tick left the TranslateY bounds. Expected '5..7', observed '$($translation.Y)'."
+        throw "SLEEP tick $tick left the breathing-scale bounds. Expected '1.0..1.012', observed '$($breathingScale.ScaleX)'."
     }
-}
-
-$distinctSleepTranslateYs = $sleepTranslateYs | ForEach-Object { [Math]::Round($_, 6) } | Sort-Object -Unique
-if ($distinctSleepTranslateYs.Count -lt 60)
-{
-    throw "SLEEP breathing did not provide enough continuous values. Expected at least '60', observed '$($distinctSleepTranslateYs.Count)'."
 }
 
 $wakeCases = @(
@@ -147,6 +153,10 @@ foreach ($wakeCase in $wakeCases)
     Assert-Near $wakeCase.ScaleY ([double]$scale.ScaleY) 0.000001 "$($wakeCase.State) ScaleY retained a SLEEP transform."
     Assert-Near $wakeCase.Rotation ([double]$rotation.Angle) 0.000001 "$($wakeCase.State) rotation changed."
     Assert-Near $wakeCase.TranslateY ([double]$translation.Y) 0.000001 "$($wakeCase.State) retained a SLEEP vertical offset."
+    Assert-Near 1.0 ([double]$breathingScale.ScaleX) 0.000001 `
+        "$($wakeCase.State) retained SLEEP breathing ScaleX."
+    Assert-Near 1.0 ([double]$breathingScale.ScaleY) 0.000001 `
+        "$($wakeCase.State) retained SLEEP breathing ScaleY."
 }
 
-Write-Output 'SLEEP POSE PASS: continuous bounded translation-only breathing, corrected closed-frame selection, and wake-state pose reset passed.'
+Write-Output 'SLEEP POSE PASS: bottom-anchored continuous image breathing, fixed body baseline, closed-frame selection, and wake-state pose reset passed.'

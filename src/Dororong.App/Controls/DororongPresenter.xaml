@@ -33,9 +33,14 @@
                                         Width="96"
                                         Height="96"
                                         Canvas.Left="6"
+                                        RenderTransformOrigin="0.5,1"
                                         RenderOptions.BitmapScalingMode="HighQuality"
                                         Source="/Dororong.App;component/Assets/dororong-canonical.png"
-                                        Stretch="Uniform" />
+                                        Stretch="Uniform">
+                <controls:AlphaHitTestImage.RenderTransform>
+                    <ScaleTransform x:Name="ImageBreathingScaleTransform" />
+                </controls:AlphaHitTestImage.RenderTransform>
+            </controls:AlphaHitTestImage>
         </Canvas>
     </Canvas>
 </UserControl>
