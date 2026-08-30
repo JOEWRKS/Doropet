@@ -408,6 +408,13 @@ if ($Focus -in @('All', 'PetLoop'))
     $timerType = Get-RequiredType $appAssembly 'Dororong.App.Runtime.PetLoopTimer'
     $hostType = Get-RequiredType $appAssembly 'Dororong.App.Runtime.PetLoopHost'
     $petLoopType = Get-RequiredType $appAssembly 'Dororong.App.PetLoop'
+    $tickIntervalField = $petLoopType.GetField(
+        'TickInterval',
+        [Reflection.BindingFlags]'Static,NonPublic')
+    Assert-True ($null -ne $tickIntervalField) 'The production PetLoop timer interval field was not found.'
+    $tickInterval = [TimeSpan]$tickIntervalField.GetValue($null)
+    Assert-True ($tickInterval.TotalMilliseconds -le 16.7) `
+        "The production PetLoop timer interval exceeded the display-cadence limit. Expected <= '16.7 ms', observed '$($tickInterval.TotalMilliseconds) ms'."
 
     $fixture = New-PetLoopFixture $clockType $timerType $hostType $petLoopType
     $fixture.Start.Invoke($fixture.Loop, @()) | Out-Null

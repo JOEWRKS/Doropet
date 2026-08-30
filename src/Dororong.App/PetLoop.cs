@@ -12,7 +12,7 @@ namespace Dororong.App;
 
 internal sealed class PetLoop : IDisposable
 {
-    private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(33);
+    private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(16);
     private const double InitialMargin = 32;
 
     private readonly PetLoopClock _clock;
