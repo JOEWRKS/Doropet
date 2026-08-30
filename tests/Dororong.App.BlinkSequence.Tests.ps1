@@ -39,8 +39,6 @@ Add-Type -Path $appAssemblyPath
 
 $presenter = [Dororong.App.Controls.DororongPresenter]::new()
 $image = [System.Windows.Controls.Image]$presenter.FindName('DororongImage')
-$scale = $presenter.FindName('BodyScaleTransform')
-$translation = $presenter.FindName('BodyTranslateTransform')
 $state = [Dororong.Core.Behavior.PetState]
 $facing = [Dororong.Core.Behavior.FacingDirection]::Right
 $origin = [Dororong.Core.Geometry.PointD]::new(0, 0)
@@ -53,8 +51,8 @@ function Render-State(
         $State,$origin,$facing,$Phase,$false,$null))
 }
 
-# Each lid-only state occupies 0.08 seconds in the existing two-second IDLE
-# phase, so squint and full close each cover two 33ms render probes.
+# Preserve the exact authored frame selected immediately before, at, and inside
+# each existing IDLE blink phase threshold.
 $idleCases = @(
     @{ Phase = 0.649999; Frame = 'dororong-canonical.png'; Label = 'before blink' },
     @{ Phase = 0.650000; Frame = 'dororong-blink-squint.png'; Label = 'first squint entry' },
@@ -74,15 +72,6 @@ foreach ($case in $idleCases)
     {
         $idleFailures.Add("IDLE $($case.Label) phase=$($case.Phase) did not use $($case.Frame); observed '$actualFrame'.")
     }
-    if ([double]$scale.ScaleX -ne 1.0)
-    { $idleFailures.Add("IDLE $($case.Label) scaled horizontally; observed '$([double]$scale.ScaleX)'.") }
-    if ([double]$scale.ScaleY -ne 1.0)
-    { $idleFailures.Add("IDLE $($case.Label) scaled vertically; observed '$([double]$scale.ScaleY)'.") }
-    $translateY = [double]$translation.Y
-    if ($translateY -lt -1.0 -or $translateY -gt 1.0 -or $translateY -ne [Math]::Round($translateY))
-    {
-        $idleFailures.Add("IDLE $($case.Label) breathing is not bounded to whole-pixel vertical translation; observed '$translateY'.")
-    }
 }
 if ($idleFailures.Count -gt 0) { throw ($idleFailures -join [Environment]::NewLine) }
 
@@ -99,4 +88,4 @@ foreach ($otherState in @(
     Assert-Frame $image 'dororong-canonical.png' "$otherState reset at blink phase"
 }
 
-Write-Output 'BLINK SEQUENCE PASS: 33ms probes map IDLE to open/squint/squint/closed/closed/squint/squint/open; IDLE uses whole-pixel translation without scaling, SLEEP stays closed, and other states reset to canonical.'
+Write-Output 'BLINK SEQUENCE PASS: existing IDLE phase thresholds map to open/squint/squint/closed/closed/squint/squint/open; SLEEP stays closed, and other states reset to canonical.'

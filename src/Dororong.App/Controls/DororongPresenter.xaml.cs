@@ -38,7 +38,8 @@ public partial class DororongPresenter : UserControl
         switch (snapshot.State)
         {
             case PetState.Idle:
-                BodyTranslateTransform.Y = Math.Round(-cycle);
+                ImageBreathingScaleTransform.ScaleX = 1 + (0.04 * bounce);
+                ImageBreathingScaleTransform.ScaleY = 1 + (0.04 * bounce);
                 if (p is >= 0.65 and < 0.69)
                 {
                     DororongImage.Source = BlinkSquintFrame;

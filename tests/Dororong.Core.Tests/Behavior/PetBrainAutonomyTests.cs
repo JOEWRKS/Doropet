@@ -217,6 +217,24 @@ public sealed class PetBrainAutonomyTests
     }
 
     [Fact]
+    public void Idle_phase_advances_one_quarter_after_one_second()
+    {
+        var tuning = BehaviorTuning.Default with
+        {
+            MaxDelta = TimeSpan.FromSeconds(1),
+            IdleMin = TimeSpan.FromSeconds(11),
+            IdleMax = TimeSpan.FromSeconds(11),
+            SleepDelay = TimeSpan.FromMinutes(11)
+        };
+        var brain = new PetBrain(tuning, new SequenceRandomSource(0.0), new PointD(100, 100));
+
+        var actual = brain.Update(PetTestInput.At(1.0));
+
+        Assert.Equal(PetState.Idle, actual.State);
+        Assert.Equal(0.25, actual.Phase, precision: 10);
+    }
+
+    [Fact]
     public void Walk_with_multiple_reflections_matches_split_frames_in_position_and_heading()
     {
         var wholeFrame = CreateBoundaryBrain(headingUnit: 0, speed: 2000, new PointD(10, 200));

@@ -440,7 +440,7 @@ public sealed class PetBrain
 
     private double GetPhase() => _state switch
     {
-        PetState.Idle => RepeatingPhase(_stateElapsed, TimeSpan.FromSeconds(2)),
+        PetState.Idle => RepeatingPhase(_stateElapsed, TimeSpan.FromSeconds(4)),
         PetState.Walk => RepeatingPhase(_stateElapsed, TimeSpan.FromSeconds(0.6)),
         PetState.Sleep => RepeatingPhase(_stateElapsed, TimeSpan.FromSeconds(4)),
         PetState.Dragged => 0,
