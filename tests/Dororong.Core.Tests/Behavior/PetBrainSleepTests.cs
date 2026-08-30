@@ -72,6 +72,20 @@ public sealed class PetBrainSleepTests
     }
 
     [Fact]
+    public void Sleep_phase_advances_one_quarter_after_one_second()
+    {
+        var brain = PetTestInput.CreateSleepingBrain();
+
+        for (var tick = 0; tick < 10; tick++)
+        {
+            brain.Update(PetTestInput.At(0.1));
+        }
+
+        Assert.Equal(PetState.Sleep, brain.Current.State);
+        Assert.Equal(0.25, brain.Current.Phase, precision: 10);
+    }
+
+    [Fact]
     public void Click_without_drag_wakes_sleep_into_click_reaction()
     {
         var brain = PetTestInput.CreateSleepingBrain();

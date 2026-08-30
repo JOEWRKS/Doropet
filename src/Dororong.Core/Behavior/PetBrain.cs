@@ -442,7 +442,7 @@ public sealed class PetBrain
     {
         PetState.Idle => RepeatingPhase(_stateElapsed, TimeSpan.FromSeconds(2)),
         PetState.Walk => RepeatingPhase(_stateElapsed, TimeSpan.FromSeconds(0.6)),
-        PetState.Sleep => RepeatingPhase(_stateElapsed, TimeSpan.FromSeconds(2.4)),
+        PetState.Sleep => RepeatingPhase(_stateElapsed, TimeSpan.FromSeconds(4)),
         PetState.Dragged => 0,
         PetState.Curious => FinitePhase(_tuning.CuriousDuration),
         PetState.Startled => FinitePhase(_tuning.StartledDuration),

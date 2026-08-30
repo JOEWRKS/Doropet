@@ -33,7 +33,7 @@
                                         Width="96"
                                         Height="96"
                                         Canvas.Left="6"
-                                        RenderTransformOrigin="0.5,1"
+                                        RenderTransformOrigin="0.428987,0.559073"
                                         RenderOptions.BitmapScalingMode="HighQuality"
                                         Source="/Dororong.App;component/Assets/dororong-canonical.png"
                                         Stretch="Uniform">

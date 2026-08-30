@@ -63,10 +63,6 @@ foreach ($namedPart in @(
 
 Assert-Equal $true ([Object]::ReferenceEquals($image.RenderTransform, $breathingScale)) `
     'The dedicated breathing scale was not applied directly to the authored image.'
-Assert-Near 0.5 ([double]$image.RenderTransformOrigin.X) 0.000001 `
-    'The image breathing scale was not horizontally centered.'
-Assert-Near 1.0 ([double]$image.RenderTransformOrigin.Y) 0.000001 `
-    'The image breathing scale was not anchored to the bottom edge.'
 
 $state = [Dororong.Core.Behavior.PetState]
 $facing = [Dororong.Core.Behavior.FacingDirection]::Right
@@ -86,11 +82,72 @@ function New-Snapshot(
         $GrabOffset)
 }
 
+function Get-RenderedAlphaWeightedCentroid(
+    [Dororong.App.Controls.DororongPresenter]$Presenter)
+{
+    $size = [System.Windows.Size]::new(144, 144)
+    $Presenter.Measure($size)
+    $Presenter.Arrange([System.Windows.Rect]::new([System.Windows.Point]::new(0, 0), $size))
+    $Presenter.UpdateLayout()
+
+    $bitmap = [System.Windows.Media.Imaging.RenderTargetBitmap]::new(
+        144,
+        144,
+        96,
+        96,
+        [System.Windows.Media.PixelFormats]::Pbgra32)
+    $bitmap.Render($Presenter)
+
+    $stride = 144 * 4
+    $pixels = [byte[]]::new($stride * 144)
+    $bitmap.CopyPixels($pixels, $stride, 0)
+
+    [double]$weight = 0
+    [double]$weightedX = 0
+    [double]$weightedY = 0
+    for ($y = 0; $y -lt 144; $y++)
+    {
+        for ($x = 0; $x -lt 144; $x++)
+        {
+            $alpha = [double]$pixels[($y * $stride) + ($x * 4) + 3]
+            if ($alpha -le 8)
+            {
+                continue
+            }
+
+            $weight += $alpha
+            $weightedX += ($x + 0.5) * $alpha
+            $weightedY += ($y + 0.5) * $alpha
+        }
+    }
+
+    if ($weight -le 0)
+    {
+        throw 'The rendered presenter contained no visible alpha for centroid measurement.'
+    }
+
+    return [pscustomobject]@{
+        X = $weightedX / $weight
+        Y = $weightedY / $weight
+    }
+}
+
+$presenter.Render((New-Snapshot $state::Sleep 0.0))
+$restingCentroid = Get-RenderedAlphaWeightedCentroid $presenter
+$presenter.Render((New-Snapshot $state::Sleep 0.5))
+$peakCentroid = Get-RenderedAlphaWeightedCentroid $presenter
+$centroidDeltaX = $peakCentroid.X - $restingCentroid.X
+$centroidDeltaY = $peakCentroid.Y - $restingCentroid.Y
+Assert-Near 0.0 $centroidDeltaX 0.1 `
+    'Peak SLEEP growth moved the rendered alpha-weighted visible centroid horizontally.'
+Assert-Near 0.0 $centroidDeltaY 0.1 `
+    'Peak SLEEP growth moved the rendered alpha-weighted visible centroid vertically.'
+
 $sleepCases = @(
     @{ Name = 'start'; Phase = 0.0; BreathingScale = 1.0 },
-    @{ Name = 'expansion'; Phase = 0.25; BreathingScale = 1.0084852813742386 },
-    @{ Name = 'peak'; Phase = 0.5; BreathingScale = 1.012 },
-    @{ Name = 'return'; Phase = 0.75; BreathingScale = 1.0084852813742386 },
+    @{ Name = 'expansion'; Phase = 0.25; BreathingScale = 1.0282842712474618 },
+    @{ Name = 'peak'; Phase = 0.5; BreathingScale = 1.04 },
+    @{ Name = 'return'; Phase = 0.75; BreathingScale = 1.0282842712474618 },
     @{ Name = 'end'; Phase = 1.0; BreathingScale = 1.0 }
 )
 
@@ -108,9 +165,9 @@ foreach ($sleepCase in $sleepCases)
 }
 
 $sleepBreathingScales = [System.Collections.Generic.List[double]]::new()
-for ($tick = 0; $tick -le 150; $tick++)
+for ($tick = 0; $tick -le 250; $tick++)
 {
-    $phase = ($tick * 0.016) / 2.4
+    $phase = ($tick * 0.016) / 4.0
     $presenter.Render((New-Snapshot $state::Sleep $phase))
     Assert-Equal $true $image.Source.ToString().EndsWith('dororong-closed-eyes.png', [StringComparison]::OrdinalIgnoreCase) `
         "SLEEP tick $tick did not use dororong-closed-eyes.png."
@@ -126,15 +183,15 @@ for ($tick = 0; $tick -le 150; $tick++)
         $adjacentDelta = [Math]::Abs(
             $sleepBreathingScales[$sleepBreathingScales.Count - 1] -
             $sleepBreathingScales[$sleepBreathingScales.Count - 2])
-        if ($adjacentDelta -gt 0.000252)
+        if ($adjacentDelta -gt 0.000503)
         {
-            throw "SLEEP tick $tick exceeded the 16 ms adjacent breathing-scale continuity limit. Expected <= '0.000252', observed '$adjacentDelta'."
+            throw "SLEEP tick $tick exceeded the 16 ms adjacent breathing-scale continuity limit. Expected <= '0.000503', observed '$adjacentDelta'."
         }
     }
 
-    if ([double]$breathingScale.ScaleX -lt 1.0 -or [double]$breathingScale.ScaleX -gt 1.012)
+    if ([double]$breathingScale.ScaleX -lt 1.0 -or [double]$breathingScale.ScaleX -gt 1.04)
     {
-        throw "SLEEP tick $tick left the breathing-scale bounds. Expected '1.0..1.012', observed '$($breathingScale.ScaleX)'."
+        throw "SLEEP tick $tick left the breathing-scale bounds. Expected '1.0..1.04', observed '$($breathingScale.ScaleX)'."
     }
 }
 
@@ -148,9 +205,9 @@ $wakeCases = @(
 foreach ($wakeCase in $wakeCases)
 {
     $presenter.Render((New-Snapshot $state::Sleep 0.5))
-    Assert-Near 1.012 ([double]$breathingScale.ScaleX) 0.000001 `
+    Assert-Near 1.04 ([double]$breathingScale.ScaleX) 0.000001 `
         "$($wakeCase.State) reset precondition did not start from peak SLEEP breathing ScaleX."
-    Assert-Near 1.012 ([double]$breathingScale.ScaleY) 0.000001 `
+    Assert-Near 1.04 ([double]$breathingScale.ScaleY) 0.000001 `
         "$($wakeCase.State) reset precondition did not start from peak SLEEP breathing ScaleY."
 
     $presenter.Render((New-Snapshot $wakeCase.State $wakeCase.Phase $wakeCase.GrabOffset))
@@ -165,4 +222,6 @@ foreach ($wakeCase in $wakeCases)
         "$($wakeCase.State) retained SLEEP breathing ScaleY."
 }
 
-Write-Output 'SLEEP POSE PASS: bottom-anchored continuous image breathing, fixed body baseline, closed-frame selection, and wake-state pose reset passed.'
+Write-Output ("SLEEP POSE PASS: visible-center continuous image growth over four seconds, " +
+    "rendered-centroid delta=($([Math]::Round($centroidDeltaX, 6)),$([Math]::Round($centroidDeltaY, 6))) px, " +
+    'fixed body baseline, closed-frame selection, and wake-state pose reset passed.')
