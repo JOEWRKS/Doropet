@@ -608,7 +608,7 @@ function Invoke-AuthorityMutationFailure(
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $sourcePath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical-source.png'
-$nativePath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-canonical.png'
+$nativePath = Join-Path $repositoryRoot 'tests/fixtures/dororong-body-outline-native-authority.png'
 $maskPath = Join-Path $repositoryRoot 'src/Dororong.App/Assets/dororong-body-region-mask.png'
 $authorityPath = Join-Path $repositoryRoot 'tests/fixtures/dororong-body-outline-authority.psd1'
 $supportPath = Join-Path $repositoryRoot 'tests/support/Dororong.ContinuousOptics.ps1'

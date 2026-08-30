@@ -51,9 +51,9 @@ $paths=[ordered]@{
 $expected=[ordered]@{
     Source='F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504'
     Mask='D08B3A941C662F1CBC55C486C13FD4C6CD8901DA9CD5CF8512509698219FE46F'
-    Open='238AC7F0ACC765ABC40AE3E13543E088BC3F694C0D4FBC99BDFD99648D94B511'
-    Squint='615C758D82F745F41D22547B1B42DB16AAF6ACA900229F55823DFD82A6584721'
-    Closed='319C3E931C8D9D2D32CB172B1AB7617EB7362700FC832182F9B187B0BAB9DFBB'
+    Open='699348D1973709F228D843341AC5312AA7F449D57B9BFC76576256231E259A78'
+    Squint='AE2ECC443279153F7174B05E4DAD1E3491BE0232E25F7DDA3E6BFD1174B12F50'
+    Closed='D3C88F3546FABD487C679C8822FD1F52AF8AC5052132A11D57370AC86E514FFA'
     SourceOpen='D1F0770CBCA95FC79B5E68642D78A5A48077834495C9ECDBCD73B34545AC94FF'
     SourceBaseline='8F542A4F1B2671789BD7CD4980D890BF96CFCC9DADBC9D4E61963CCE2D384CCB'
     NativeBaseline='3B3D171D2C62134284915D7D162D43F36263761D4EA6344F4AC8BCEA730C5B59'
@@ -74,8 +74,8 @@ $generatorOutput=& pwsh -NoProfile -File $paths.Generator -SourcePath $paths.Sou
     -BodyMaskPath $paths.Mask -OutputDirectory $outputDirectory -EvidenceDirectory $evidenceDirectory 2>&1
 Assert-Equal 0 $LASTEXITCODE "Canonical/authored-state export failed: $($generatorOutput-join[Environment]::NewLine)"
 $generatorText=$generatorOutput-join[Environment]::NewLine
-Assert-True $generatorText.Contains('resizeOpen=1 authoredNativeCopies=2',[StringComparison]::Ordinal) `
-    'Generator did not report one canonical resize plus two authored-native copies.'
+Assert-True $generatorText.Contains('authoredFrames=3',[StringComparison]::Ordinal) `
+    'Generator did not report the three supplied authored frames.'
 
 $expectedOutput=@('dororong-blink-squint.png','dororong-canonical.png','dororong-closed-eyes.png')|Sort-Object
 $actualOutput=@(Get-ChildItem -LiteralPath $outputDirectory -File|Sort-Object Name|ForEach-Object Name)

@@ -21,36 +21,6 @@ function Get-PurpleCount([Drawing.Bitmap]$Bitmap,[object]$Region)
     return $count
 }
 
-function Test-LidInk([Drawing.Color]$Pixel)
-{
-    return $Pixel.ToArgb() -in @(
-        [Drawing.Color]::FromArgb(255,50,42,48).ToArgb(),
-        [Drawing.Color]::FromArgb(255,150,130,133).ToArgb())
-}
-
-function Get-ChangedLidGeometry([Drawing.Bitmap]$Open,[Drawing.Bitmap]$State,[object]$Region)
-{
-    $coordinates = [Collections.Generic.List[object[]]]::new()
-    foreach ($y in $Region.Y0..$Region.Y1)
-    {
-        foreach ($x in $Region.X0..$Region.X1)
-        {
-            $before=$Open.GetPixel($x,$y);$after=$State.GetPixel($x,$y)
-            if ($before.ToArgb() -ne $after.ToArgb() -and (Test-LidInk $after) -and -not (Test-Purple $after))
-            { $coordinates.Add(@($x,$y)) }
-        }
-    }
-    if ($coordinates.Count -eq 0) { throw 'The reviewed eye region contains no changed lid ink.' }
-    $xs=@($coordinates|ForEach-Object{[int]$_[0]});$ys=@($coordinates|ForEach-Object{[int]$_[1]})
-    $minX=($xs|Measure-Object -Minimum).Minimum;$maxX=($xs|Measure-Object -Maximum).Maximum
-    $minY=($ys|Measure-Object -Minimum).Minimum;$maxY=($ys|Measure-Object -Maximum).Maximum
-    return [pscustomobject]@{
-        Width=1+$maxX-$minX
-        Depth=$maxY-$minY
-        CenterY=($minY+$maxY)/2.0
-    }
-}
-
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $assetRoot = Join-Path $repositoryRoot 'src/Dororong.App/Assets'
 $old70Path = Join-Path $assetRoot 'dororong-eyes-70-open.png'
@@ -86,35 +56,42 @@ if (-not (Test-Path -LiteralPath $squintPath -PathType Leaf))
     $failures.Add('The single lid-only squint runtime resource is missing.')
 }
 
-$openPath = Join-Path $assetRoot 'dororong-canonical.png'
-$open = [Drawing.Bitmap]::new($openPath)
-$closed = [Drawing.Bitmap]::new($closedPath)
+if ((Test-Path -LiteralPath $squintPath) -and (Get-FileHash -LiteralPath $squintPath -Algorithm SHA256).Hash -ne
+    'AE2ECC443279153F7174B05E4DAD1E3491BE0232E25F7DDA3E6BFD1174B12F50')
+{ $failures.Add('The runtime squint is not the supplied half-close frame.') }
+if ((Get-FileHash -LiteralPath $closedPath -Algorithm SHA256).Hash -ne
+    'D3C88F3546FABD487C679C8822FD1F52AF8AC5052132A11D57370AC86E514FFA')
+{ $failures.Add('The runtime closed face is not the supplied full-close frame.') }
+
+# Only the generated closed eyes belong to the expression state. The canonical
+# mouth and lower face remain the positional authority, and the generated mouth
+# above them must be removed instead of moving or replacing the canonical mouth.
+$canonicalBitmap = [Drawing.Bitmap]::new((Join-Path $assetRoot 'dororong-canonical.png'))
+$closedBitmap = [Drawing.Bitmap]::new($closedPath)
 try
 {
-    $leftClosed = Get-ChangedLidGeometry $open $closed $regions[0]
-    $rightClosed = Get-ChangedLidGeometry $open $closed $regions[1]
-    if ($leftClosed.CenterY -ne $rightClosed.CenterY)
+    $changedCanonicalLowerFacePixels = 0
+    foreach ($y in 59..62)
     {
-        $failures.Add("The final left/right native vertical centers are unequal (left=$($leftClosed.CenterY) right=$($rightClosed.CenterY)).")
+        foreach ($x in 22..34)
+        {
+            if ($canonicalBitmap.GetPixel($x,$y).ToArgb() -ne $closedBitmap.GetPixel($x,$y).ToArgb())
+            {
+                $changedCanonicalLowerFacePixels++
+            }
+        }
     }
-    foreach ($entry in @(
-        @{Name='viewer-left';Geometry=$leftClosed},
-        @{Name='viewer-right';Geometry=$rightClosed}))
+    if ($changedCanonicalLowerFacePixels -ne 0)
     {
-        if ($entry.Geometry.Width -ne 7)
-        { $failures.Add("The $($entry.Name) final lid visible width is $($entry.Geometry.Width), not 7.") }
-        if ($entry.Geometry.Depth -ne 2)
-        { $failures.Add("The $($entry.Name) final lid depth is $($entry.Geometry.Depth), not 2.") }
+        $failures.Add("The closed expression moves the canonical mouth or imports a lower-face/chin line at $changedCanonicalLowerFacePixels pixels.")
     }
-}
-finally { $closed.Dispose();$open.Dispose() }
 
-if ((Test-Path -LiteralPath $squintPath) -and (Get-FileHash -LiteralPath $squintPath -Algorithm SHA256).Hash -ne
-    '615C758D82F745F41D22547B1B42DB16AAF6ACA900229F55823DFD82A6584721')
-{ $failures.Add('The runtime squint is not the exact approved Task 19 attempt-2 pair-B input.') }
-if ((Get-FileHash -LiteralPath $closedPath -Algorithm SHA256).Hash -ne
-    '319C3E931C8D9D2D32CB172B1AB7617EB7362700FC832182F9B187B0BAB9DFBB')
-{ $failures.Add('The runtime closed face is not the exact approved Task 19 attempt-2 pair-B input.') }
+}
+finally
+{
+    $canonicalBitmap.Dispose()
+    $closedBitmap.Dispose()
+}
 
 $coreAssemblyPath = Join-Path $repositoryRoot "src/Dororong.Core/bin/$Configuration/net8.0/Dororong.Core.dll"
 $appAssemblyPath = Join-Path $repositoryRoot "src/Dororong.App/bin/$Configuration/net8.0-windows/Dororong.App.dll"
@@ -149,4 +126,4 @@ if (($expected -join '|') -ne (@($observed) -join '|'))
 }
 
 if ($failures.Count -gt 0) { throw ($failures -join [Environment]::NewLine) }
-Write-Output 'BLINK RECOVERY PASS: rejected iris resources are absent, pair-B closed lids have equal centers, width 7, depth 2, and IDLE playback does not require iris-bearing intermediates.'
+Write-Output 'BLINK RECOVERY PASS: rejected iris resources are absent, the canonical mouth/lower face is exact, and IDLE playback does not require the rejected intermediate resources.'
