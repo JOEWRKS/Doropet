@@ -86,7 +86,7 @@ public partial class DororongPresenter : UserControl
                 break;
 
             case PetState.Sleep:
-                BodyTranslateTransform.Y = 6 - Math.Round(cycle);
+                BodyTranslateTransform.Y = 6 - cycle;
                 DororongImage.Source = ClosedEyesFrame;
                 break;
 

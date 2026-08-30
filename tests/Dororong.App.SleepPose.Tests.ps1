@@ -100,6 +100,38 @@ Assert-Equal $true $highFrame.EndsWith('dororong-closed-eyes.png', [StringCompar
 Assert-Equal $true $lowFrame.EndsWith('dororong-closed-eyes.png', [StringComparison]::OrdinalIgnoreCase) `
     'SLEEP contraction phase did not use dororong-closed-eyes.png.'
 
+$sleepTranslateYs = [System.Collections.Generic.List[double]]::new()
+for ($tick = 0; $tick -lt 73; $tick++)
+{
+    $phase = ($tick * 0.033) / 2.4
+    $presenter.Render((New-Snapshot $state::Sleep $phase))
+    Assert-Equal $true $image.Source.ToString().EndsWith('dororong-closed-eyes.png', [StringComparison]::OrdinalIgnoreCase) `
+        "SLEEP tick $tick did not use dororong-closed-eyes.png."
+    Assert-Near 1.0 ([double]$scale.ScaleX) 0.000001 "SLEEP tick $tick changed ScaleX."
+    Assert-Near 1.0 ([double]$scale.ScaleY) 0.000001 "SLEEP tick $tick changed ScaleY."
+
+    $sleepTranslateYs.Add([double]$translation.Y)
+    if ($sleepTranslateYs.Count -gt 1)
+    {
+        $adjacentDelta = [Math]::Abs($sleepTranslateYs[$sleepTranslateYs.Count - 1] - $sleepTranslateYs[$sleepTranslateYs.Count - 2])
+        if ($adjacentDelta -gt 0.1)
+        {
+            throw "SLEEP tick $tick exceeded the adjacent TranslateY continuity limit. Expected <= '0.1', observed '$adjacentDelta'."
+        }
+    }
+
+    if ([double]$translation.Y -lt 5.0 -or [double]$translation.Y -gt 7.0)
+    {
+        throw "SLEEP tick $tick left the TranslateY bounds. Expected '5..7', observed '$($translation.Y)'."
+    }
+}
+
+$distinctSleepTranslateYs = $sleepTranslateYs | ForEach-Object { [Math]::Round($_, 6) } | Sort-Object -Unique
+if ($distinctSleepTranslateYs.Count -lt 60)
+{
+    throw "SLEEP breathing did not provide enough continuous values. Expected at least '60', observed '$($distinctSleepTranslateYs.Count)'."
+}
+
 $wakeCases = @(
     @{ State = $state::Curious; Phase = 0.25; GrabOffset = $null; ScaleX = 1.0; ScaleY = 1.0; Rotation = 7.0; TranslateY = 0.0 },
     @{ State = $state::Startled; Phase = 0.25; GrabOffset = $null; ScaleX = 1.12727922061358; ScaleY = 0.901005050633883; Rotation = 0.0; TranslateY = 0.0 },
