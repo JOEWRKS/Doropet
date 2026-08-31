@@ -85,24 +85,56 @@ function New-PresenterFixture() {
     $presenter = [Dororong.App.Controls.DororongPresenter]::new()
     return [pscustomobject]@{ Presenter = $presenter; Image = [System.Windows.Controls.Image]$presenter.FindName('DororongImage'); BodyScale = $presenter.FindName('BodyScaleTransform'); Rotation = $presenter.FindName('BodyRotateTransform'); Translation = $presenter.FindName('BodyTranslateTransform'); Breathing = $presenter.FindName('ImageBreathingScaleTransform') }
 }
+function Get-RenderedAlpha([Dororong.App.Controls.DororongPresenter]$Presenter) {
+    $size = [System.Windows.Size]::new(144, 144)
+    $Presenter.Measure($size)
+    $Presenter.Arrange([System.Windows.Rect]::new([System.Windows.Point]::new(0, 0), $size))
+    $Presenter.UpdateLayout()
+    $bitmap = [System.Windows.Media.Imaging.RenderTargetBitmap]::new(144, 144, 96, 96, [System.Windows.Media.PixelFormats]::Pbgra32)
+    $bitmap.Render($Presenter)
+    $pixels = [byte[]]::new(144 * 144 * 4)
+    $bitmap.CopyPixels($pixels, 144 * 4, 0)
+    [long]$sum = 0
+    for ($index = 3; $index -lt $pixels.Length; $index += 4) { $sum += $pixels[$index] }
+    return [pscustomobject]@{ Pixels = $pixels; Sum = $sum }
+}
+function Get-RenderedAlphaAt([byte[]]$Pixels, [int]$X, [int]$Y) {
+    return [int]$Pixels[(($Y * 144) + $X) * 4 + 3]
+}
 
 $fixture = New-PresenterFixture
 Assert-True ($null -ne $fixture.Image) 'DororongImage was not found in the presenter namescope.'
 Assert-True ([Object]::ReferenceEquals($fixture.Image.RenderTransform, $fixture.Breathing)) 'The dedicated breathing scale was not applied directly to the authored image.'
-$entryCases = @(
-    @{ Phase = 0.0; Frame = 'dororong-blink-squint.png'; Label = '0ms standing squint' },
-    @{ Phase = 0.0225; Frame = 'dororong-closed-eyes.png'; Label = '90ms standing closed' },
-    @{ Phase = 0.045; Frame = 'dororong-sleep-crouch-closed.png'; Label = '180ms crouch closed' },
-    @{ Phase = 0.070; Frame = 'dororong-sleep-tuck-closed.png'; Label = '280ms tuck closed' },
-    @{ Phase = 0.100; Frame = 'dororong-sleep.png'; Label = '400ms settled loaf' }
+$entrySegments = @(
+    @{ Start = 0.0000; End = 0.0225; From = 'dororong-canonical.png'; To = 'dororong-blink-squint.png'; Label = 'open to squint' },
+    @{ Start = 0.0225; End = 0.0450; From = 'dororong-blink-squint.png'; To = 'dororong-closed-eyes.png'; Label = 'squint to closed' },
+    @{ Start = 0.0450; End = 0.0700; From = 'dororong-closed-eyes.png'; To = 'dororong-sleep-crouch-closed.png'; Label = 'closed to crouch' },
+    @{ Start = 0.0700; End = 0.1000; From = 'dororong-sleep-crouch-closed.png'; To = 'dororong-sleep-tuck-closed.png'; Label = 'crouch to tuck' },
+    @{ Start = 0.1000; End = 0.1350; From = 'dororong-sleep-tuck-closed.png'; To = 'dororong-sleep.png'; Label = 'tuck to loaf' }
 )
-foreach ($entryCase in $entryCases) {
-    $fixture.Presenter.Render((New-Snapshot $state::Sleep $entryCase.Phase))
-    Assert-Frame $fixture.Image $entryCase.Frame "SLEEP entry $($entryCase.Label)"
-    Assert-Near 1.0 ([double]$fixture.Breathing.ScaleX) 0.000001 "SLEEP entry $($entryCase.Label) began breathing early."
-    Assert-Near 1.0 ([double]$fixture.Breathing.ScaleY) 0.000001 "SLEEP entry $($entryCase.Label) began breathing early."
-    Assert-Origin $fixture.Image 0.428987 0.916667 "SLEEP entry $($entryCase.Label)"
+foreach ($entrySegment in $entrySegments) {
+    $midpoint = ([double]$entrySegment.Start + [double]$entrySegment.End) / 2
+    $fixture.Presenter.Render((New-Snapshot $state::Sleep $midpoint))
+    Assert-Near 1.0 ([double]$fixture.Image.Opacity) 0.000001 "SLEEP entry $($entrySegment.Label) midpoint changed the interactive image opacity."
+    Assert-Near 1.0 ([double]$fixture.Breathing.ScaleX) 0.000001 "SLEEP entry $($entrySegment.Label) began breathing early."
+    Assert-Near 1.0 ([double]$fixture.Breathing.ScaleY) 0.000001 "SLEEP entry $($entrySegment.Label) began breathing early."
+    Assert-Origin $fixture.Image 0.428987 0.916667 "SLEEP entry $($entrySegment.Label)"
+
+    $fixture.Presenter.Render((New-Snapshot $state::Sleep ([double]$entrySegment.Start)))
+    Assert-Frame $fixture.Image $entrySegment.From "SLEEP entry $($entrySegment.Label) exact start"
+    Assert-Near 1.0 ([double]$fixture.Image.Opacity) 0.000001 "SLEEP entry $($entrySegment.Label) exact start base opacity changed."
 }
+
+$alphaFixture = New-PresenterFixture
+$alphaFixture.Presenter.Render((New-Snapshot $state::Sleep 0.01125))
+$openSquintMidpoint = Get-RenderedAlpha $alphaFixture.Presenter
+Assert-Near 818015 ([double]$openSquintMidpoint.Sum) 5000 'Open-to-squint midpoint lost alpha instead of linearly blending the two approved equal-alpha sources.'
+$alphaFixture.Presenter.Render((New-Snapshot $state::Sleep 0.0575))
+$closedCrouchMidpoint = Get-RenderedAlpha $alphaFixture.Presenter
+Assert-Near 859341.5 ([double]$closedCrouchMidpoint.Sum) 5000 'Closed-to-crouch midpoint lost alpha instead of matching the hand-derived linear source-alpha interpolation.'
+Assert-Near 127.5 (Get-RenderedAlphaAt $closedCrouchMidpoint.Pixels 53 49) 1.0 'Closed-to-crouch outgoing-only pixel hard-switched instead of blending at midpoint.'
+Assert-Near 127.5 (Get-RenderedAlphaAt $closedCrouchMidpoint.Pixels 86 52) 1.0 'Closed-to-crouch incoming-only pixel hard-switched instead of blending at midpoint.'
+
 $fixture.Presenter.Render((New-Snapshot $state::Sleep 0.135))
 Assert-Frame $fixture.Image 'dororong-sleep.png' 'SLEEP settlement at 540ms'
 Assert-Origin $fixture.Image 0.435630 0.854167 'SLEEP settlement at 540ms'
@@ -116,10 +148,11 @@ Assert-Frame $fixture.Image 'dororong-sleep.png' 'SLEEP phase wrap after settlem
 Assert-Origin $fixture.Image 0.435630 0.854167 'SLEEP phase wrap after settlement'
 
 $partialEntry = New-PresenterFixture
-$partialEntry.Presenter.Render((New-Snapshot $state::Sleep 0.045))
-Assert-Frame $partialEntry.Image 'dororong-sleep-crouch-closed.png' 'Partial SLEEP entry'
+$partialEntry.Presenter.Render((New-Snapshot $state::Sleep 0.0575))
+Assert-Near 1.0 ([double]$partialEntry.Image.Opacity) 0.000001 'Partial SLEEP entry changed the interactive image opacity.'
 $partialEntry.Presenter.Render((New-Snapshot $state::Dragged 0.25 ([Dororong.Core.Geometry.PointD]::new(76, 48))))
 Assert-Frame $partialEntry.Image 'dororong-canonical.png' 'Dragged SLEEP cancellation'
+Assert-Near 1.0 ([double]$partialEntry.Image.Opacity) 0.000001 'Dragged SLEEP cancellation did not restore the interactive image opacity.'
 Assert-Near 1.12 ([double]$partialEntry.BodyScale.ScaleY) 0.000001 'Dragged SLEEP cancellation did not preserve the dragged pose.'
 Assert-Origin $partialEntry.Image 0.428987 0.916667 'Dragged SLEEP cancellation'
 
@@ -151,7 +184,8 @@ $oneShot.Presenter.Render((New-Snapshot $state::Curious 0.1125))
 $oneShot.Presenter.Render((New-Snapshot $state::Curious 0.01))
 Assert-Frame $oneShot.Image 'dororong-canonical.png' 'Curious wake bridge replay prevention'
 $oneShot.Presenter.Render((New-Snapshot $state::Sleep 0.0))
-Assert-Frame $oneShot.Image 'dororong-blink-squint.png' 'Fresh SLEEP entry after a wake'
+Assert-Frame $oneShot.Image 'dororong-canonical.png' 'Fresh SLEEP entry after a wake'
+Assert-Near 1.0 ([double]$oneShot.Image.Opacity) 0.000001 'Fresh SLEEP entry changed the interactive image opacity.'
 
 $interruptedWake = New-PresenterFixture
 $interruptedWake.Presenter.Render((New-Snapshot $state::Sleep 0.135))
