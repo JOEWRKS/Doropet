@@ -9,8 +9,8 @@ Historical verdicts must remain intact:
 - body outline: `PASS`;
 - awake body-click canonical eyes: `PASS`, based on the user's exact attempt-2 observation `ㅇㅇ 유지 됨`;
 - body-click motion feel, focus, and transparent click-through: `UNVERIFIED`;
-- body-drag implementation and deterministic production mapping: `PASS`;
-- body-drag art, actual runtime feel, and user acceptance: `PROVISIONAL / UNVERIFIED`;
+- body-drag implementation, deterministic production mapping, and held-drag work-area clamp: `PASS`;
+- body-drag art, actual Windows boundary/motion feel, and user acceptance: `PROVISIONAL / UNVERIFIED`;
 - left/right cheeks: not delivered and `UNVERIFIED`;
 - every unobserved actual-Windows row: `UNVERIFIED`;
 - overall M1: `PARTIAL`.
@@ -27,14 +27,18 @@ Historical verdicts must remain intact:
 
 ## Exact executable left for morning inspection
 
-- Publish root: `artifacts/repro/direct-interactions-overnight-attempt-2/runtime/`.
-- Executable SHA-256: `AFB74F04BC88E0D0FBF5B5DE2DD49ECE72E23A4B79A8EA1ED7D585AE39517EEC`.
-- PID at handoff: `45432`.
-- Start: `2026-09-01T04:30:37.8050600+09:00`.
-- Exact path: `D:\JOEWRKS\.worktrees\DororongDesktopPet-m1-expression-animation\artifacts\repro\direct-interactions-overnight-attempt-2\runtime\Dororong.App.exe`.
+- Product checkpoint: `8fa1a96385025f775abf57d4f72a7c77a1586912` (`fix: clamp held body drag to work area`).
+- Publish root: `artifacts/repro/direct-interactions-overnight-attempt-3/runtime/`.
+- Executable SHA-256: `4AFC145876F2F3CBC5C15D450655E3E5EC966DB9BECA3D4017A3D53BB771AE3A`.
+- PID at handoff: `47088`.
+- Parent PID: `44420`.
+- Start: `2026-09-01T05:23:46.6142130+09:00`.
+- Exact path: `D:\JOEWRKS\.worktrees\DororongDesktopPet-m1-expression-animation\artifacts\repro\direct-interactions-overnight-attempt-3\runtime\Dororong.App.exe`.
 - Command line: the same exact path, quoted.
 
 The process was launched once and must not be treated as accepted merely because it remains alive. If it must later be stopped, first read back PID, exact resolved executable path, command line, and start time; stop it only if all still match this record. If identity is ambiguous or the PID is absent, leave it alone and report that state.
+
+Attempt-2 PID `45432` is historical: its exact path, quoted command, CIM start time, and executable hash were matched before it alone was stopped, and absence was confirmed before PID `47088` was launched.
 
 ## Morning observation order
 
@@ -50,13 +54,15 @@ Do not try to judge left or right cheeks from this runtime; no cheek family was 
 
 ## Deterministic evidence that is already complete
 
-- Fresh Core invocation: `82/82`, exit `0`.
-- Fresh App invocation: `53/53`, exit `0`.
+- Original Task 11 fresh Core invocation: `82/82`, exit `0`.
+- Original Task 11 fresh App invocation: `53/53`, exit `0`.
 - Five focused corrected WPF harnesses: each exit `0`.
 - Static stale direct-presenter call count: `0` outside intentional adapters.
 - Direct-interaction render suite: `234` assertions, exit `0`.
 - Release build: `0` warnings, `0` errors, exit `0`.
 - Fresh body-click and body-drag native/4× production-mapping grids: `artifacts/repro/direct-interactions-overnight-attempt-1/verification/final-rendered-16ms/`.
+- Final-review fix `8fa1a96`: focused four-edge held-drag `4/4`, controller/loop `2/2`, capture ownership `3/3`, fresh Core `86/86`, fresh App `53/53`, Release build `0` warnings / `0` errors, and scoped re-review `PASS` with no new findings.
+- Capture metadata now declares body pending false, cheek true, core drag true, and drag settle/release false; actual Windows capture cleanup remains `UNVERIFIED`.
 
 The complete sorted PowerShell-suite loop must still be treated as `UNVERIFIED`: the command was run, but its invocation-bound session identifier was lost and therefore its final output/exit cannot be cited. Do not upgrade it from later process absence or partial output. A future worker may run a fresh complete loop when authorized, but this Task 11 checkpoint does not rerun it.
 
@@ -73,7 +79,7 @@ Both attempts are immutable rejected evidence under `artifacts/candidates/direct
 ## Repository hygiene and boundaries
 
 - Harness compatibility commit: `fe1dac3bfb0d7ed6bd547742c1f64f07abcd0545`.
-- No product behavior changed during Task 11.
+- Final-review product fix: `8fa1a96385025f775abf57d4f72a7c77a1586912`; it changes only held-drag clamping and capture ownership metadata/consumption, with no presenter, art, render, timing, settle, or release change.
 - `src/Dororong.App/Controls/DororongPresenter.xaml` contains a pre-existing unrelated EOL/stat-only working-tree modification. It was not edited, staged, or committed by this work and must remain untouched.
-- The attempt-1 publish failure path was preserved; no publish used `artifacts/publish/win-x64`.
+- The attempt-1 publish failure path and attempt-2 historical publish remain preserved; no publish used `artifacts/publish/win-x64`.
 - No push, PR, merge, or phase-2 branch was created.

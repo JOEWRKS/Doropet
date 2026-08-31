@@ -6,6 +6,8 @@ Base: `df9669fd4ad11e1e5d512b61621e6e95c547b078`.
 
 Harness compatibility commit: `fe1dac3bfb0d7ed6bd547742c1f64f07abcd0545` (`test: update legacy presenter harnesses`).
 
+Final-review product fix: `8fa1a96385025f775abf57d4f72a7c77a1586912` (`fix: clamp held body drag to work area`); scoped re-review `PASS`, no new findings.
+
 ## Complete-suite attempts and harness root cause
 
 The requested fresh sequence was:
@@ -161,13 +163,80 @@ The new exact attempt-2 executable was launched once, without retry or relaunch:
 - start `2026-09-01T04:30:37.8050600+09:00`;
 - executable SHA-256 `AFB74F04BC88E0D0FBF5B5DE2DD49ECE72E23A4B79A8EA1ED7D585AE39517EEC`.
 
-The app is left running for morning user inspection. Liveness is not used as actual-Windows interaction evidence.
+That attempt-2 process record is historical after the final-review integration. Liveness was not used as actual-Windows interaction evidence.
+
+## Final-review fix integration
+
+Scoped review found that held drag used raw `pointer - grabOffset` on both the threshold-crossing and later held assignments, while only release was normalized. It also found that `BodyPending.RequiresCapture=true` contradicted the loop's actual capture ownership.
+
+Commit `8fa1a96385025f775abf57d4f72a7c77a1586912` applies the existing work-area/pet-size clamp at both held-drag assignments while preserving the original grab offset and same-tick movement. It changes body-pending capture metadata to false and makes `PetLoop.UpdateMouseCapture` consume `directInteraction.RequiresCapture` alongside core `Dragged` state. No presenter, art, render, timing, settle, or release behavior changed.
+
+Evidence recorded by the committed final-review fix report:
+
+- pre-fix four-edge threshold RED: `4/4` failed with raw out-of-range positions;
+- pre-fix controller/loop RED: pending capture true and held window `(840,650)` instead of `(680,500)`;
+- corrected four-edge focused check: `4/4` passed, covering threshold tick, subsequent held tick, exact extrema, preserved `(60,60)` grab offset, and clamped release;
+- corrected controller/loop check: `2/2` passed;
+- capture ownership check: `3/3` passed;
+- fresh Core: `86/86`, exit `0`;
+- fresh App: `53/53`, exit `0`;
+- Release build: exit `0`, `0` warnings, `0` errors;
+- scoped re-review: `PASS`, no new findings.
+
+No test or full PowerShell loop was rerun during this final-review integration. The earlier complete PowerShell loop remains `UNVERIFIED` because its final invocation-bound exit is unavailable.
+
+## Publish attempt 3 — current final-review runtime
+
+The immutable target was confirmed absent:
+
+`artifacts/repro/direct-interactions-overnight-attempt-3/runtime/`
+
+Current HEAD `8fa1a96385025f775abf57d4f72a7c77a1586912` was published exactly once, using the already-valid attempt-2 restore state:
+
+```powershell
+dotnet publish src/Dororong.App/Dororong.App.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts/repro/direct-interactions-overnight-attempt-3/runtime --no-restore
+```
+
+Result: exit `0`.
+
+| File | Bytes | SHA-256 |
+|---|---:|---|
+| `Assets/dororong-canonical-source.png` | 45,681 | `F96EC30CBD18429E6BA1138BFA4EB44F331974C9820D36EE97A02FE518E46504` |
+| `Dororong.App.deps.json` | 872 | `33645B94AC7BD58D1245115937354C18F35AFD3BEA7B7D2BB49946F0CC805988` |
+| `Dororong.App.dll` | 270,848 | `AA4D381620D6FFD44A99AEC25C774BC0ACE3CB98D31796E2CE0C24CDD53C1DAA` |
+| `Dororong.App.exe` | 150,016 | `4AFC145876F2F3CBC5C15D450655E3E5EC966DB9BECA3D4017A3D53BB771AE3A` |
+| `Dororong.App.pdb` | 33,832 | `3F134B96E383E03263D35A352805ADDF0EEC57FAC0F1657A8E0806EFAAD7ED6A` |
+| `Dororong.App.runtimeconfig.json` | 515 | `89AD1EA5C9C20B6B266547EF27C0AE3840CAB5642D3C2AEDF06B7026245671DD` |
+| `Dororong.Core.dll` | 32,768 | `9D3D36241A9FA7CC1EDA831EFECF328A6865054434ABD82366AF21E71A67B852` |
+| `Dororong.Core.pdb` | 18,468 | `22FB0786664AA8D74E8C0B2EE90FE546CBE2A1A3C5953DD38AC2E853C1A67587` |
+
+## Attempt-2 retirement and attempt-3 launch
+
+PID `45432` was reread before replacement:
+
+- exact attempt-2 executable path matched;
+- exact quoted command matched;
+- CIM creation time matched `2026-09-01T04:30:37.8050600+09:00`;
+- executable SHA-256 matched `AFB74F04BC88E0D0FBF5B5DE2DD49ECE72E23A4B79A8EA1ED7D585AE39517EEC`.
+
+`Get-Process.StartTime` exposed a ninth 100 ns digit (`...8050609`) while CIM, the same source used for the historical record, returned the exact recorded microsecond value (`...8050600`). The process was not stopped until this same-source match resolved the apparent precision mismatch. PID `45432` alone was then stopped and readback confirmed absence.
+
+The exact attempt-3 executable was launched once, without retry or relaunch:
+
+- PID `47088`;
+- parent PID `44420`;
+- executable path `D:\JOEWRKS\.worktrees\DororongDesktopPet-m1-expression-animation\artifacts\repro\direct-interactions-overnight-attempt-3\runtime\Dororong.App.exe`;
+- command line: the same exact path, quoted;
+- start `2026-09-01T05:23:46.6142130+09:00`;
+- executable SHA-256 `4AFC145876F2F3CBC5C15D450655E3E5EC966DB9BECA3D4017A3D53BB771AE3A`.
+
+The attempt-3 app is left running for morning user inspection. Liveness is not used as actual-Windows interaction evidence.
 
 ## Final boundary and hygiene
 
 - Phase-1 body outline remains `PASS`.
 - Body-click canonical-eye preservation remains user-observed `PASS`; remaining feel/focus/click-through rows remain `UNVERIFIED`.
-- Body-drag implementation/deterministic mapping is `PASS`; art/runtime/user feel remains `PROVISIONAL / UNVERIFIED`.
+- Body-drag implementation, deterministic mapping, held-drag work-area clamp, and capture metadata consistency are `PASS`; art and actual Windows boundary/motion/user feel remain `PROVISIONAL / UNVERIFIED`.
 - Left/right cheeks remain not delivered and `UNVERIFIED`; Task 9 is blocked and Task 10 was not started.
 - All unobserved actual-Windows rows remain `UNVERIFIED`.
 - Complete PowerShell loop final exit remains unavailable/`UNVERIFIED`.
