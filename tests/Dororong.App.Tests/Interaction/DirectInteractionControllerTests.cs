@@ -53,6 +53,7 @@ public sealed class DirectInteractionControllerTests
 
         Assert.Equal(DirectInteractionPhase.CheekPull, snapshot.Phase);
         Assert.Equal(1, snapshot.Strength, 3);
+        Assert.True(snapshot.RequiresCapture);
     }
 
     [Fact]
@@ -91,11 +92,16 @@ public sealed class DirectInteractionControllerTests
         var controller = new DirectInteractionController();
         controller.Begin(DirectInteractionTarget.Body, new PointD(0, 0), 0);
 
+        var began = controller.Current;
+
         var pending = controller.Advance(TimeSpan.FromSeconds(1), new PointerSample(true, new PointD(100, 100)), true, PetState.Idle, PetState.Idle);
         var entered = controller.Advance(TimeSpan.Zero, new PointerSample(true, new PointD(100, 100)), true, PetState.Idle, PetState.Dragged);
 
+        Assert.False(began.RequiresCapture);
         Assert.Equal(DirectInteractionPhase.BodyPending, pending.Phase);
+        Assert.False(pending.RequiresCapture);
         Assert.Equal(DirectInteractionPhase.BodyDragEntry, entered.Phase);
+        Assert.True(entered.RequiresCapture);
     }
 
     [Fact]

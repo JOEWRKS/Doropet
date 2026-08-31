@@ -21,6 +21,7 @@ public sealed class PetLoopDirectInteractionTests
         Assert.Equal(1, harness.CaptureCount);
         Assert.All(harness.WindowPositions, position => Assert.Equal(beforePress, position));
         Assert.Equal(DirectInteractionPhase.CheekPress, harness.Renders[^1].Direct.Phase);
+        Assert.True(harness.Renders[^1].Direct.RequiresCapture);
     }
 
     [Fact]
@@ -35,6 +36,7 @@ public sealed class PetLoopDirectInteractionTests
         Assert.Equal(0, harness.CaptureCount);
         Assert.Equal(PetState.Idle, harness.Renders[^1].Core.State);
         Assert.Equal(DirectInteractionPhase.BodyPending, harness.Renders[^1].Direct.Phase);
+        Assert.False(harness.Renders[^1].Direct.RequiresCapture);
     }
 
     [Fact]
@@ -70,11 +72,12 @@ public sealed class PetLoopDirectInteractionTests
         Assert.Equal(beforePress + new PointD(20, 10), harness.WindowPosition);
         Assert.Equal(new PointD(60, 50), entered.Core.GrabOffset);
         Assert.Equal(DirectInteractionPhase.BodyDragEntry, entered.Direct.Phase);
+        Assert.True(entered.Direct.RequiresCapture);
         Assert.Equal(1, harness.CaptureCount);
 
         harness.MovePointerTo(new PointD(900, 700));
         harness.Tick();
-        Assert.Equal(new PointD(840, 650), harness.WindowPosition);
+        Assert.Equal(new PointD(680, 500), harness.WindowPosition);
 
         harness.Release();
 
@@ -83,6 +86,7 @@ public sealed class PetLoopDirectInteractionTests
         Assert.Equal(new PointD(680, 500), harness.WindowPosition);
         Assert.Null(released.Core.GrabOffset);
         Assert.Equal(DirectInteractionPhase.BodyDragSettle, released.Direct.Phase);
+        Assert.False(released.Direct.RequiresCapture);
         Assert.Equal(1, harness.ReleaseCount);
     }
 

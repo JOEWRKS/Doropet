@@ -202,7 +202,9 @@ public sealed class PetBrain
                 ResetInactivity();
                 if (input.Pointer.IsAvailable && _grabOffset is { } dragOffset)
                 {
-                    _position = input.Pointer.Position - dragOffset;
+                    _position = input.WorkArea.ClampTopLeft(
+                        input.Pointer.Position - dragOffset,
+                        input.PetSize);
                 }
             }
             else
@@ -234,7 +236,9 @@ public sealed class PetBrain
                 _state = PetState.Dragged;
                 _stateElapsed = TimeSpan.Zero;
                 _stateDuration = TimeSpan.MaxValue;
-                _position = input.Pointer.Position - dragOffset;
+                _position = input.WorkArea.ClampTopLeft(
+                    input.Pointer.Position - dragOffset,
+                    input.PetSize);
             }
 
             return handled;

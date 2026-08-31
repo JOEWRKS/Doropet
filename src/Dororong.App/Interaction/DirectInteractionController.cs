@@ -29,7 +29,7 @@ internal sealed class DirectInteractionController
 
         Current = target switch
         {
-            DirectInteractionTarget.Body => new(target, DirectInteractionPhase.BodyPending, pointerPosition, pointerPosition, 0, 0, true),
+            DirectInteractionTarget.Body => new(target, DirectInteractionPhase.BodyPending, pointerPosition, pointerPosition, 0, 0, false),
             DirectInteractionTarget.LeftCheek or DirectInteractionTarget.RightCheek => new(target, DirectInteractionPhase.CheekPress, pointerPosition, pointerPosition, 0, 0, true),
             _ => DirectInteractionSnapshot.None
         };
@@ -214,7 +214,7 @@ internal sealed class DirectInteractionController
             return Current;
         }
 
-        Current = Current with { PointerPosition = pointerPosition, RequiresCapture = true };
+        Current = Current with { PointerPosition = pointerPosition, RequiresCapture = false };
         return Current;
     }
 }

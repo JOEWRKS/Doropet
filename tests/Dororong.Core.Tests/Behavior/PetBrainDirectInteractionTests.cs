@@ -178,6 +178,50 @@ public sealed class PetBrainDirectInteractionTests
     }
 
     [Theory]
+    [InlineData(-10, 300, 0, 240, -100, 400, 0, 340)]
+    [InlineData(900, 300, 680, 240, 1000, 400, 680, 340)]
+    [InlineData(400, -10, 340, 0, 500, -100, 440, 0)]
+    [InlineData(400, 700, 340, 500, 500, 800, 440, 500)]
+    public void Held_drag_clamps_threshold_and_subsequent_ticks_at_each_work_area_edge(
+        double thresholdPointerX,
+        double thresholdPointerY,
+        double thresholdExpectedX,
+        double thresholdExpectedY,
+        double heldPointerX,
+        double heldPointerY,
+        double heldExpectedX,
+        double heldExpectedY)
+    {
+        var brain = PetTestInput.CreateBrainAt(new PointD(100, 100));
+        brain.Update(PetTestInput.At(
+            0.1, pointer: new PointD(160, 160), primaryDown: true,
+            bodyPressPosition: new PointD(160, 160)));
+
+        var threshold = brain.Update(PetTestInput.At(
+            0.1,
+            pointer: new PointD(thresholdPointerX, thresholdPointerY),
+            primaryDown: true));
+        var held = brain.Update(PetTestInput.At(
+            0.1,
+            pointer: new PointD(heldPointerX, heldPointerY),
+            primaryDown: true));
+        var released = brain.Update(PetTestInput.At(
+            0.1,
+            pointer: new PointD(heldPointerX, heldPointerY),
+            primaryDown: false));
+
+        Assert.Equal(PetState.Dragged, threshold.State);
+        Assert.Equal(new PointD(thresholdExpectedX, thresholdExpectedY), threshold.Position);
+        Assert.Equal(new PointD(60, 60), threshold.GrabOffset);
+        Assert.Equal(PetState.Dragged, held.State);
+        Assert.Equal(new PointD(heldExpectedX, heldExpectedY), held.Position);
+        Assert.Equal(new PointD(60, 60), held.GrabOffset);
+        Assert.Equal(PetState.Idle, released.State);
+        Assert.Equal(new PointD(heldExpectedX, heldExpectedY), released.Position);
+        Assert.Null(released.GrabOffset);
+    }
+
+    [Theory]
     [InlineData(-10, 300, 0, 240)]
     [InlineData(900, 300, 680, 240)]
     [InlineData(400, -10, 340, 0)]

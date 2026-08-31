@@ -208,8 +208,7 @@ internal sealed class PetLoop : IDisposable
         PetSnapshot current,
         DirectInteractionSnapshot directInteraction)
     {
-        var requiresCapture = current.State == PetState.Dragged ||
-            directInteraction.Phase is DirectInteractionPhase.CheekPress or DirectInteractionPhase.CheekPull;
+        var requiresCapture = current.State == PetState.Dragged || directInteraction.RequiresCapture;
         if (requiresCapture && !_isMouseCaptured)
         {
             if (!_host.CaptureMouse())
