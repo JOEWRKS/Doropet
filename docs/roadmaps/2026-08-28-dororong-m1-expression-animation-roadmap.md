@@ -165,14 +165,24 @@ Until then, overall M1 remains `PARTIAL`.
 - If a stage fails, keep its evidence, fix the demonstrated cause, and recheck the original failure before moving on.
 - Do not push, create a new PR, merge, or modify the frozen phase-1 branch unless the user explicitly requests it.
 
-## 6. Immediate next unit
+## 6. Current checkpoint and immediate next unit
 
-The first implementation unit is Stage A only:
+Stage A closed-eye art and breathing are accepted checkpoints, and attempt 38 is an acceptable sleep-crossfade checkpoint:
 
-1. agree on the closed-eye/SLEEP visual contract;
-2. implement and inspect the static closed-eye frame;
-3. obtain user approval for that frame;
-4. add restrained sleep/wake motion around the approved frame;
-5. verify it before proceeding to direct-interaction animation.
+- the exact user-authored open/squint/closed frame family is preserved;
+- click-only wake was directly observed as `CLICK_REACTION` in attempt 29;
+- attempt 35 replaced center-origin zoom with foot-anchored directional breathing, and the user accepted its desktop breathing likeness;
+- attempt 38 (`c883b7872dcdb162dd395c26b09353d570c178a5`) blends cached premultiplied `Pbgra32` frames on one surface; its 36-frame 0–560 ms render evidence has fixed body Y and no alpha dip, and the user said `나쁘지 않다`;
+- overall M1 remains `PARTIAL` because the remaining wake paths and later stages are not yet accepted.
 
-No Stage B–G product work begins merely because this roadmap exists.
+The immediate next unit remains inside Stage A and covers only the three unverified wake routes:
+
+1. slow approach from a fresh SLEEP baseline must wake into `CURIOUS`;
+2. fast closing approach from a fresh SLEEP baseline must wake into `STARTLED`;
+3. a drag from a fresh SLEEP baseline must wake into `DRAGGED` while retaining the original grab offset.
+
+Start by observing the current exact runtime one route at a time. Change presentation code only when that observation demonstrates a concrete defect. Preserve the accepted eye assets, attempt-35 breathing, click-only priority, and all core transition rules.
+
+The approved [direct-interaction design](../specs/2026-08-31-dororong-direct-interaction-design.md) is now staged for its delivery-order input-metadata slice. It does not close Stage A, approve interaction art, or promote any actual-Windows interaction acceptance.
+
+After all three routes pass actual Windows observation, close Stage A and proceed to Stage B. The direct-interaction implementation proceeds only in the approved small slices; no later product work begins merely because the design exists.
