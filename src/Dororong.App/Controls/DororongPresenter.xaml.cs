@@ -270,9 +270,7 @@ public partial class DororongPresenter : UserControl
         BodyTranslateTransform.Y = bodyClick.TranslationY;
         ImageBreathingScaleTransform.ScaleX = bodyClick.ScaleX;
         ImageBreathingScaleTransform.ScaleY = bodyClick.ScaleY;
-        DororongImage.Source = bodyClick.Expression == BodyClickExpression.HappySquint
-            ? BlinkSquintFrame
-            : CanonicalFrame;
+        DororongImage.Source = CanonicalFrame;
         DororongImage.Opacity = 1;
         _activeInteractionDescriptor = FrameInteractionDescriptor.Canonical;
     }

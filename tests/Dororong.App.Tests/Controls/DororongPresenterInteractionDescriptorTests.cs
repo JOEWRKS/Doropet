@@ -97,7 +97,7 @@ public sealed class DororongPresenterInteractionDescriptorTests
             presenter.Render(Snapshot(PetState.ClickReaction, FacingDirection.Right, phase: 0.052), DirectInteractionSnapshot.None);
             AssertFrame(image, "dororong-canonical.png");
             presenter.Render(Snapshot(PetState.ClickReaction, FacingDirection.Right, phase: 0.31), DirectInteractionSnapshot.None);
-            AssertFrame(image, "dororong-blink-squint.png");
+            AssertFrame(image, "dororong-canonical.png");
             Assert.Equal(-10.5, translation.Y, precision: 4);
         });
     }
@@ -118,7 +118,24 @@ public sealed class DororongPresenterInteractionDescriptorTests
             presenter.Render(Snapshot(PetState.ClickReaction, FacingDirection.Right, phase: 0.18), DirectInteractionSnapshot.None);
             AssertFrame(image, "dororong-canonical.png");
             presenter.Render(Snapshot(PetState.ClickReaction, FacingDirection.Right, phase: 0.31), DirectInteractionSnapshot.None);
-            AssertFrame(image, "dororong-blink-squint.png");
+            AssertFrame(image, "dororong-canonical.png");
+        });
+    }
+
+    [Fact]
+    public void Awake_body_click_keeps_the_canonical_expression_through_the_entire_hop()
+    {
+        RunOnSta(() =>
+        {
+            var presenter = new DororongPresenter();
+            var image = Assert.IsAssignableFrom<System.Windows.Controls.Image>(presenter.FindName("DororongImage"));
+
+            presenter.Render(Snapshot(PetState.Idle, FacingDirection.Right, phase: 0), DirectInteractionSnapshot.None);
+            foreach (var phase in new[] { 0d, 0.08, 0.16, 0.31, 0.46, 0.56, 0.75, 0.84, 0.92, 1d })
+            {
+                presenter.Render(Snapshot(PetState.ClickReaction, FacingDirection.Right, phase), DirectInteractionSnapshot.None);
+                AssertFrame(image, "dororong-canonical.png");
+            }
         });
     }
 

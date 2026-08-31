@@ -67,14 +67,14 @@ After a cheek interaction ends, behavior resolves through the existing state mod
 
 A body press remains a pending click while pointer movement stays below the Windows system drag threshold. Dororong may show only a very subtle press squash during this pending interval. It must not show the stretched hanging silhouette before the threshold is crossed.
 
-Release below the threshold confirms the existing `CLICK_REACTION`. The target visual lasts roughly 0.5 seconds and reads as a happy, playful response rather than fear:
+Release below the threshold confirms the existing `CLICK_REACTION`. The target visual lasts roughly 0.5 seconds and reads as a playful response rather than fear:
 
 1. about 80 ms: subtle press/squash;
 2. about 150 ms: short upward hop;
 3. about 100 ms: brief airborne apex using the unchanged accepted body silhouette;
 4. about 170 ms: descent, land/compress, and recovery to the canonical resting pose.
 
-The expression is a happy squint or wink. It must not reuse the surprised expression or retreat language of `STARTLED`. The short body click does not introduce a newly drawn body or leg pose: the accepted canonical character artwork and accepted expression assets are transformed as a whole. A separate four-leg dangling drawing is deferred until a complete identity-preserving authored pose is approved.
+An awake body click keeps the exact canonical open-eye expression for the entire press, hop, apex, land, and recovery. It must not substitute the half-closed blink/squint frame or reuse the surprised expression or retreat language of `STARTLED`. A click that begins in `SLEEP` may first use the separately accepted sleep-wake transition frames, but uses the canonical open-eye artwork once the hop begins. The short body click does not introduce a newly drawn body or leg pose: the accepted canonical character artwork is transformed as a whole. A separate four-leg dangling drawing is deferred until a complete identity-preserving authored pose is approved.
 
 If the user holds the press without crossing the threshold, the pending press pose may hold without advancing the confirmed click timeline. Release begins or continues the authored click reaction from a visually compatible press frame, without a one-frame reset to the canonical pose.
 
@@ -160,7 +160,7 @@ Threshold comparison uses the operating system's current drag metrics in the sam
 
 Every key image is a complete 96x96 character asset with transparency. Face-piece, eye-only, cheek-only, or body-only overlays are not production frames. The exact canonical head, hair, rose, bow, ribbons, approved outline, no-tail identity, and non-target anatomy are preserved outside the intended deformation.
 
-The body-click slice is an explicit exception to authored key-image production. It reuses the exact accepted canonical and happy-expression character assets and produces the press, hop, apex, land, and recovery read with whole-character scale and translation only. It does not erase, redraw, replace, or procedurally synthesize the body or legs. Body-drag and cheek deformation still require complete approved character images under the rules below.
+The body-click slice is an explicit exception to authored key-image production. It reuses the exact accepted canonical open-eye character asset and produces the press, hop, apex, land, and recovery read with whole-character scale and translation only. It does not erase, redraw, replace, or procedurally synthesize the body or legs. Body-drag and cheek deformation still require complete approved character images under the rules below.
 
 The rough user sketch is used as the silhouette basis for the body-hang family and as the interaction-location basis for the cheeks. It does not replace the canonical asset as the character-identity source.
 
@@ -217,7 +217,7 @@ The initial target is approximately 500 ms after click confirmation:
 |---|---:|---|
 | press/squash | ~80 ms | subtle compression; no fear expression |
 | lift | ~150 ms | clear upward impulse without head/body separation |
-| apex | ~100 ms | unchanged accepted body silhouette is visibly airborne; happy squint or wink |
+| apex | ~100 ms | unchanged accepted body silhouette and canonical open-eye expression are visibly airborne |
 | descent/land/recover | ~170 ms | readable contact, one small compression, canonical rest |
 
 Timing can be calibrated during actual Windows observation, but it must preserve the four-part read and remain distinct from `STARTLED`.
@@ -282,13 +282,13 @@ Each exact approved art family must prove:
 
 Repository image analysis and rendered playback can reject a candidate. They cannot promote an unobserved user-facing interaction to actual-Windows `PASS`.
 
-The transform-only body click instead proves that every sampled frame uses an exact accepted source image, keeps opacity at 1, changes only the permitted whole-character transforms and accepted expression selection, preserves one visible character surface, leaves the window position unchanged, and returns exactly to the canonical rest transform. Rendered normal-speed playback must show no float-like drift, stepped movement, clipping, or anatomy substitution.
+The transform-only body click instead proves that every awake sampled frame uses the exact accepted canonical open-eye source image, keeps opacity at 1, changes only the permitted whole-character transforms, preserves one visible character surface, leaves the window position unchanged, and returns exactly to the canonical rest transform. A sleep-origin click may use only the accepted sleep-wake bridge before the canonical hop. Rendered normal-speed playback must show no float-like drift, stepped movement, clipping, expression substitution, or anatomy substitution.
 
 ### 8.3 Actual Windows acceptance
 
 Actual Windows observation is recorded separately for each delivery slice:
 
-1. body press below threshold stays un-stretched and releases into the distinct happy click animation;
+1. body press below threshold stays un-stretched, retains the canonical open-eye expression while awake, and releases into the distinct playful click animation;
 2. body movement beyond threshold enters hang without grab-point or window jump;
 3. dragged movement remains responsive and bounded, and release settles at the released location;
 4. left-cheek press/pull/release works and does not move the window;

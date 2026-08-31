@@ -12,34 +12,31 @@ public sealed class BodyClickTransformSamplerTests
         Assert.Equal(1.012, sample.ScaleX, precision: 6);
         Assert.Equal(0.975, sample.ScaleY, precision: 6);
         Assert.Equal(0, sample.TranslationY, precision: 6);
-        Assert.Equal(BodyClickExpression.Canonical, sample.Expression);
     }
 
     [Theory]
-    [InlineData(0.00, 1.012, 0.975, 0.0, "Canonical")]
-    [InlineData(0.08, 1.024, 0.960, 0.0, "Canonical")]
-    [InlineData(0.16, 1.000, 1.000, 0.0, "Canonical")]
-    [InlineData(0.31, 1.000, 1.000, -10.5, "HappySquint")]
-    [InlineData(0.46, 1.000, 1.000, -12.0, "HappySquint")]
-    [InlineData(0.56, 1.000, 1.000, -12.0, "HappySquint")]
-    [InlineData(0.75, 1.000, 1.000, -6.0, "HappySquint")]
-    [InlineData(0.84, 1.000, 1.000, 0.0, "HappySquint")]
-    [InlineData(0.875, 1.0125, 0.9825, 0.0, "HappySquint")]
-    [InlineData(0.92, 1.0241, 0.9662, 0.0, "Canonical")]
-    [InlineData(1.00, 1.000, 1.000, 0.0, "Canonical")]
+    [InlineData(0.00, 1.012, 0.975, 0.0)]
+    [InlineData(0.08, 1.024, 0.960, 0.0)]
+    [InlineData(0.16, 1.000, 1.000, 0.0)]
+    [InlineData(0.31, 1.000, 1.000, -10.5)]
+    [InlineData(0.46, 1.000, 1.000, -12.0)]
+    [InlineData(0.56, 1.000, 1.000, -12.0)]
+    [InlineData(0.75, 1.000, 1.000, -6.0)]
+    [InlineData(0.84, 1.000, 1.000, 0.0)]
+    [InlineData(0.875, 1.0125, 0.9825, 0.0)]
+    [InlineData(0.92, 1.0241, 0.9662, 0.0)]
+    [InlineData(1.00, 1.000, 1.000, 0.0)]
     public void ConfirmedClickSamplesTheApprovedFourPartTimeline(
         double phase,
         double expectedScaleX,
         double expectedScaleY,
-        double expectedTranslationY,
-        string expectedExpression)
+        double expectedTranslationY)
     {
         var sample = BodyClickTransformSampler.SampleConfirmedClick(phase);
 
         Assert.Equal(expectedScaleX, sample.ScaleX, precision: 4);
         Assert.Equal(expectedScaleY, sample.ScaleY, precision: 4);
         Assert.Equal(expectedTranslationY, sample.TranslationY, precision: 4);
-        Assert.Equal(expectedExpression, sample.Expression.ToString());
     }
 
     [Fact]
@@ -71,7 +68,7 @@ public sealed class BodyClickTransformSamplerTests
     public void ConfirmedClickClampsOutsideProgressToAnExactEndpoint(double phase)
     {
         var expected = phase < 0
-            ? BodyClickTransformSampler.SamplePendingPress() with { Expression = BodyClickExpression.Canonical }
+            ? BodyClickTransformSampler.SamplePendingPress()
             : BodyClickTransformSample.Rest;
 
         Assert.Equal(expected, BodyClickTransformSampler.SampleConfirmedClick(phase));

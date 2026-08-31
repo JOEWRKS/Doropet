@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a smooth, happy body-click animation, a sketch-derived cat-like hanging body drag, and independently pressable/pullable left and right cheeks without changing Dororong's approved identity or interfering with ordinary Windows work.
+**Goal:** Add a smooth, playful body-click animation with the canonical open-eye expression, a sketch-derived cat-like hanging body drag, and independently pressable/pullable left and right cheeks without changing Dororong's approved identity or interfering with ordinary Windows work.
 
 **Architecture:** Preserve the existing `PetState` enum and core behavior priority. Add a small app-side direct-interaction controller that locks one visible-frame target for each press, feeds only the existing body click/drag events plus one local-interaction suppression flag into the core, and supplies presentation-local progress to the presenter. Render every approved multi-image family through one premultiplied `Pbgra32` surface at the existing nominal 16 ms tick; do not stack translucent character layers or introduce a general game/animation engine.
 
@@ -59,7 +59,7 @@
 |---|---|---|---|
 | DI-INPUT-1 | One opaque pointer-down locks exactly one anatomical cheek or body target until release/cancel. | deterministic app tests | logic only |
 | DI-INPUT-2 | Transparent pixels classify nothing and remain click-through. | alpha tests plus actual Windows control-behind check | Windows item remains `UNVERIFIED` until observed |
-| DI-CLICK-1 | Short body click reads press → whole-character hop/apex → land/recover with a happy expression while retaining the accepted body silhouette. | exact source-image identity, transform samples, and normal-speed playback | rendered transform-specific |
+| DI-CLICK-1 | Short body click retains the exact canonical open-eye expression and reads press → whole-character hop/apex → land/recover while preserving the accepted body silhouette. | exact source-image identity, transform samples, and normal-speed playback | rendered transform-specific |
 | DI-DRAG-1 | Threshold crossing, never pending press, begins the sketch-derived long hanging silhouette without grab-point jump. | core/app tests, approved frame family, Windows drag | layered verdicts kept separate |
 | DI-CHEEK-1 | Each cheek presses/pulls outward independently, clamps near 20 DIPs, springs back near 220 ms, and never moves the window. | app math/render tests and Windows observation | layered verdicts kept separate |
 | DI-ID-1 | Every frame preserves protected hair, rose, bow, ribbons, face placement, outline character, no-tail identity, and non-target anatomy. | exact asset comparison and root visual check | user approval required before integration |
@@ -474,7 +474,7 @@
 - Create after observation: `docs/verification/2026-08-31-m1-direct-interaction-body-click-attempt-1.md`
 
 **Interfaces:**
-- Consumes: exact accepted canonical/happy-expression assets and `PetState.ClickReaction` phase.
+- Consumes: the exact accepted canonical open-eye asset and `PetState.ClickReaction` phase; a sleep-origin click may use only the separately accepted wake bridge before the hop.
 - Produces: subtle pending press plus approximately 500 ms whole-character press/lift/apex/descent/land/recover transforms with no new body artwork.
 
 - [ ] **Step 1: Write WPF RED tests**
@@ -483,7 +483,7 @@
 
 - [ ] **Step 2: Map click phase to the transform-only timeline**
 
-  Pending body press holds a subtle foot-anchored scale compression. `CLICK_REACTION` maps phase across approximately 80/150/100/170 ms and continuously samples foot-anchored scale plus whole-character Y translation. Reuse only exact accepted character/expression images, keep window position unchanged, keep opacity 1, and use no new `PetState`.
+  Pending body press holds a subtle foot-anchored scale compression. `CLICK_REACTION` maps phase across approximately 80/150/100/170 ms and continuously samples foot-anchored scale plus whole-character Y translation. Keep the canonical open-eye image for every awake click sample; do not select the half-closed blink/squint frame. A sleep-origin click may first finish the accepted wake bridge. Keep window position unchanged, keep opacity 1, and use no new `PetState`.
 
 - [ ] **Step 3: Run automated and rendered verification**
 
@@ -491,7 +491,7 @@
 
 - [ ] **Step 4: Publish once and request the body-click Windows observation**
 
-  Publish to `artifacts/repro/direct-interaction-body-click-attempt-1/runtime/`, record executable/DLL/assets hashes, and ask the user to check only: subtle pending press, happy hop/apex/land readability without art substitution, no focus theft, and transparent click-through on a known control behind the character. Keep any unobserved item `UNVERIFIED`.
+  Publish each observation to a fresh attempt-specific path, record executable/DLL/assets hashes, and ask the user to check only: subtle pending press, canonical eyes throughout the playful hop/apex/land without art substitution, no focus theft, and transparent click-through on a known control behind the character. Keep any unobserved item `UNVERIFIED`.
 
 - [ ] **Step 5: Commit implementation and evidence separately**
 
