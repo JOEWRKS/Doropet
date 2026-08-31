@@ -83,6 +83,15 @@ function New-Snapshot([Dororong.Core.Behavior.PetState]$State, [double]$Phase, [
 }
 function New-PresenterFixture() {
     $presenter = [Dororong.App.Controls.DororongPresenter]::new()
+    $renderMethod = @($presenter.GetType().GetMethods([Reflection.BindingFlags]'Instance, NonPublic') | Where-Object { $_.Name -eq 'Render' -and $_.GetParameters().Count -eq 2 })[0]
+    Assert-True ($null -ne $renderMethod) 'The presenter combined Render contract was not found.'
+    $noDirectInteraction = @($renderMethod.GetParameters()[1].ParameterType.GetProperties([Reflection.BindingFlags]'Public, NonPublic, Static') | Where-Object { $_.Name -eq 'None' })[0].GetValue($null)
+    $presenter | Add-Member -MemberType NoteProperty -Name CombinedRenderMethod -Value $renderMethod
+    $presenter | Add-Member -MemberType NoteProperty -Name NoDirectInteractionSnapshot -Value $noDirectInteraction
+    $presenter | Add-Member -MemberType ScriptMethod -Name Render -Value {
+        param([Dororong.Core.Behavior.PetSnapshot]$Snapshot)
+        $this.CombinedRenderMethod.Invoke($this, [object[]]@($Snapshot, $this.NoDirectInteractionSnapshot))
+    }
     return [pscustomobject]@{ Presenter = $presenter; Image = [System.Windows.Controls.Image]$presenter.FindName('DororongImage'); BodyScale = $presenter.FindName('BodyScaleTransform'); Rotation = $presenter.FindName('BodyRotateTransform'); Translation = $presenter.FindName('BodyTranslateTransform'); Breathing = $presenter.FindName('ImageBreathingScaleTransform') }
 }
 function Get-RenderedAlpha([Dororong.App.Controls.DororongPresenter]$Presenter) {
@@ -119,10 +128,16 @@ foreach ($entrySegment in $entrySegments) {
     Assert-Near 1.0 ([double]$fixture.Breathing.ScaleX) 0.000001 "SLEEP entry $($entrySegment.Label) began breathing early."
     Assert-Near 1.0 ([double]$fixture.Breathing.ScaleY) 0.000001 "SLEEP entry $($entrySegment.Label) began breathing early."
     Assert-Origin $fixture.Image 0.428987 0.916667 "SLEEP entry $($entrySegment.Label)"
+    Assert-Near 0.0 ([double]$fixture.Translation.Y) 0.000001 "SLEEP entry $($entrySegment.Label) moved Body Y."
 
     $fixture.Presenter.Render((New-Snapshot $state::Sleep ([double]$entrySegment.Start)))
     Assert-Frame $fixture.Image $entrySegment.From "SLEEP entry $($entrySegment.Label) exact start"
     Assert-Near 1.0 ([double]$fixture.Image.Opacity) 0.000001 "SLEEP entry $($entrySegment.Label) exact start base opacity changed."
+    Assert-Near 0.0 ([double]$fixture.Translation.Y) 0.000001 "SLEEP entry $($entrySegment.Label) exact start moved Body Y."
+
+    $fixture.Presenter.Render((New-Snapshot $state::Sleep ([double]$entrySegment.End)))
+    Assert-Frame $fixture.Image $entrySegment.To "SLEEP entry $($entrySegment.Label) exact end"
+    Assert-Near 0.0 ([double]$fixture.Translation.Y) 0.000001 "SLEEP entry $($entrySegment.Label) exact end moved Body Y."
 }
 
 $alphaFixture = New-PresenterFixture

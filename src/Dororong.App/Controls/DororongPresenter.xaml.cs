@@ -41,12 +41,17 @@ public partial class DororongPresenter : UserControl
     private static readonly BitmapImage SleepCrouchSquintFrame = LoadFrame("dororong-sleep-crouch-squint.png");
     private static readonly BitmapImage SleepTuckClosedFrame = LoadFrame("dororong-sleep-tuck-closed.png");
     private static readonly BitmapImage SleepTuckSquintFrame = LoadFrame("dororong-sleep-tuck-squint.png");
-    private static readonly CrossfadeFrame CanonicalCrossfadeFrame = new(CanonicalFrame, FrameInteractionDescriptor.Canonical);
-    private static readonly CrossfadeFrame BlinkSquintCrossfadeFrame = new(BlinkSquintFrame, FrameInteractionDescriptor.Canonical);
-    private static readonly CrossfadeFrame ClosedEyesCrossfadeFrame = new(ClosedEyesFrame, FrameInteractionDescriptor.Canonical);
-    private static readonly CrossfadeFrame SleepCrouchClosedCrossfadeFrame = new(SleepCrouchClosedFrame, FrameInteractionDescriptor.SleepCrouch);
-    private static readonly CrossfadeFrame SleepTuckClosedCrossfadeFrame = new(SleepTuckClosedFrame, FrameInteractionDescriptor.SleepTuck);
-    private static readonly CrossfadeFrame SleepCrossfadeFrame = new(SleepFrame, FrameInteractionDescriptor.SettledSleep);
+    private static readonly PremultipliedFrame CanonicalPremultipliedFrame = PremultipliedFrame.From(CanonicalFrame);
+    private static readonly PremultipliedFrame BlinkSquintPremultipliedFrame = PremultipliedFrame.From(BlinkSquintFrame);
+    private static readonly PremultipliedFrame ClosedEyesPremultipliedFrame = PremultipliedFrame.From(ClosedEyesFrame);
+    private static readonly PremultipliedFrame SleepCrouchClosedPremultipliedFrame = PremultipliedFrame.From(SleepCrouchClosedFrame);
+    private static readonly PremultipliedFrame SleepTuckClosedPremultipliedFrame = PremultipliedFrame.From(SleepTuckClosedFrame);
+    private static readonly PremultipliedFrame SleepPremultipliedFrame = PremultipliedFrame.From(SleepFrame);
+    private static readonly PremultipliedFrameSequence CanonicalToBlinkSquintSequence = new([CanonicalPremultipliedFrame, BlinkSquintPremultipliedFrame]);
+    private static readonly PremultipliedFrameSequence BlinkSquintToClosedEyesSequence = new([BlinkSquintPremultipliedFrame, ClosedEyesPremultipliedFrame]);
+    private static readonly PremultipliedFrameSequence ClosedEyesToSleepCrouchSequence = new([ClosedEyesPremultipliedFrame, SleepCrouchClosedPremultipliedFrame]);
+    private static readonly PremultipliedFrameSequence SleepCrouchToSleepTuckSequence = new([SleepCrouchClosedPremultipliedFrame, SleepTuckClosedPremultipliedFrame]);
+    private static readonly PremultipliedFrameSequence SleepTuckToSettledSleepSequence = new([SleepTuckClosedPremultipliedFrame, SleepPremultipliedFrame]);
 
     private PetState? _lastRenderedState;
     private bool _sleepEntryComplete;
@@ -185,23 +190,23 @@ public partial class DororongPresenter : UserControl
 
         if (phase < 0.0225)
         {
-            ApplySleepCrossfade(CanonicalCrossfadeFrame, BlinkSquintCrossfadeFrame, phase, 0, 0.0225);
+            ApplySleepCrossfade(CanonicalToBlinkSquintSequence, FrameInteractionDescriptor.Canonical, FrameInteractionDescriptor.Canonical, phase, 0, 0.0225);
         }
         else if (phase < 0.045)
         {
-            ApplySleepCrossfade(BlinkSquintCrossfadeFrame, ClosedEyesCrossfadeFrame, phase, 0.0225, 0.045);
+            ApplySleepCrossfade(BlinkSquintToClosedEyesSequence, FrameInteractionDescriptor.Canonical, FrameInteractionDescriptor.Canonical, phase, 0.0225, 0.045);
         }
         else if (phase < 0.070)
         {
-            ApplySleepCrossfade(ClosedEyesCrossfadeFrame, SleepCrouchClosedCrossfadeFrame, phase, 0.045, 0.070);
+            ApplySleepCrossfade(ClosedEyesToSleepCrouchSequence, FrameInteractionDescriptor.Canonical, FrameInteractionDescriptor.SleepCrouch, phase, 0.045, 0.070);
         }
         else if (phase < 0.100)
         {
-            ApplySleepCrossfade(SleepCrouchClosedCrossfadeFrame, SleepTuckClosedCrossfadeFrame, phase, 0.070, 0.100);
+            ApplySleepCrossfade(SleepCrouchToSleepTuckSequence, FrameInteractionDescriptor.SleepCrouch, FrameInteractionDescriptor.SleepTuck, phase, 0.070, 0.100);
         }
         else if (phase < 0.135)
         {
-            ApplySleepCrossfade(SleepTuckClosedCrossfadeFrame, SleepCrossfadeFrame, phase, 0.100, 0.135);
+            ApplySleepCrossfade(SleepTuckToSettledSleepSequence, FrameInteractionDescriptor.SleepTuck, FrameInteractionDescriptor.SettledSleep, phase, 0.100, 0.135);
         }
         else
         {
@@ -211,8 +216,9 @@ public partial class DororongPresenter : UserControl
     }
 
     private void ApplySleepCrossfade(
-        CrossfadeFrame from,
-        CrossfadeFrame to,
+        PremultipliedFrameSequence frames,
+        FrameInteractionDescriptor fromDescriptor,
+        FrameInteractionDescriptor toDescriptor,
         double phase,
         double start,
         double end)
@@ -221,40 +227,22 @@ public partial class DororongPresenter : UserControl
         var opacity = progress * progress * (3 - (2 * progress));
         if (opacity <= 0)
         {
-            DororongImage.Source = from.Source;
-            _activeInteractionDescriptor = from.InteractionDescriptor;
+            DororongImage.Source = frames.Sample(0);
+            _activeInteractionDescriptor = fromDescriptor;
             return;
         }
 
         if (opacity >= 1)
         {
-            DororongImage.Source = to.Source;
-            _activeInteractionDescriptor = to.InteractionDescriptor;
+            DororongImage.Source = frames.Sample(1);
+            _activeInteractionDescriptor = toDescriptor;
             return;
         }
 
-        var pixels = new byte[from.Pixels.Length];
-        for (var index = 0; index < pixels.Length; index++)
-        {
-            pixels[index] = (byte)Math.Round(
-                from.Pixels[index] + ((to.Pixels[index] - from.Pixels[index]) * opacity),
-                MidpointRounding.AwayFromZero);
-        }
-
-        var blended = BitmapSource.Create(
-            from.Source.PixelWidth,
-            from.Source.PixelHeight,
-            96,
-            96,
-            PixelFormats.Pbgra32,
-            null,
-            pixels,
-            from.Stride);
-        blended.Freeze();
-        DororongImage.Source = blended;
+        DororongImage.Source = frames.Sample(progress);
         _activeInteractionDescriptor = FrameInteractionDescriptor.Interpolate(
-            from.InteractionDescriptor,
-            to.InteractionDescriptor,
+            fromDescriptor,
+            toDescriptor,
             opacity);
     }
 
@@ -335,29 +323,6 @@ public partial class DororongPresenter : UserControl
         DororongImage.Opacity = 1;
         _activeInteractionDescriptor = FrameInteractionDescriptor.Canonical;
         _activeFacing = FacingDirection.Right;
-    }
-
-    private sealed class CrossfadeFrame
-    {
-        public CrossfadeFrame(
-            BitmapImage source,
-            FrameInteractionDescriptor interactionDescriptor)
-        {
-            Source = source;
-            InteractionDescriptor = interactionDescriptor;
-            var converted = new FormatConvertedBitmap(source, PixelFormats.Pbgra32, null, 0);
-            Stride = converted.PixelWidth * 4;
-            Pixels = new byte[Stride * converted.PixelHeight];
-            converted.CopyPixels(Pixels, Stride, 0);
-        }
-
-        public BitmapImage Source { get; }
-
-        public FrameInteractionDescriptor InteractionDescriptor { get; }
-
-        public byte[] Pixels { get; }
-
-        public int Stride { get; }
     }
 
     private static BitmapImage LoadFrame(string fileName)
