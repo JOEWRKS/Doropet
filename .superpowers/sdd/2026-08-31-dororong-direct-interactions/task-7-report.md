@@ -201,3 +201,138 @@ Reference/evidence hashes:
 - The 96 px frame can extend only from canonical bottom row 88 to row 95, a seven-pixel absolute bound extension. Most of the long-body read therefore comes from redistributing white body mass upward-to-downward inside the fixed frame, not from increasing the window size.
 - The normal-speed GIF is mechanically verified as 12 frames/800 ms and its still sequence was inspected, but subjective motion feel remains `UNVERIFIED` for root/user observation.
 - Self-review confirmed only Task 7 files were committed. The unrelated presenter XAML working-tree modification remains unstaged.
+
+---
+
+## Fix round 1 — immutable attempt 2
+
+Status: `PROVISIONAL / UNVERIFIED`. This round fixes the reviewer-observed endpoint topology jump and rectangular/comb-like lower body without claiming root or user approval. Product staging remains branch-only; there was no push, merge, app stop, or app relaunch.
+
+Implementation commit: `86386e9` (`art: smooth provisional body drag endpoints`).
+
+### Files and exact paths
+
+- Strengthened regression contract: `tests/Dororong.App.DirectInteractionAssets.Tests.ps1`.
+- New immutable candidate package: `artifacts/candidates/direct-interactions/body-drag-v1/attempt-2/`.
+- Candidate generator: `artifacts/candidates/direct-interactions/body-drag-v1/attempt-2/Build-BodyDragCandidate.ps1`.
+- Candidate frames: `artifacts/candidates/direct-interactions/body-drag-v1/attempt-2/frames/` (twelve complete 96×96 PNGs).
+- New verification package: `artifacts/verification/direct-interactions/body-drag-v1/attempt-2/`.
+- Product runtime paths: `src/Dororong.App/Assets/body-drag-*.png`.
+- Product source paths: `src/Dororong.App/Assets/frame-sources/body-drag-*.png`.
+- The product names did not change, so `src/Dororong.App/Dororong.App.csproj` required no edit.
+- Attempt 1 was not overwritten: `git diff --quiet HEAD^ -- artifacts/candidates/direct-interactions/body-drag-v1/attempt-1 artifacts/verification/direct-interactions/body-drag-v1/attempt-1` returned exit `0` after the implementation commit.
+
+### Prompt and tool mode
+
+No new image-generation call was made. The existing generated sheet `artifacts/candidates/direct-interactions/body-drag-v1/attempt-1/generated-sheet-attempt-2.png` (`A01188C35421680EF80FDCD14D36486FF36806B38E928FDEB7920B2FC88F445F`) remained a silhouette reference. Attempt 2 was authored locally and deterministically with PowerShell/System.Drawing by isolating the accepted canonical body through `src/Dororong.App/Assets/dororong-body-region-mask.png`, applying a top-anchored progressive vertical warp, shifting the four original rounded lower lobes by different amounts, and opening three rounded U valleys. Protected head/face/hair/rose/bow/ribbon areas are then copied back pixel-exactly from canonical. This method preserves identity more aggressively than another generative edit.
+
+Warp progress is `0, 0.25, 0.40, 0.55, 0.70, 0.85, 1.0, 1.0, 0.84, 0.60, 0.25, 0`; full-hang leg target bottoms are intentionally unequal. Product files are promoted only after the complete candidate and verification package exists.
+
+### TDD RED and GREEN evidence
+
+The asset test was strengthened before attempt-2 product generation. It now checks both full-pixel and silhouette endpoint deltas (`<=750` and `<=300`), all non-hold neighbor deltas (`<=850`), four separated opaque runs, at least three distinct full-hang leg bottoms with no more than four rows of spread, and at most three rows of per-leg movement between checked neighbors.
+
+RED against attempt 1:
+
+```text
+pwsh -NoProfile -File tests/Dororong.App.DirectInteractionAssets.Tests.ps1
+Exception: ... First changed entry key replaces too much of the rounded canonical body: 1135 pixels.
+exit 1
+```
+
+Attempt-1 diagnostic binding: entry-00→entry-01 was `1135` full changed pixels / `488` silhouette pixels; settle-03→settle-04 was `1188` / `536`.
+
+GREEN against attempt 2:
+
+```text
+pwsh -NoProfile -File tests/Dororong.App.DirectInteractionAssets.Tests.ps1
+DIRECT INTERACTION ASSETS PASS: 12 complete 96x96 transparent body-drag keys, fixed protected identity, continuous extension/recovery, four separated hang legs, no tail protrusion, clean alpha, source/runtime parity, and exact canonical recovery passed.
+exit 0
+```
+
+Fresh covering checks:
+
+```text
+dotnet test DororongDesktopPet.sln --configuration Release --no-build
+Core: 82 passed, 0 failed, 0 skipped.
+App: 51 passed, 0 failed, 0 skipped.
+
+pwsh -NoProfile -File tests/Dororong.App.DirectInteractionRender.Tests.ps1 -Configuration Release
+DIRECT INTERACTION RENDER PASS: 166 assertions covered exact accepted sources, one opaque surface, pending compression, continuous 500ms hop, and exact rest recovery.
+
+dotnet build DororongDesktopPet.sln --configuration Release --no-restore
+Build succeeded; 0 warnings; 0 errors.
+
+git diff --cached --check
+exit 0
+```
+
+### Measured continuity and timing
+
+Full changed/silhouette-changed pixels for the exact non-hold sequence are:
+
+| Neighbor | Full | Silhouette |
+|---|---:|---:|
+| entry-00 → entry-01 | 615 | 166 |
+| entry-01 → entry-02 | 590 | 114 |
+| entry-02 → entry-03 | 629 | 117 |
+| entry-03 → entry-04 | 688 | 130 |
+| entry-04 → entry-05 | 764 | 132 |
+| entry-05 → entry-06 | 820 | 119 |
+| settle-00 → settle-01 | 832 | 128 |
+| settle-01 → settle-02 | 842 | 192 |
+| settle-02 → settle-03 | 810 | 280 |
+| settle-03 → settle-04 | 615 | 166 |
+
+The full-hang leg bottoms read `95,94,92,91`: four non-parallel tips, four rows maximum spread, and four distinct lengths. The normal-speed GIF decodes as twelve frames in the expected neighbor order with positive delays `5,5,5,5,5,5,8,16,6,6,6,8` centiseconds, totaling exactly `800 ms`. Encoded timing and sequence are verified; subjective motion feel remains explicitly `UNVERIFIED` pending root/user runtime observation.
+
+### Visual-check observations
+
+Sources inspected at native scale and nearest-neighbor 4× were the attempt-2 native strip, 4× strip, onion strip, difference strip, and 800 ms playback.
+
+| Invariant | Exact observation | Result |
+|---|---|---|
+| Complete character / protected identity | Every key is a complete sprite. The canonical upper/head/face/hair/rose/bow/ribbons remain visually fixed; automated protected-pixel checks are exact. | PASS |
+| Slight first extension | Entry-01 retains the canonical rounded torso read and changes `615/166`, rather than attempt 1's replacement-like `1135/488`. | PASS |
+| Rounded continuous contour | Native and 4× strips show the original body mass lengthening downward through one contour family. Onion and difference strips confine motion to the permitted lower-body connection and show no detached paws or horizontal torso seam. | PASS |
+| Four countable legs / no comb | Three U-shaped valleys open gradually; four lower lobes remain countable. Tip rows `95,94,92,91` and visibly different widths/lengths avoid a parallel baseline. | PASS |
+| No tail / no fifth limb | No separate right-side protrusion appears in native or 4× inspection; the existing ornament/ribbon remains canonical. | PASS |
+| Gradual settle and exact recovery | Settle mirrors the same rounded contour family, lands at the same slight-extension key, then recovers byte-exactly to canonical. The final transition is `615/166`, not attempt 1's `1188/536`. | PASS |
+| Playback feel | Frame order and positive 800 ms timing are proven and the GIF was inspected. Runtime motion feel has not been approved by root/user. | UNVERIFIED |
+
+### SHA-256 binding
+
+Candidate, product source, and product runtime copies share these hashes:
+
+| Key | SHA-256 |
+|---|---|
+| entry-00-press | `699348D1973709F228D843341AC5312AA7F449D57B9BFC76576256231E259A78` |
+| entry-01-lengthen | `862C1EA03B2368FBF2163F0C07E3B3A717389A6580EF2C282F65B86EA99B5879` |
+| entry-02-drop | `0DDC8554E1E8F589C6A83230712B30160A38524C5E25773788D13C195E3519EE` |
+| entry-03-stretch | `319311A9452C188DB4E1BD7F91C6FDD78FB6812FACE227CB2A9DF1743F9EE8F3` |
+| entry-04-dangle | `4619F665B8AD71C4D629A7D5B43F8362110CD6ECB38F7E3A57E68E290F5472C9` |
+| entry-05-near-hang | `C28E4E6E4E6C6060885C26E3D807D3CE77A2D563EE5F94477C21D984080BE4EA` |
+| entry-06-hang | `6F9968FE05EA9E92D657ACD9E0B74333C408493D811A2F42CAE3707D53DCE94A` |
+| settle-00-hang | `6F9968FE05EA9E92D657ACD9E0B74333C408493D811A2F42CAE3707D53DCE94A` |
+| settle-01-lift | `BAA74DE388AE97E2A125C9E1B0AC4A9F4C7CC74E3A75C50F1CEB185045316C24` |
+| settle-02-gather | `4BCEE1ED2480BB9D3083A122C57BF7F585596376E5749AC8E5535A901C2C40D3` |
+| settle-03-land | `862C1EA03B2368FBF2163F0C07E3B3A717389A6580EF2C282F65B86EA99B5879` |
+| settle-04-recover | `699348D1973709F228D843341AC5312AA7F449D57B9BFC76576256231E259A78` |
+
+Verification artifacts:
+
+| Artifact | SHA-256 |
+|---|---|
+| difference strip | `8F0C3B0E4D67A4E0C3F0B380641BD8BD0995C5C2CC6E32C203FBFE8322D50B83` |
+| 800 ms playback | `1E0816EE72674A860D81F853B2C8E3A7FB19CD7B5B4E20021319151AFF9BC85E` |
+| metrics JSON | `57D32D0685E65679F995AFA0CBC1389F7937F58E9C282280D0F8B5B8FE685A08` |
+| native strip | `F244B7465A9CAF1D9EF116023BB5E14E75D099F9304671AB17C444DFDECD2CE4` |
+| nearest 4× strip | `3229FB5E4547A3860EFA463A087CD06DF4E08C66B94110023446E926F3D3D3D3` |
+| onion strip | `E15D6D0CA55F229DAD9A353ED798C9CB6A6059B50D5B3BED3478AE5AF5777A37` |
+
+### Concerns and self-review
+
+- The exact attempt-2 package is still provisional and not root/user approved. Motion feel remains runtime-unverified even though encoded timing and sequence are verified.
+- The 96×96 canvas still limits absolute downward travel to the bottom edge; this family expresses hang primarily by reshaping canonical lower-body mass within that fixed frame.
+- Attempt 2 intentionally reuses the existing generated silhouette reference but not its changed identity or opaque contact-sheet background; deterministic canonical-mask warping is the final raster method.
+- Self-review confirmed attempt 1 remains intact, product/source bytes match, accepted canonical/sleep/click assets were not overwritten, no app process was touched, and the pre-existing `src/Dororong.App/Controls/DororongPresenter.xaml` modification remains unstaged.
