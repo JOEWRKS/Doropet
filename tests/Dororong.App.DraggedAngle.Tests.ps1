@@ -13,6 +13,11 @@ Add-Type -Path $coreAssemblyPath
 Add-Type -Path $appAssemblyPath
 
 $presenter = [Dororong.App.Controls.DororongPresenter]::new()
+$render = @($presenter.GetType().GetMethods([Reflection.BindingFlags]'Instance,NonPublic') |
+    Where-Object { $_.Name -eq 'Render' -and $_.GetParameters().Count -eq 2 })[0]
+if ($null -eq $render) { throw 'The presenter combined Render contract was not found.' }
+$noDirectInteraction = $render.GetParameters()[1].ParameterType.GetProperty(
+    'None', [Reflection.BindingFlags]'Static,Public,NonPublic').GetValue($null)
 $rotation = $presenter.FindName('BodyRotateTransform')
 if ($null -eq $rotation)
 {
@@ -38,7 +43,7 @@ foreach ($case in $cases)
         $true,
         $grabOffset)
 
-    $presenter.Render($snapshot)
+    $render.Invoke($presenter, [object[]]@($snapshot, $noDirectInteraction)) | Out-Null
 
     $actualAngle = [double]$rotation.Angle
     if ([double]::IsNaN($actualAngle) -or [double]::IsInfinity($actualAngle))

@@ -99,6 +99,10 @@ Add-Type -AssemblyName PresentationFramework
 Add-Type -Path $coreAssemblyPath
 Add-Type -Path $appAssemblyPath
 $presenter = [Dororong.App.Controls.DororongPresenter]::new()
+$render = @($presenter.GetType().GetMethods([Reflection.BindingFlags]'Instance,NonPublic') |
+    Where-Object { $_.Name -eq 'Render' -and $_.GetParameters().Count -eq 2 })[0]
+$noDirectInteraction = $render.GetParameters()[1].ParameterType.GetProperty(
+    'None', [Reflection.BindingFlags]'Static,Public,NonPublic').GetValue($null)
 $image = [Windows.Controls.Image]$presenter.FindName('DororongImage')
 $state = [Dororong.Core.Behavior.PetState]
 $facing = [Dororong.Core.Behavior.FacingDirection]::Right
@@ -106,8 +110,10 @@ $origin = [Dororong.Core.Geometry.PointD]::new(0,0)
 $observed = [Collections.Generic.List[string]]::new()
 foreach ($phase in @(0.649999,0.650000,0.666500,0.690000,0.706500,0.730000,0.746500,0.770000))
 {
-    $presenter.Render([Dororong.Core.Behavior.PetSnapshot]::new(
-        $state::Idle,$origin,$facing,$phase,$false,$null))
+    $render.Invoke($presenter, [object[]]@(
+        [Dororong.Core.Behavior.PetSnapshot]::new(
+            $state::Idle,$origin,$facing,$phase,$false,$null),
+        $noDirectInteraction)) | Out-Null
     $observed.Add([IO.Path]::GetFileName($image.Source.ToString()))
 }
 $oldRuntimeResources = @($observed | Where-Object {

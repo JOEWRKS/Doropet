@@ -42,6 +42,11 @@ Add-Type -Path $coreAssemblyPath
 Add-Type -Path $appAssemblyPath
 
 $presenter = [Dororong.App.Controls.DororongPresenter]::new()
+$render = @($presenter.GetType().GetMethods([Reflection.BindingFlags]'Instance,NonPublic') |
+    Where-Object { $_.Name -eq 'Render' -and $_.GetParameters().Count -eq 2 })[0]
+if ($null -eq $render) { throw 'The presenter combined Render contract was not found.' }
+$noDirectInteraction = $render.GetParameters()[1].ParameterType.GetProperty(
+    'None', [Reflection.BindingFlags]'Static,Public,NonPublic').GetValue($null)
 $bodyScale = $presenter.FindName('BodyScaleTransform')
 $rotation = $presenter.FindName('BodyRotateTransform')
 $translation = $presenter.FindName('BodyTranslateTransform')
@@ -145,9 +150,9 @@ if ([Math]::Abs([double]$image.RenderTransformOrigin.X - 0.428987) -gt 0.0000001
         "IDLE breathing origin must use the visible horizontal center and foot baseline '0.428987,0.916667'; observed '$($image.RenderTransformOrigin.X),$($image.RenderTransformOrigin.Y)'.")
 }
 
-$presenter.Render((New-Snapshot $state::Idle 0.0))
+$render.Invoke($presenter, [object[]]@((New-Snapshot $state::Idle 0.0), $noDirectInteraction)) | Out-Null
 $restingGeometry = Get-RenderedVisibleGeometry $presenter
-$presenter.Render((New-Snapshot $state::Idle 0.405))
+$render.Invoke($presenter, [object[]]@((New-Snapshot $state::Idle 0.405), $noDirectInteraction)) | Out-Null
 $peakGeometry = Get-RenderedVisibleGeometry $presenter
 $widthGrowth = $peakGeometry.Width - $restingGeometry.Width
 $heightGrowth = $peakGeometry.Height - $restingGeometry.Height
@@ -181,7 +186,7 @@ $idleCases = @(
 
 foreach ($idleCase in $idleCases)
 {
-    $presenter.Render((New-Snapshot $state::Idle $idleCase.Phase))
+    $render.Invoke($presenter, [object[]]@((New-Snapshot $state::Idle $idleCase.Phase), $noDirectInteraction)) | Out-Null
     if (-not $image.Source.ToString().EndsWith($idleCase.Frame, [StringComparison]::OrdinalIgnoreCase))
     {
         $failures.Add("IDLE $($idleCase.Name) phase did not use $($idleCase.Frame).")
@@ -217,7 +222,7 @@ $scaleYContinuityFailure = $false
 for ($tick = 0; $tick -le 250; $tick++)
 {
     $phase = ($tick * 0.016) / 4.0
-    $presenter.Render((New-Snapshot $state::Idle $phase))
+    $render.Invoke($presenter, [object[]]@((New-Snapshot $state::Idle $phase), $noDirectInteraction)) | Out-Null
     if ([Math]::Abs([double]$translation.Y) -gt 0.000001)
     {
         $translatedSampleCount++
@@ -274,13 +279,13 @@ if ($increasingSampleCount -ge $decreasingSampleCount)
     $failures.Add("IDLE inhale was not shorter than exhale; observed '$increasingSampleCount' increasing samples and '$decreasingSampleCount' decreasing samples.")
 }
 
-$presenter.Render((New-Snapshot $state::Idle 0.405))
+$render.Invoke($presenter, [object[]]@((New-Snapshot $state::Idle 0.405), $noDirectInteraction)) | Out-Null
 if ([Math]::Abs([double]$breathingScale.ScaleX - 1.024) -gt 0.000001 -or
     [Math]::Abs([double]$breathingScale.ScaleY - 1.012) -gt 0.000001)
 {
     $failures.Add("Curious reset precondition did not start from peak IDLE directional scale; observed '$([double]$breathingScale.ScaleX),$([double]$breathingScale.ScaleY)'.")
 }
-$presenter.Render((New-Snapshot $state::Curious 0.25))
+$render.Invoke($presenter, [object[]]@((New-Snapshot $state::Curious 0.25), $noDirectInteraction)) | Out-Null
 try
 {
     Assert-Frame $image 'dororong-canonical.png' 'Curious reset'

@@ -131,6 +131,11 @@ Add-Type -AssemblyName PresentationFramework
 Add-Type -Path $coreAssemblyPath
 Add-Type -Path $appAssemblyPath
 $presenter=[Dororong.App.Controls.DororongPresenter]::new()
+$render=@($presenter.GetType().GetMethods([Reflection.BindingFlags]'Instance,NonPublic') |
+    Where-Object { $_.Name-eq'Render'-and$_.GetParameters().Count-eq 2 })[0]
+if($null-eq$render){throw 'The presenter combined Render contract was not found.'}
+$noDirectInteraction=$render.GetParameters()[1].ParameterType.GetProperty(
+    'None',[Reflection.BindingFlags]'Static,Public,NonPublic').GetValue($null)
 $bodyGroup=[Windows.Controls.Canvas]$presenter.FindName('BodyGroup')
 $image=[Windows.Controls.Image]$presenter.FindName('DororongImage')
 $scale=$presenter.FindName('BodyScaleTransform')
@@ -162,8 +167,10 @@ finally{$window.Close()}
 $state=[Dororong.Core.Behavior.PetState];$facing=[Dororong.Core.Behavior.FacingDirection]::Right
 function Render-State([Dororong.Core.Behavior.PetState]$State,[double]$Phase)
 {
-    $presenter.Render([Dororong.Core.Behavior.PetSnapshot]::new(
-        $State,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,$Phase,$false,$null))
+    $render.Invoke($presenter,[object[]]@(
+        [Dororong.Core.Behavior.PetSnapshot]::new(
+            $State,[Dororong.Core.Geometry.PointD]::new(0,0),$facing,$Phase,$false,$null),
+        $noDirectInteraction))|Out-Null
 }
 foreach($case in @(
     @{State=$state::Idle;Phase=0.1;Frame='dororong-canonical.png';Label='Idle open'},
