@@ -167,22 +167,16 @@ Until then, overall M1 remains `PARTIAL`.
 
 ## 6. Current checkpoint and immediate next unit
 
-Stage A closed-eye art and breathing are accepted checkpoints, and attempt 38 is an acceptable sleep-crossfade checkpoint:
+Stage A closed-eye art, breathing, and sleep crossfade remain accepted checkpoints. The direct-interaction input/controller infrastructure and transform-only body click are now implemented on `feature/dororong-m1-expression-animation`.
 
-- the exact user-authored open/squint/closed frame family is preserved;
-- click-only wake was directly observed as `CLICK_REACTION` in attempt 29;
-- attempt 35 replaced center-origin zoom with foot-anchored directional breathing, and the user accepted its desktop breathing likeness;
-- attempt 38 (`c883b7872dcdb162dd395c26b09353d570c178a5`) blends cached premultiplied `Pbgra32` frames on one surface; its 36-frame 0–560 ms render evidence has fixed body Y and no alpha dip, and the user said `나쁘지 않다`;
-- overall M1 remains `PARTIAL` because the remaining wake paths and later stages are not yet accepted.
+- the exact user-authored open/squint/closed frame family and accepted sleep-wake bridge remain preserved;
+- attempt 38 (`c883b7872dcdb162dd395c26b09353d570c178a5`) remains the accepted sleep-crossfade checkpoint;
+- body-click product checkpoint `92dd706bfcaf51def1d148670dfb787ef40ec1d0` removes all newly drawn click-pose art and keeps awake clicks on the exact canonical open-eye image;
+- body-click attempt 2 passed direct user observation for canonical-eye preservation;
+- pending-press subtlety, the complete hop/apex/land feel, focus preservation, and transparent-area click-through remain `UNVERIFIED` for the exact attempt-2 runtime;
+- slow-approach, fast-approach, and drag wake routes also remain `UNVERIFIED`;
+- overall M1 remains `PARTIAL`.
 
-The immediate next unit remains inside Stage A and covers only the three unverified wake routes:
+The immediate next unit is to finish body-click Windows acceptance one observable at a time. Do not infer the remaining non-interference properties from automated tests.
 
-1. slow approach from a fresh SLEEP baseline must wake into `CURIOUS`;
-2. fast closing approach from a fresh SLEEP baseline must wake into `STARTLED`;
-3. a drag from a fresh SLEEP baseline must wake into `DRAGGED` while retaining the original grab offset.
-
-Start by observing the current exact runtime one route at a time. Change presentation code only when that observation demonstrates a concrete defect. Preserve the accepted eye assets, attempt-35 breathing, click-only priority, and all core transition rules.
-
-The approved [direct-interaction design](../specs/2026-08-31-dororong-direct-interaction-design.md) is now staged for its delivery-order input-metadata slice. It does not close Stage A, approve interaction art, or promote any actual-Windows interaction acceptance.
-
-After all three routes pass actual Windows observation, close Stage A and proceed to Stage B. The direct-interaction implementation proceeds only in the approved small slices; no later product work begins merely because the design exists.
+After that boundary is closed, proceed to direct-interaction Task 7: create the body-drag entry/hang/release candidate family from the canonical asset and durable user sketch. Candidate frames must be root-reviewed and shown as native frames, a nearest-neighbor enlarged strip, and normal-speed playback before any bytes are promoted into product assets.

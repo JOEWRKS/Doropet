@@ -471,21 +471,21 @@
 **Files:**
 - Modify: `src/Dororong.App/Controls/DororongPresenter.xaml.cs`
 - Create: `tests/Dororong.App.DirectInteractionRender.Tests.ps1`
-- Create after observation: `docs/verification/2026-08-31-m1-direct-interaction-body-click-attempt-1.md`
+- Create after observation: `docs/verification/2026-09-01-m1-direct-interaction-body-click-attempt-2.md`
 
 **Interfaces:**
 - Consumes: the exact accepted canonical open-eye asset and `PetState.ClickReaction` phase; a sleep-origin click may use only the separately accepted wake bridge before the hop.
 - Produces: subtle pending press plus approximately 500 ms whole-character press/lift/apex/descent/land/recover transforms with no new body artwork.
 
-- [ ] **Step 1: Write WPF RED tests**
+- [x] **Step 1: Write WPF RED tests**
 
   Sample pending press and `CLICK_REACTION` at every 16 ms tick. Require exact accepted source-image selection, full image opacity 1, one visible character surface, continuous whole-character scale/Y transforms, unchanged window position, exact canonical rest transform at completion, and no hanging drag pose before threshold. Expected RED: the current presenter has no confirmed-click transform timeline.
 
-- [ ] **Step 2: Map click phase to the transform-only timeline**
+- [x] **Step 2: Map click phase to the transform-only timeline**
 
   Pending body press holds a subtle foot-anchored scale compression. `CLICK_REACTION` maps phase across approximately 80/150/100/170 ms and continuously samples foot-anchored scale plus whole-character Y translation. Keep the canonical open-eye image for every awake click sample; do not select the half-closed blink/squint frame. A sleep-origin click may first finish the accepted wake bridge. Keep window position unchanged, keep opacity 1, and use no new `PetState`.
 
-- [ ] **Step 3: Run automated and rendered verification**
+- [x] **Step 3: Run automated and rendered verification**
 
   Run Core, App xUnit, direct-render, sleep, and Release build checks. Render a native strip, nearest-neighbor strip, and production-speed GIF from the exact accepted product image plus the production transform sampler. Root visual-check must compare source-image hashes and inspect the transform-only motion.
 
@@ -493,7 +493,9 @@
 
   Publish each observation to a fresh attempt-specific path, record executable/DLL/assets hashes, and ask the user to check only: subtle pending press, canonical eyes throughout the playful hop/apex/land without art substitution, no focus theft, and transparent click-through on a known control behind the character. Keep any unobserved item `UNVERIFIED`.
 
-- [ ] **Step 5: Commit implementation and evidence separately**
+  Attempt 2 passed direct user observation for canonical-eye preservation. Pending-press subtlety, the complete motion-feel verdict, no-focus-theft, and transparent click-through remain `UNVERIFIED`.
+
+- [x] **Step 5: Commit implementation and evidence separately**
 
   Commit code/tests as `feat: animate Dororong body click`; after the user report, commit the exact evidence file as `docs: record body click acceptance attempt`.
 
