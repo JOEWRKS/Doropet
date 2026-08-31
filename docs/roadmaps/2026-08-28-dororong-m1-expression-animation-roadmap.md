@@ -167,16 +167,17 @@ Until then, overall M1 remains `PARTIAL`.
 
 ## 6. Current checkpoint and immediate next unit
 
-Stage A closed-eye art, breathing, and sleep crossfade remain accepted checkpoints. The direct-interaction input/controller infrastructure and transform-only body click are now implemented on `feature/dororong-m1-expression-animation`.
+Stage A closed-eye art, breathing, and sleep crossfade remain accepted checkpoints. Direct-interaction infrastructure, the transform-only body click, and a provisional complete-character body-drag mapping are implemented on `feature/dororong-m1-expression-animation`. This is a truthful `PARTIAL` checkpoint, not completion of the direct-interaction slice.
 
-- the exact user-authored open/squint/closed frame family and accepted sleep-wake bridge remain preserved;
+- the exact user-authored open/squint/closed family and accepted sleep-wake bridge remain preserved;
 - attempt 38 (`c883b7872dcdb162dd395c26b09353d570c178a5`) remains the accepted sleep-crossfade checkpoint;
-- body-click product checkpoint `92dd706bfcaf51def1d148670dfb787ef40ec1d0` removes all newly drawn click-pose art and keeps awake clicks on the exact canonical open-eye image;
-- body-click attempt 2 passed direct user observation for canonical-eye preservation;
-- pending-press subtlety, the complete hop/apex/land feel, focus preservation, and transparent-area click-through remain `UNVERIFIED` for the exact attempt-2 runtime;
-- slow-approach, fast-approach, and drag wake routes also remain `UNVERIFIED`;
-- overall M1 remains `PARTIAL`.
+- body-click product checkpoint `92dd706bfcaf51def1d148670dfb787ef40ec1d0` keeps awake clicks on the exact canonical open-eye image, and body-click attempt 2 passed direct user observation for canonical-eye preservation (`ㅇㅇ 유지 됨`);
+- the current body-click mapping uses the canonical image throughout and passes a fresh 16 ms native/enlarged deterministic render inspection; pending-press subtlety, full hop/apex/land feel, focus preservation, and transparent-area click-through remain `UNVERIFIED`;
+- body-drag entry/hold/settle implementation is deterministically covered and the current 140 ms / 180 ms production mapping passes a fresh native/enlarged render inspection; the Task 7 attempt-2 family, runtime motion feel, and user acceptance remain `PROVISIONAL / UNVERIFIED`;
+- Task 9 generated and preserved two rejected cheek attempts. The primary image-generated sheets redrew identity and baked a checkerboard; the deterministic fallback did not read as cheek motion; the bounded recovery produced detached-paw/ribbon and checker-like contour defects. Root and implementer independently rejected the recovery family. No cheek art was promoted, and Task 10 was not started;
+- left-cheek and right-cheek art, integration, runtime behavior, and user acceptance are therefore not delivered and remain `UNVERIFIED`;
+- the final exact PowerShell-suite loop has no available final exit because its invocation session was lost. Separate fresh Core `82/82`, App `53/53`, five focused migrated-harness exits, zero stale direct calls, and the zero-warning/zero-error Release build remain valid evidence, but the complete loop itself is `UNVERIFIED`;
+- the current morning-inspection publish is `artifacts/repro/direct-interactions-overnight-attempt-2/runtime/`, with `Dororong.App.exe` SHA-256 `AFB74F04BC88E0D0FBF5B5DE2DD49ECE72E23A4B79A8EA1ED7D585AE39517EEC`. It was launched exactly once as PID `45432`. Process liveness is not actual-Windows acceptance;
+- slow/fast/drag wake observations, focus, click-through, topmost, bounds, capture cleanup, explicit Exit, autonomous interactions, and broader M1 remain `UNVERIFIED` or `PARTIAL` as recorded in the final acceptance matrix.
 
-The immediate next unit is to finish body-click Windows acceptance one observable at a time. Do not infer the remaining non-interference properties from automated tests.
-
-After that boundary is closed, proceed to direct-interaction Task 7: create the body-drag entry/hang/release candidate family from the canonical asset and durable user sketch. Candidate frames must be root-reviewed and shown as native frames, a nearest-neighbor enlarged strip, and normal-speed playback before any bytes are promoted into product assets.
+The immediate next unit is the ordered morning observation of delivered body click and provisional body drag, one observable at a time, without inferring unobserved properties. Cheeks require a new art direction or explicit user choice before Task 9 can resume; do not integrate either rejected family. The complete PowerShell-suite loop also needs a future fresh invocation-bound run before any full-regression claim. Overall M1 stays `PARTIAL` until all roadmap acceptance rows are directly evidenced.
