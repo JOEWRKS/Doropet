@@ -174,7 +174,7 @@ Assert-Origin $partialEntry.Image 0.428987 0.916667 'Dragged SLEEP cancellation'
 $wakeCases = @(
     @{ State = $state::Curious; FirstLimit = 0.05625; SecondLimit = 0.1125; Transform = 'rotation' },
     @{ State = $state::Startled; FirstLimit = 0.06; SecondLimit = 0.12; Transform = 'startled scale' },
-    @{ State = $state::ClickReaction; FirstLimit = 0.09; SecondLimit = 0.18; Transform = 'click bounce' }
+    @{ State = $state::ClickReaction; FirstLimit = 0.09; SecondLimit = 0.18; Transform = 'click press' }
 )
 foreach ($wakeCase in $wakeCases) {
     $wake = New-PresenterFixture
@@ -184,7 +184,12 @@ foreach ($wakeCase in $wakeCases) {
     switch ($wakeCase.Transform) {
         'rotation' { Assert-Near 7.0 ([double]$wake.Rotation.Angle) 0.000001 'Curious rotation stopped during the wake bridge.' }
         'startled scale' { $wake.Presenter.Render((New-Snapshot $wakeCase.State 0.02)); Assert-True (([double]$wake.BodyScale.ScaleX) -gt 1.0) 'Startled scale stopped during the wake bridge.' }
-        'click bounce' { $wake.Presenter.Render((New-Snapshot $wakeCase.State 0.04)); Assert-True (([double]$wake.Translation.Y) -lt 0.0) 'Click bounce stopped during the wake bridge.' }
+        'click press' {
+            $wake.Presenter.Render((New-Snapshot $wakeCase.State 0.04))
+            Assert-Near 0.0 ([double]$wake.Translation.Y) 0.000001 'Click press moved upward before its approved 80ms compression completed.'
+            Assert-True (([double]$wake.Breathing.ScaleX) -gt 1.0) 'Click press lost horizontal squash during the wake bridge.'
+            Assert-True (([double]$wake.Breathing.ScaleY) -lt 1.0) 'Click press lost vertical squash during the wake bridge.'
+        }
     }
     $wake.Presenter.Render((New-Snapshot $wakeCase.State $wakeCase.FirstLimit))
     Assert-Frame $wake.Image 'dororong-sleep-crouch-squint.png' "$($wakeCase.State) wake bridge second segment"

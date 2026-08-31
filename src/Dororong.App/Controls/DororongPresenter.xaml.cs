@@ -32,6 +32,9 @@ internal sealed class DirectInteractionPressEventArgs : EventArgs
 public partial class DororongPresenter : UserControl
 {
     private const double FrameMaximumCoordinate = 95;
+    private const double BodyClickWakeFirstSegmentMilliseconds = 45;
+    private const double BodyClickWakeDurationMilliseconds = 90;
+    private const double PresentationTickMilliseconds = 16;
 
     private static readonly BitmapImage CanonicalFrame = LoadFrame("dororong-canonical.png");
     private static readonly BitmapImage BlinkSquintFrame = LoadFrame("dororong-blink-squint.png");
@@ -59,6 +62,13 @@ public partial class DororongPresenter : UserControl
     private bool _wakeBridgeComplete;
     private FrameInteractionDescriptor _activeInteractionDescriptor = FrameInteractionDescriptor.Canonical;
     private FacingDirection _activeFacing = FacingDirection.Right;
+    private bool _bodyClickPresentationActive;
+    private FacingDirection _bodyClickVisibleFacing = FacingDirection.Right;
+    private FacingDirection? _postBodyClickIdleFacing;
+    private bool _bodyClickWakeActive;
+    private bool _bodyClickWakeClickStarted;
+    private double _bodyClickWakeElapsedMilliseconds;
+    private double _bodyClickWakeAtClickStartMilliseconds;
 
     public DororongPresenter()
     {
@@ -71,10 +81,30 @@ public partial class DororongPresenter : UserControl
 
     internal void Render(PetSnapshot snapshot, DirectInteractionSnapshot directInteraction)
     {
-        _ = directInteraction;
         var p = Math.Clamp(snapshot.Phase, 0, 1);
         var cycle = Math.Sin(p * Math.PI * 2);
         var bounce = Math.Sin(p * Math.PI);
+        var bodyClickPresentationActive = IsBodyClickPresentationActive(snapshot, directInteraction);
+        if (bodyClickPresentationActive && !_bodyClickPresentationActive)
+        {
+            _bodyClickPresentationActive = true;
+            _bodyClickVisibleFacing = _activeFacing;
+            _postBodyClickIdleFacing = null;
+        }
+        else if (!bodyClickPresentationActive)
+        {
+            if (_bodyClickPresentationActive && _lastRenderedState == PetState.ClickReaction)
+            {
+                _postBodyClickIdleFacing = _bodyClickVisibleFacing;
+            }
+
+            ResetBodyClickPresentationState();
+            if (snapshot.State != PetState.Idle)
+            {
+                _postBodyClickIdleFacing = null;
+            }
+        }
+
         var wokeFromSettledSleep =
             _lastRenderedState == PetState.Sleep &&
             _sleepEntryComplete;
@@ -88,10 +118,19 @@ public partial class DororongPresenter : UserControl
         else if (snapshot.State != PetState.Sleep && _lastRenderedState == PetState.Sleep)
         {
             _sleepEntryComplete = false;
-            _wakeBridgeState = wokeFromSettledSleep && SupportsWakeBridge(snapshot.State)
-                ? snapshot.State
-                : null;
-            _wakeBridgeComplete = !wokeFromSettledSleep;
+            if (wokeFromSettledSleep && bodyClickPresentationActive)
+            {
+                StartBodyClickWake();
+                _wakeBridgeState = null;
+                _wakeBridgeComplete = false;
+            }
+            else
+            {
+                _wakeBridgeState = wokeFromSettledSleep && SupportsWakeBridge(snapshot.State)
+                    ? snapshot.State
+                    : null;
+                _wakeBridgeComplete = !wokeFromSettledSleep;
+            }
         }
         else if (snapshot.State != PetState.Sleep && snapshot.State != _lastRenderedState)
         {
@@ -139,7 +178,6 @@ public partial class DororongPresenter : UserControl
                 break;
 
             case PetState.ClickReaction:
-                BodyTranslateTransform.Y = -10 * bounce;
                 break;
 
             case PetState.Dragged:
@@ -159,11 +197,142 @@ public partial class DororongPresenter : UserControl
                 throw new ArgumentOutOfRangeException(nameof(snapshot), snapshot.State, "Unknown pet state.");
         }
 
+        if (!bodyClickPresentationActive &&
+            snapshot.State == PetState.Idle &&
+            _postBodyClickIdleFacing is { } idleFacing)
+        {
+            BodyScaleTransform.ScaleX = idleFacing == FacingDirection.Left ? -1 : 1;
+        }
+
+        ApplyBodyClickPresentation(snapshot, directInteraction);
         ApplyWakeBridge(snapshot.State, p);
+        ApplyBodyClickWakeBridge(snapshot, directInteraction);
         _activeFacing = BodyScaleTransform.ScaleX < 0
             ? FacingDirection.Left
             : FacingDirection.Right;
         _lastRenderedState = snapshot.State;
+    }
+
+    private static bool IsBodyClickPresentationActive(
+        PetSnapshot snapshot,
+        DirectInteractionSnapshot directInteraction) =>
+        snapshot.State == PetState.ClickReaction ||
+        directInteraction is
+        {
+            Target: DirectInteractionTarget.Body,
+            Phase: DirectInteractionPhase.BodyPending
+        };
+
+    private void StartBodyClickWake()
+    {
+        _bodyClickWakeActive = true;
+        _bodyClickWakeClickStarted = false;
+        _bodyClickWakeElapsedMilliseconds = 0;
+        _bodyClickWakeAtClickStartMilliseconds = 0;
+    }
+
+    private void ResetBodyClickPresentationState()
+    {
+        _bodyClickPresentationActive = false;
+        _bodyClickWakeActive = false;
+        _bodyClickWakeClickStarted = false;
+        _bodyClickWakeElapsedMilliseconds = 0;
+        _bodyClickWakeAtClickStartMilliseconds = 0;
+    }
+
+    private void ApplyBodyClickPresentation(
+        PetSnapshot snapshot,
+        DirectInteractionSnapshot directInteraction)
+    {
+        BodyClickTransformSample? sample = null;
+        if (directInteraction is
+            {
+                Target: DirectInteractionTarget.Body,
+                Phase: DirectInteractionPhase.BodyPending
+            })
+        {
+            sample = BodyClickTransformSampler.SamplePendingPress();
+        }
+        else if (snapshot.State == PetState.ClickReaction)
+        {
+            sample = BodyClickTransformSampler.SampleConfirmedClick(snapshot.Phase);
+        }
+
+        if (sample is not { } bodyClick)
+        {
+            return;
+        }
+
+        BodyScaleTransform.ScaleX = _bodyClickVisibleFacing == FacingDirection.Left ? -1 : 1;
+        BodyScaleTransform.ScaleY = 1;
+        BodyRotateTransform.Angle = 0;
+        BodyTranslateTransform.X = 0;
+        BodyTranslateTransform.Y = bodyClick.TranslationY;
+        ImageBreathingScaleTransform.ScaleX = bodyClick.ScaleX;
+        ImageBreathingScaleTransform.ScaleY = bodyClick.ScaleY;
+        DororongImage.Source = bodyClick.Expression == BodyClickExpression.HappySquint
+            ? BlinkSquintFrame
+            : CanonicalFrame;
+        DororongImage.Opacity = 1;
+        _activeInteractionDescriptor = FrameInteractionDescriptor.Canonical;
+    }
+
+    private void ApplyBodyClickWakeBridge(
+        PetSnapshot snapshot,
+        DirectInteractionSnapshot directInteraction)
+    {
+        if (!_bodyClickWakeActive)
+        {
+            return;
+        }
+
+        double elapsedMilliseconds;
+        if (directInteraction is
+            {
+                Target: DirectInteractionTarget.Body,
+                Phase: DirectInteractionPhase.BodyPending
+            })
+        {
+            elapsedMilliseconds = _bodyClickWakeElapsedMilliseconds;
+            _bodyClickWakeElapsedMilliseconds = Math.Min(
+                BodyClickWakeDurationMilliseconds,
+                _bodyClickWakeElapsedMilliseconds + PresentationTickMilliseconds);
+        }
+        else if (snapshot.State == PetState.ClickReaction)
+        {
+            if (!_bodyClickWakeClickStarted)
+            {
+                _bodyClickWakeClickStarted = true;
+                _bodyClickWakeAtClickStartMilliseconds = _bodyClickWakeElapsedMilliseconds;
+            }
+
+            elapsedMilliseconds = Math.Min(
+                BodyClickWakeDurationMilliseconds,
+                _bodyClickWakeAtClickStartMilliseconds + (Math.Clamp(snapshot.Phase, 0, 1) * 500));
+            _bodyClickWakeElapsedMilliseconds = Math.Max(
+                _bodyClickWakeElapsedMilliseconds,
+                elapsedMilliseconds);
+        }
+        else
+        {
+            ResetBodyClickPresentationState();
+            return;
+        }
+
+        if (elapsedMilliseconds < BodyClickWakeFirstSegmentMilliseconds)
+        {
+            DororongImage.Source = SleepTuckSquintFrame;
+            _activeInteractionDescriptor = FrameInteractionDescriptor.SleepTuck;
+        }
+        else if (elapsedMilliseconds < BodyClickWakeDurationMilliseconds)
+        {
+            DororongImage.Source = SleepCrouchSquintFrame;
+            _activeInteractionDescriptor = FrameInteractionDescriptor.SleepCrouch;
+        }
+        else
+        {
+            _bodyClickWakeActive = false;
+        }
     }
 
     internal DirectInteractionTarget ClassifyOpaqueSourcePoint(PointD sourcePosition, bool opaque) =>

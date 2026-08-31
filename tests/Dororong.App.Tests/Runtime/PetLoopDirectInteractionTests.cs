@@ -38,6 +38,22 @@ public sealed class PetLoopDirectInteractionTests
     }
 
     [Fact]
+    public void Body_click_keeps_every_real_loop_window_position_unchanged()
+    {
+        using var harness = new LoopHarness(CreateIdleBrain);
+        harness.Start();
+        var beforePress = harness.WindowPosition;
+
+        harness.Press(DirectInteractionTarget.Body, outwardSign: 0);
+        harness.Tick();
+        harness.Release();
+        harness.Tick();
+
+        Assert.Equal(PetState.ClickReaction, harness.Renders[^1].Core.State);
+        Assert.All(harness.WindowPositions, position => Assert.Equal(beforePress, position));
+    }
+
+    [Fact]
     public void Locked_cheek_rejects_a_second_body_press()
     {
         using var harness = new LoopHarness(CreateIdleBrain);
