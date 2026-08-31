@@ -1,0 +1,87 @@
+{
+  "Candidate": "body-drag-v1-attempt-1-provisional-unverified",
+  "FrameCount": 12,
+  "FrameWidth": 96,
+  "FrameHeight": 96,
+  "TimelineMs": {
+    "Entry": 380,
+    "Hold": 160,
+    "Settle": 260,
+    "Total": 800
+  },
+  "CanonicalSha256": "699348D1973709F228D843341AC5312AA7F449D57B9BFC76576256231E259A78",
+  "Frames": [
+    {
+      "Index": 0,
+      "Name": "body-drag-entry-00-press.png",
+      "IntendedBottomY": 88,
+      "Sha256": "699348D1973709F228D843341AC5312AA7F449D57B9BFC76576256231E259A78"
+    },
+    {
+      "Index": 1,
+      "Name": "body-drag-entry-01-lengthen.png",
+      "IntendedBottomY": 89,
+      "Sha256": "AFAB5A6E3224003937A5E0D130DA93DDA0A29C847720F2EB47E4F46BBAAE8782"
+    },
+    {
+      "Index": 2,
+      "Name": "body-drag-entry-02-drop.png",
+      "IntendedBottomY": 90,
+      "Sha256": "E482F791BACD6EA8168E1A0CEA6081982C02B161C40CD543C13567424EA8CFA9"
+    },
+    {
+      "Index": 3,
+      "Name": "body-drag-entry-03-stretch.png",
+      "IntendedBottomY": 92,
+      "Sha256": "40F28DE4AA4F5899295420ED6B17620E276D05DEC8D9D8FEDCF55C1E7F923F43"
+    },
+    {
+      "Index": 4,
+      "Name": "body-drag-entry-04-dangle.png",
+      "IntendedBottomY": 94,
+      "Sha256": "FEA4EDBC9C177DB50BCF3110B2DB0AA50BA43A865554947096B1AC9907C78EB4"
+    },
+    {
+      "Index": 5,
+      "Name": "body-drag-entry-05-near-hang.png",
+      "IntendedBottomY": 95,
+      "Sha256": "F8A5A773A014A2E37DEFAE2C1A231EB9C5858D45A63928B63ECEDCFBC4489936"
+    },
+    {
+      "Index": 6,
+      "Name": "body-drag-entry-06-hang.png",
+      "IntendedBottomY": 95,
+      "Sha256": "7716E8684BB04A7FEB56BD3CBCEF5AE7E81FEC67D4BD240B5B8892C52E5A409E"
+    },
+    {
+      "Index": 7,
+      "Name": "body-drag-settle-00-hang.png",
+      "IntendedBottomY": 95,
+      "Sha256": "7716E8684BB04A7FEB56BD3CBCEF5AE7E81FEC67D4BD240B5B8892C52E5A409E"
+    },
+    {
+      "Index": 8,
+      "Name": "body-drag-settle-01-lift.png",
+      "IntendedBottomY": 94,
+      "Sha256": "30E32D846DE18E6612DFB2A71DE2247627263A5EE35747666B29CABC34362857"
+    },
+    {
+      "Index": 9,
+      "Name": "body-drag-settle-02-gather.png",
+      "IntendedBottomY": 92,
+      "Sha256": "40F28DE4AA4F5899295420ED6B17620E276D05DEC8D9D8FEDCF55C1E7F923F43"
+    },
+    {
+      "Index": 10,
+      "Name": "body-drag-settle-03-land.png",
+      "IntendedBottomY": 90,
+      "Sha256": "20D139FDE3368185056C6E7BA98547DEDAC4E19BEBB8F6F3E84161C113FF7991"
+    },
+    {
+      "Index": 11,
+      "Name": "body-drag-settle-04-recover.png",
+      "IntendedBottomY": 88,
+      "Sha256": "699348D1973709F228D843341AC5312AA7F449D57B9BFC76576256231E259A78"
+    }
+  ]
+}

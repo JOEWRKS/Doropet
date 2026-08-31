@@ -13,6 +13,18 @@
     <Resource Include="Assets\dororong-sleep-crouch-squint.png" />
     <Resource Include="Assets\dororong-sleep-tuck-closed.png" />
     <Resource Include="Assets\dororong-sleep-tuck-squint.png" />
+    <Resource Include="Assets\body-drag-entry-00-press.png" />
+    <Resource Include="Assets\body-drag-entry-01-lengthen.png" />
+    <Resource Include="Assets\body-drag-entry-02-drop.png" />
+    <Resource Include="Assets\body-drag-entry-03-stretch.png" />
+    <Resource Include="Assets\body-drag-entry-04-dangle.png" />
+    <Resource Include="Assets\body-drag-entry-05-near-hang.png" />
+    <Resource Include="Assets\body-drag-entry-06-hang.png" />
+    <Resource Include="Assets\body-drag-settle-00-hang.png" />
+    <Resource Include="Assets\body-drag-settle-01-lift.png" />
+    <Resource Include="Assets\body-drag-settle-02-gather.png" />
+    <Resource Include="Assets\body-drag-settle-03-land.png" />
+    <Resource Include="Assets\body-drag-settle-04-recover.png" />
     <None Include="Assets\dororong-canonical-source.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
