@@ -31,6 +31,8 @@ internal sealed class DirectInteractionPressEventArgs : EventArgs
 
 public partial class DororongPresenter : UserControl
 {
+    private const double FrameMaximumCoordinate = 95;
+
     private static readonly BitmapImage CanonicalFrame = LoadFrame("dororong-canonical.png");
     private static readonly BitmapImage BlinkSquintFrame = LoadFrame("dororong-blink-squint.png");
     private static readonly BitmapImage ClosedEyesFrame = LoadFrame("dororong-closed-eyes.png");
@@ -39,12 +41,12 @@ public partial class DororongPresenter : UserControl
     private static readonly BitmapImage SleepCrouchSquintFrame = LoadFrame("dororong-sleep-crouch-squint.png");
     private static readonly BitmapImage SleepTuckClosedFrame = LoadFrame("dororong-sleep-tuck-closed.png");
     private static readonly BitmapImage SleepTuckSquintFrame = LoadFrame("dororong-sleep-tuck-squint.png");
-    private static readonly CrossfadeFrame CanonicalCrossfadeFrame = new(CanonicalFrame);
-    private static readonly CrossfadeFrame BlinkSquintCrossfadeFrame = new(BlinkSquintFrame);
-    private static readonly CrossfadeFrame ClosedEyesCrossfadeFrame = new(ClosedEyesFrame);
-    private static readonly CrossfadeFrame SleepCrouchClosedCrossfadeFrame = new(SleepCrouchClosedFrame);
-    private static readonly CrossfadeFrame SleepTuckClosedCrossfadeFrame = new(SleepTuckClosedFrame);
-    private static readonly CrossfadeFrame SleepCrossfadeFrame = new(SleepFrame);
+    private static readonly CrossfadeFrame CanonicalCrossfadeFrame = new(CanonicalFrame, FrameInteractionDescriptor.Canonical);
+    private static readonly CrossfadeFrame BlinkSquintCrossfadeFrame = new(BlinkSquintFrame, FrameInteractionDescriptor.Canonical);
+    private static readonly CrossfadeFrame ClosedEyesCrossfadeFrame = new(ClosedEyesFrame, FrameInteractionDescriptor.Canonical);
+    private static readonly CrossfadeFrame SleepCrouchClosedCrossfadeFrame = new(SleepCrouchClosedFrame, FrameInteractionDescriptor.SleepCrouch);
+    private static readonly CrossfadeFrame SleepTuckClosedCrossfadeFrame = new(SleepTuckClosedFrame, FrameInteractionDescriptor.SleepTuck);
+    private static readonly CrossfadeFrame SleepCrossfadeFrame = new(SleepFrame, FrameInteractionDescriptor.SettledSleep);
 
     private PetState? _lastRenderedState;
     private bool _sleepEntryComplete;
@@ -153,10 +155,22 @@ public partial class DororongPresenter : UserControl
         }
 
         ApplyWakeBridge(snapshot.State, p);
-        _activeInteractionDescriptor = FrameInteractionDescriptor.Canonical;
-        _activeFacing = snapshot.Facing;
+        _activeFacing = BodyScaleTransform.ScaleX < 0
+            ? FacingDirection.Left
+            : FacingDirection.Right;
         _lastRenderedState = snapshot.State;
     }
+
+    internal DirectInteractionTarget ClassifyOpaqueSourcePoint(PointD sourcePosition, bool opaque) =>
+        _activeInteractionDescriptor.Classify(
+            GetVisibleFramePoint(sourcePosition),
+            _activeFacing,
+            opaque);
+
+    private PointD GetVisibleFramePoint(PointD sourcePosition) =>
+        _activeFacing == FacingDirection.Left
+            ? new PointD(FrameMaximumCoordinate - sourcePosition.X, sourcePosition.Y)
+            : sourcePosition;
 
     private static bool SupportsWakeBridge(PetState state) =>
         state is PetState.Curious or PetState.Startled or PetState.ClickReaction;
@@ -208,12 +222,14 @@ public partial class DororongPresenter : UserControl
         if (opacity <= 0)
         {
             DororongImage.Source = from.Source;
+            _activeInteractionDescriptor = from.InteractionDescriptor;
             return;
         }
 
         if (opacity >= 1)
         {
             DororongImage.Source = to.Source;
+            _activeInteractionDescriptor = to.InteractionDescriptor;
             return;
         }
 
@@ -236,11 +252,16 @@ public partial class DororongPresenter : UserControl
             from.Stride);
         blended.Freeze();
         DororongImage.Source = blended;
+        _activeInteractionDescriptor = FrameInteractionDescriptor.Interpolate(
+            from.InteractionDescriptor,
+            to.InteractionDescriptor,
+            opacity);
     }
 
     private void ApplySettledSleep(double phase)
     {
         DororongImage.Source = SleepFrame;
+        _activeInteractionDescriptor = FrameInteractionDescriptor.SettledSleep;
         DororongImage.RenderTransformOrigin = new Point(0.435630, 0.854167);
         ApplyBreathing((phase - 0.135 + 1) % 1);
     }
@@ -263,10 +284,12 @@ public partial class DororongPresenter : UserControl
         if (phase < firstLimit)
         {
             DororongImage.Source = SleepTuckSquintFrame;
+            _activeInteractionDescriptor = FrameInteractionDescriptor.SleepTuck;
         }
         else if (phase < secondLimit)
         {
             DororongImage.Source = SleepCrouchSquintFrame;
+            _activeInteractionDescriptor = FrameInteractionDescriptor.SleepCrouch;
         }
         else
         {
@@ -310,13 +333,18 @@ public partial class DororongPresenter : UserControl
         DororongImage.RenderTransformOrigin = new Point(0.428987, 0.916667);
         DororongImage.Source = CanonicalFrame;
         DororongImage.Opacity = 1;
+        _activeInteractionDescriptor = FrameInteractionDescriptor.Canonical;
+        _activeFacing = FacingDirection.Right;
     }
 
     private sealed class CrossfadeFrame
     {
-        public CrossfadeFrame(BitmapImage source)
+        public CrossfadeFrame(
+            BitmapImage source,
+            FrameInteractionDescriptor interactionDescriptor)
         {
             Source = source;
+            InteractionDescriptor = interactionDescriptor;
             var converted = new FormatConvertedBitmap(source, PixelFormats.Pbgra32, null, 0);
             Stride = converted.PixelWidth * 4;
             Pixels = new byte[Stride * converted.PixelHeight];
@@ -324,6 +352,8 @@ public partial class DororongPresenter : UserControl
         }
 
         public BitmapImage Source { get; }
+
+        public FrameInteractionDescriptor InteractionDescriptor { get; }
 
         public byte[] Pixels { get; }
 
@@ -345,12 +375,13 @@ public partial class DororongPresenter : UserControl
 
     private void OnBodyPrimaryPressed(object sender, MouseButtonEventArgs e)
     {
-        if (!DororongImage.TryGetOpaqueSourcePoint(e.GetPosition(DororongImage), out var framePosition))
+        if (!DororongImage.TryGetOpaqueSourcePoint(e.GetPosition(DororongImage), out var sourcePosition))
         {
             return;
         }
 
-        var target = _activeInteractionDescriptor.Classify(framePosition, _activeFacing, opaque: true);
+        var framePosition = GetVisibleFramePoint(sourcePosition);
+        var target = ClassifyOpaqueSourcePoint(sourcePosition, opaque: true);
         if (target == DirectInteractionTarget.None)
         {
             return;

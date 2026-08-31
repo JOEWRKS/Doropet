@@ -21,6 +21,31 @@ internal sealed class FrameInteractionDescriptor
         leftCheek: new RectD(48, 48, 18, 17),
         rightCheek: new RectD(22, 48, 18, 17));
 
+    internal static FrameInteractionDescriptor SleepCrouch { get; } = new(
+        leftCheek: new RectD(37, 53, 18, 17),
+        rightCheek: new RectD(14, 53, 18, 17));
+
+    internal static FrameInteractionDescriptor SleepTuck { get; } = new(
+        leftCheek: new RectD(34, 59, 17, 16),
+        rightCheek: new RectD(12, 59, 18, 16));
+
+    internal static FrameInteractionDescriptor SettledSleep { get; } = new(
+        leftCheek: new RectD(33, 55, 17, 16),
+        rightCheek: new RectD(12, 55, 18, 16));
+
+    internal static FrameInteractionDescriptor Interpolate(
+        FrameInteractionDescriptor from,
+        FrameInteractionDescriptor to,
+        double progress)
+    {
+        ArgumentNullException.ThrowIfNull(from);
+        ArgumentNullException.ThrowIfNull(to);
+        var amount = Math.Clamp(progress, 0, 1);
+        return new FrameInteractionDescriptor(
+            Interpolate(from._leftCheek, to._leftCheek, amount),
+            Interpolate(from._rightCheek, to._rightCheek, amount));
+    }
+
     internal DirectInteractionTarget Classify(
         PointD sourcePoint,
         FacingDirection facing,
@@ -64,4 +89,11 @@ internal sealed class FrameInteractionDescriptor
         point.X < rectangle.Right &&
         point.Y >= rectangle.Y &&
         point.Y < rectangle.Bottom;
+
+    private static RectD Interpolate(RectD from, RectD to, double progress) =>
+        new(
+            from.X + ((to.X - from.X) * progress),
+            from.Y + ((to.Y - from.Y) * progress),
+            from.Width + ((to.Width - from.Width) * progress),
+            from.Height + ((to.Height - from.Height) * progress));
 }
