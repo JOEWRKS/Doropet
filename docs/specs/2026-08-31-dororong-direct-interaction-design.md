@@ -71,10 +71,10 @@ Release below the threshold confirms the existing `CLICK_REACTION`. The target v
 
 1. about 80 ms: subtle press/squash;
 2. about 150 ms: short upward hop;
-3. about 100 ms: airborne apex with all four legs briefly dangling;
+3. about 100 ms: brief airborne apex using the unchanged accepted body silhouette;
 4. about 170 ms: descent, land/compress, and recovery to the canonical resting pose.
 
-The expression is a happy squint or wink. It must not reuse the surprised expression or retreat language of `STARTLED`.
+The expression is a happy squint or wink. It must not reuse the surprised expression or retreat language of `STARTLED`. The short body click does not introduce a newly drawn body or leg pose: the accepted canonical character artwork and accepted expression assets are transformed as a whole. A separate four-leg dangling drawing is deferred until a complete identity-preserving authored pose is approved.
 
 If the user holds the press without crossing the threshold, the pending press pose may hold without advancing the confirmed click timeline. Release begins or continues the authored click reaction from a visually compatible press frame, without a one-frame reset to the canonical pose.
 
@@ -160,6 +160,8 @@ Threshold comparison uses the operating system's current drag metrics in the sam
 
 Every key image is a complete 96x96 character asset with transparency. Face-piece, eye-only, cheek-only, or body-only overlays are not production frames. The exact canonical head, hair, rose, bow, ribbons, approved outline, no-tail identity, and non-target anatomy are preserved outside the intended deformation.
 
+The body-click slice is an explicit exception to authored key-image production. It reuses the exact accepted canonical and happy-expression character assets and produces the press, hop, apex, land, and recovery read with whole-character scale and translation only. It does not erase, redraw, replace, or procedurally synthesize the body or legs. Body-drag and cheek deformation still require complete approved character images under the rules below.
+
 The rough user sketch is used as the silhouette basis for the body-hang family and as the interaction-location basis for the cheeks. It does not replace the canonical asset as the character-identity source.
 
 ### 5.2 Coherent sequential authoring
@@ -179,7 +181,7 @@ Additional key images are added only when they close an observed pose or timing 
 
 The initial production targets are ranges, not immutable quotas:
 
-- body click: roughly 8–10 authored key images covering press, lift, apex, dangle, descent, land, and recovery;
+- body click: no new body-pose images; sample the accepted character asset continuously through press, lift, apex, descent, land, and recovery transforms;
 - body drag entry: roughly 6–8 authored key images from canonical/pending press to the full hanging pose;
 - body drag release/settle: roughly 4–6 authored key images;
 - cheek interaction, per side: roughly 5–7 authored key images from press through half and full pull;
@@ -189,19 +191,21 @@ Reversing or reusing frames is allowed only when normal-speed playback remains v
 
 ### 5.4 Runtime interpolation
 
-Runtime may interpolate between adjacent approved key images at a nominal 16 ms presentation cadence. Interpolation is composed into one premultiplied `Pbgra` surface per displayed frame. It must not reduce the opacity of the entire character or stack partially transparent WPF character controls in a way that creates an alpha dip, washed-out silhouette, or double-image ghost.
+Runtime may interpolate between adjacent approved key images at a nominal 16 ms presentation cadence. For the body-click exception, runtime samples continuous whole-character scale and translation transforms at that cadence while the accepted source image remains unchanged. Interpolation is composed into one premultiplied `Pbgra` surface per displayed frame when image families are involved. It must not reduce the opacity of the entire character or stack partially transparent WPF character controls in a way that creates an alpha dip, washed-out silhouette, or double-image ghost.
 
 Interpolation is a timing bridge between already coherent neighbors; it is not a substitute for an authored missing pose. If adjacent frames have materially different anatomy, anchor, or scale, the art family must be corrected before integration.
 
 ### 5.5 Candidate review package
 
-Before any family is integrated into product assets, it is shown as:
+Before any authored family is integrated into product assets, it is shown as:
 
 1. all native 96x96 frames in sequence;
 2. a nearest-neighbor enlarged strip on a contrasting background;
 3. normal-speed playback with production-intent timing.
 
 The root worker performs the visual check first. A candidate with a visible identity, anatomy, anchor, opacity, or timing defect is corrected before it is shown to the user. User approval of that exact candidate family is required before product integration. Approval of one family does not approve the later families.
+
+For the transform-only body click, the equivalent package is a native-scale rendered timeline, a nearest-neighbor enlarged timeline, and normal-speed playback produced from the exact accepted source image and transform sampler. No body-click art asset is promoted.
 
 ## 6. Motion timelines
 
@@ -213,7 +217,7 @@ The initial target is approximately 500 ms after click confirmation:
 |---|---:|---|
 | press/squash | ~80 ms | subtle compression; no fear expression |
 | lift | ~150 ms | clear upward impulse without head/body separation |
-| apex/dangle | ~100 ms | four legs briefly dangle; happy squint or wink |
+| apex | ~100 ms | unchanged accepted body silhouette is visibly airborne; happy squint or wink |
 | descent/land/recover | ~170 ms | readable contact, one small compression, canonical rest |
 
 Timing can be calibrated during actual Windows observation, but it must preserve the four-part read and remain distinct from `STARTLED`.
@@ -236,7 +240,7 @@ Work proceeds in small, user-observable slices:
 
 1. **Attempt-38 sleep crossfade checkpoint.** Preserve the current sleep-crossfade work separately before direct-interaction implementation. The user described its result as `나쁘지 않다`; that statement must not be inflated into proof that the work is committed, that all Stage A routes pass, or that broader M1 is complete.
 2. **Input target metadata and tests.** Add locked `Body`/`LeftCheek`/`RightCheek` classification, visible-frame anchors, capture/cancellation behavior, and deterministic input tests without yet integrating unapproved interaction art.
-3. **Body click.** Produce the multi-frame candidate package, perform root visual review, obtain user approval, integrate it, and run body-click actual-Windows acceptance.
+3. **Body click.** Preserve the exact accepted character artwork, implement the transform-only press/hop/land timeline, perform root visual review on rendered output, then run body-click actual-Windows acceptance. Rejected procedural/generated body-pose candidates remain evidence only and are never product assets.
 4. **Body drag.** Produce and approve entry/hang/release art, integrate threshold and presentation behavior, then verify grab offset, bounds, and release on Windows.
 5. **Cheeks.** Produce and approve left and right cheek families, integrate press/pull/release, then verify both sides and window immobility on Windows.
 6. **Final non-interference.** Recheck transparent click-through, alpha hit regions across animation frames, no focus theft, topmost behavior, work-area bounds, capture cleanup, and explicit Exit.
@@ -277,6 +281,8 @@ Each exact approved art family must prove:
 - readable motion at normal speed, not only in a slowed strip.
 
 Repository image analysis and rendered playback can reject a candidate. They cannot promote an unobserved user-facing interaction to actual-Windows `PASS`.
+
+The transform-only body click instead proves that every sampled frame uses an exact accepted source image, keeps opacity at 1, changes only the permitted whole-character transforms and accepted expression selection, preserves one visible character surface, leaves the window position unchanged, and returns exactly to the canonical rest transform. Rendered normal-speed playback must show no float-like drift, stepped movement, clipping, or anatomy substitution.
 
 ### 8.3 Actual Windows acceptance
 

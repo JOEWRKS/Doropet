@@ -22,10 +22,10 @@
 - Use the current Windows system drag threshold in one consistent DIP coordinate space; no hanging frame appears before the body threshold is crossed.
 - A cheek press/pull never moves the window and never emits body click or body drag.
 - Direct interaction wakes `SLEEP`, resets inactivity, and suppresses proximity reactions while its local presentation is active.
-- Body click targets roughly 500 ms; cheek release targets roughly 220 ms; cheek effective pull is clamped near 20 DIPs.
+- Body click targets roughly 500 ms using exact accepted artwork plus whole-character transforms only; cheek release targets roughly 220 ms; cheek effective pull is clamped near 20 DIPs.
 - Every production key is a complete 96x96 transparent character image. Eye-only, face-only, cheek-only, and body-only overlays are forbidden.
 - Author each next image from its immediate neighbor with onion-skin comparison. More frames do not excuse head, ornament, limb, anchor, alpha, or outline drift.
-- Candidate frame count starts at body click 8–10, drag entry 6–8, drag settle 4–6, cheek pull 5–7 per side, and cheek spring 4–6 per side. Counts change only when visual evidence shows a continuity gap or redundant noise.
+- Body click creates no new body-pose art. Candidate frame count starts at drag entry 6–8, drag settle 4–6, cheek pull 5–7 per side, and cheek spring 4–6 per side. Counts change only when visual evidence shows a continuity gap or redundant noise.
 - Before product integration, show native frames, a nearest-neighbor enlarged strip, and normal-speed playback. Root visual review precedes user review; user approval is exact-family-specific.
 - Interpolate only adjacent approved keys on one premultiplied `Pbgra32` surface at the nominal 16 ms presentation tick. Do not crossfade whole WPF controls.
 - Transparent pixels remain click-through, keyboard focus remains with the user's work, topmost behavior and work-area clamping remain unchanged, and Exit remains explicit.
@@ -59,7 +59,7 @@
 |---|---|---|---|
 | DI-INPUT-1 | One opaque pointer-down locks exactly one anatomical cheek or body target until release/cancel. | deterministic app tests | logic only |
 | DI-INPUT-2 | Transparent pixels classify nothing and remain click-through. | alpha tests plus actual Windows control-behind check | Windows item remains `UNVERIFIED` until observed |
-| DI-CLICK-1 | Short body click reads press → hop → four-leg dangle → land/recover with a happy expression. | approved exact frame family and normal-speed playback | visual family-specific |
+| DI-CLICK-1 | Short body click reads press → whole-character hop/apex → land/recover with a happy expression while retaining the accepted body silhouette. | exact source-image identity, transform samples, and normal-speed playback | rendered transform-specific |
 | DI-DRAG-1 | Threshold crossing, never pending press, begins the sketch-derived long hanging silhouette without grab-point jump. | core/app tests, approved frame family, Windows drag | layered verdicts kept separate |
 | DI-CHEEK-1 | Each cheek presses/pulls outward independently, clamps near 20 DIPs, springs back near 220 ms, and never moves the window. | app math/render tests and Windows observation | layered verdicts kept separate |
 | DI-ID-1 | Every frame preserves protected hair, rose, bow, ribbons, face placement, outline character, no-tail identity, and non-target anatomy. | exact asset comparison and root visual check | user approval required before integration |
@@ -446,55 +446,25 @@
   git commit -m "refactor: share premultiplied frame sequencing"
   ```
 
-### Task 5: Produce and approve the body-click multi-image family
+### Task 5: Close rejected body-click art candidates without promotion
 
 **Files:**
-- Create after approval: `src/Dororong.App/Assets/frame-sources/interactions/body-click/body-click-00-press.png` through `body-click-08-recover.png`
-- Create after approval: matching files under `src/Dororong.App/Assets/Interactions/BodyClick/`
-- Create: `tests/Dororong.App.DirectInteractionAssets.Tests.ps1`
-- Modify: `src/Dororong.App/Dororong.App.csproj`
-- Candidate only: `artifacts/candidates/direct-interactions/body-click-v1/`
+- Preserve as rejected evidence only: `artifacts/candidates/direct-interactions/body-click-v1/` through `body-click-v5/`
+- Do not create: `src/Dororong.App/Assets/frame-sources/interactions/body-click/`
+- Do not create: `src/Dororong.App/Assets/Interactions/BodyClick/`
+- Remove the obsolete RED-only body-click asset test; Task 6 tests rendered transforms instead.
 
 **Interfaces:**
-- Consumes: canonical frame identity and the approved 80/150/100/170 ms click timeline.
-- Produces: nine approved complete-character keys: press, compress, lift, rise, apex, dangle, fall, land, recover.
+- Consumes: failed root/user visual review of procedural and generated body-pose candidates.
+- Produces: a closed boundary that no candidate bytes become product assets and hands the exact accepted artwork to Task 6.
 
-- [ ] **Step 1: Write asset checks before adding product files**
+- [ ] **Step 1: Preserve and classify the failed attempts**
 
-  Require nine ordered 96x96 RGBA assets; nonzero alpha; no tail; exactly four readable legs at apex/dangle; canonical hair/rose/bow/ribbons outside the intended moving silhouette; stable head scale/anchor; and no one-frame protrusion, missing contour, transparent RGB fringe, or ornament redraw. Expected RED: body-click product directory absent.
+  Keep v1-v5 immutable as candidate evidence. Record that generated candidates drifted from Dororong identity and procedural candidates replaced the accepted body with geometric contours. They are `FAIL`, not product art.
 
-- [ ] **Step 2: Create one coherent candidate sheet**
+- [ ] **Step 2: Confirm the product boundary**
 
-  Use the `imagegen` skill with the exact canonical PNG as identity reference and the approved timeline as motion reference. Request one horizontal nine-panel transparent sprite sheet so all poses are solved together, not nine independent generations. The happy expression is a squint/wink; the silhouette shows press → hop → four dangling legs → land and never reads as `STARTLED`.
-
-  If the generated sheet changes protected identity, reject it before extraction. One evidence-based edit may correct the demonstrated defect; a second failed method stops the candidate and asks the user rather than silently integrating drift.
-
-- [ ] **Step 3: Extract sequentially and perform root visual check**
-
-  Extract to 96x96 cells in the candidate directory, then produce:
-
-  ```text
-  body-click-native-strip.png
-  body-click-nearest-4x.png
-  body-click-500ms.gif
-  body-click-metrics.json
-  ```
-
-  Compare each image with its immediate neighbor using onion-skin/difference views. Root rejects anatomy, anchor, alpha, timing, or identity failures before showing anything to the user.
-
-- [ ] **Step 4: Obtain exact-family user approval before integration**
-
-  Show the enlarged strip and normal-speed 500 ms playback. Record approval or the exact failing image/transition. Do not copy candidate files into `src/` while approval is absent.
-
-- [ ] **Step 5: Promote the approved exact bytes and commit assets**
-
-  Copy the approved nine images byte-for-byte into both source and runtime directories, add explicit WPF `Resource` entries, run the asset test, record each SHA-256, and commit:
-
-  ```powershell
-  git add -- src/Dororong.App/Assets src/Dororong.App/Dororong.App.csproj tests/Dororong.App.DirectInteractionAssets.Tests.ps1
-  git diff --cached --check
-  git commit -m "art: add approved body click frames"
-  ```
+  Verify no body-click product asset directory, WPF resource entry, or candidate hash was promoted. Remove only the obsolete uncommitted RED asset test created for the abandoned approach.
 
 ### Task 6: Integrate and observe body click
 
@@ -504,24 +474,24 @@
 - Create after observation: `docs/verification/2026-08-31-m1-direct-interaction-body-click-attempt-1.md`
 
 **Interfaces:**
-- Consumes: approved Task 5 sequence and `PetState.ClickReaction` phase.
-- Produces: subtle pending press plus exact 500 ms press/lift/apex/dangle/descent/land/recover playback.
+- Consumes: exact accepted canonical/happy-expression assets and `PetState.ClickReaction` phase.
+- Produces: subtle pending press plus approximately 500 ms whole-character press/lift/apex/descent/land/recover transforms with no new body artwork.
 
 - [ ] **Step 1: Write WPF RED tests**
 
-  Sample pending press and `CLICK_REACTION` at every 16 ms tick. Require the ordered nine-key family, exact endpoint assets, full image opacity 1, one visible character surface, stable protected head/ornament regions, and no hanging drag key before threshold. Expected RED: current presenter only translates the canonical frame upward.
+  Sample pending press and `CLICK_REACTION` at every 16 ms tick. Require exact accepted source-image selection, full image opacity 1, one visible character surface, continuous whole-character scale/Y transforms, unchanged window position, exact canonical rest transform at completion, and no hanging drag pose before threshold. Expected RED: the current presenter has no confirmed-click transform timeline.
 
-- [ ] **Step 2: Map click phase to the approved sequence**
+- [ ] **Step 2: Map click phase to the transform-only timeline**
 
-  Pending body press samples the first subtle press key without advancing. `CLICK_REACTION` maps phase across approximately 80/150/100/170 ms and samples adjacent approved keys through `PremultipliedFrameSequence`. Keep window position unchanged and use no new `PetState`.
+  Pending body press holds a subtle foot-anchored scale compression. `CLICK_REACTION` maps phase across approximately 80/150/100/170 ms and continuously samples foot-anchored scale plus whole-character Y translation. Reuse only exact accepted character/expression images, keep window position unchanged, keep opacity 1, and use no new `PetState`.
 
 - [ ] **Step 3: Run automated and rendered verification**
 
-  Run Core, App xUnit, asset, direct-render, sleep, and Release build checks. Render a native strip, nearest-neighbor strip, and production-speed GIF from the exact product resource. Root visual-check must compare it to the approved Task 5 hashes.
+  Run Core, App xUnit, direct-render, sleep, and Release build checks. Render a native strip, nearest-neighbor strip, and production-speed GIF from the exact accepted product image plus the production transform sampler. Root visual-check must compare source-image hashes and inspect the transform-only motion.
 
 - [ ] **Step 4: Publish once and request the body-click Windows observation**
 
-  Publish to `artifacts/repro/direct-interaction-body-click-attempt-1/runtime/`, record executable/DLL/assets hashes, and ask the user to check only: no stretch before release, happy hop/dangle/land readability, no focus theft, and transparent click-through on a known control behind the character. Keep any unobserved item `UNVERIFIED`.
+  Publish to `artifacts/repro/direct-interaction-body-click-attempt-1/runtime/`, record executable/DLL/assets hashes, and ask the user to check only: subtle pending press, happy hop/apex/land readability without art substitution, no focus theft, and transparent click-through on a known control behind the character. Keep any unobserved item `UNVERIFIED`.
 
 - [ ] **Step 5: Commit implementation and evidence separately**
 
