@@ -121,7 +121,14 @@ internal sealed class DirectInteractionController
         if (Current.Phase == DirectInteractionPhase.BodyPending && currentState == PetState.Dragged)
         {
             _phaseElapsedMilliseconds = 0;
-            Current = Current with { Phase = DirectInteractionPhase.BodyDragEntry, PointerPosition = pointerPosition, RequiresCapture = primaryButtonDown };
+            Current = Current with
+            {
+                Phase = DirectInteractionPhase.BodyDragEntry,
+                PointerPosition = pointerPosition,
+                Strength = 0,
+                ReleaseProgress = 0,
+                RequiresCapture = primaryButtonDown
+            };
             return Current;
         }
 
@@ -130,35 +137,74 @@ internal sealed class DirectInteractionController
             if (currentState != PetState.Dragged)
             {
                 _phaseElapsedMilliseconds = 0;
-                Current = Current with { Phase = DirectInteractionPhase.BodyDragSettle, PointerPosition = pointerPosition, RequiresCapture = false };
+                Current = Current with
+                {
+                    Phase = DirectInteractionPhase.BodyDragSettle,
+                    PointerPosition = pointerPosition,
+                    Strength = 1,
+                    ReleaseProgress = 0,
+                    RequiresCapture = false
+                };
                 return Current;
             }
 
             if (Current.Phase == DirectInteractionPhase.BodyDragEntry)
             {
                 _phaseElapsedMilliseconds += delta.TotalMilliseconds;
-                if (_phaseElapsedMilliseconds >= DragEntryDuration.TotalMilliseconds)
+                var progress = Math.Clamp(
+                    _phaseElapsedMilliseconds / DragEntryDuration.TotalMilliseconds,
+                    0,
+                    1);
+                if (progress >= 1)
                 {
                     _phaseElapsedMilliseconds = 0;
-                    Current = Current with { Phase = DirectInteractionPhase.BodyDragHold, PointerPosition = pointerPosition, RequiresCapture = primaryButtonDown };
+                    Current = Current with
+                    {
+                        Phase = DirectInteractionPhase.BodyDragHold,
+                        PointerPosition = pointerPosition,
+                        Strength = 1,
+                        RequiresCapture = primaryButtonDown
+                    };
                     return Current;
                 }
+
+                Current = Current with
+                {
+                    PointerPosition = pointerPosition,
+                    Strength = progress,
+                    RequiresCapture = primaryButtonDown
+                };
+                return Current;
             }
 
-            Current = Current with { PointerPosition = pointerPosition, RequiresCapture = primaryButtonDown };
+            Current = Current with
+            {
+                PointerPosition = pointerPosition,
+                Strength = 1,
+                RequiresCapture = primaryButtonDown
+            };
             return Current;
         }
 
         if (Current.Phase == DirectInteractionPhase.BodyDragSettle)
         {
             _phaseElapsedMilliseconds += delta.TotalMilliseconds;
-            if (_phaseElapsedMilliseconds >= DragSettleDuration.TotalMilliseconds)
+            var progress = Math.Clamp(
+                _phaseElapsedMilliseconds / DragSettleDuration.TotalMilliseconds,
+                0,
+                1);
+            if (progress >= 1)
             {
                 Cancel();
                 return Current;
             }
 
-            Current = Current with { PointerPosition = pointerPosition, RequiresCapture = false };
+            Current = Current with
+            {
+                PointerPosition = pointerPosition,
+                ReleaseProgress = progress,
+                RequiresCapture = false
+            };
             return Current;
         }
 

@@ -99,6 +99,67 @@ public sealed class DirectInteractionControllerTests
     }
 
     [Fact]
+    public void Body_drag_exposes_continuous_entry_hold_and_settle_progress()
+    {
+        var controller = new DirectInteractionController();
+        controller.Begin(DirectInteractionTarget.Body, new PointD(20, 30), 0);
+
+        var entered = controller.Advance(
+            TimeSpan.Zero,
+            new PointerSample(true, new PointD(28, 36)),
+            true,
+            PetState.Idle,
+            PetState.Dragged);
+        var entryHalfway = controller.Advance(
+            TimeSpan.FromMilliseconds(70),
+            new PointerSample(true, new PointD(40, 45)),
+            true,
+            PetState.Dragged,
+            PetState.Dragged);
+        var held = controller.Advance(
+            TimeSpan.FromMilliseconds(70),
+            new PointerSample(true, new PointD(50, 55)),
+            true,
+            PetState.Dragged,
+            PetState.Dragged);
+        var released = controller.Advance(
+            TimeSpan.Zero,
+            new PointerSample(true, new PointD(50, 55)),
+            false,
+            PetState.Dragged,
+            PetState.Idle);
+        var settleHalfway = controller.Advance(
+            TimeSpan.FromMilliseconds(90),
+            PointerSample.Unavailable,
+            false,
+            PetState.Idle,
+            PetState.Idle);
+        var completed = controller.Advance(
+            TimeSpan.FromMilliseconds(90),
+            PointerSample.Unavailable,
+            false,
+            PetState.Idle,
+            PetState.Idle);
+
+        Assert.Equal(DirectInteractionPhase.BodyDragEntry, entered.Phase);
+        Assert.Equal(0, entered.Strength);
+        Assert.Equal(new PointD(28, 36), entered.PointerPosition);
+        Assert.Equal(DirectInteractionPhase.BodyDragEntry, entryHalfway.Phase);
+        Assert.Equal(0.5, entryHalfway.Strength, 3);
+        Assert.Equal(new PointD(40, 45), entryHalfway.PointerPosition);
+        Assert.Equal(DirectInteractionPhase.BodyDragHold, held.Phase);
+        Assert.Equal(1, held.Strength);
+        Assert.Equal(new PointD(50, 55), held.PointerPosition);
+        Assert.Equal(DirectInteractionPhase.BodyDragSettle, released.Phase);
+        Assert.Equal(0, released.ReleaseProgress);
+        Assert.False(released.RequiresCapture);
+        Assert.Equal(DirectInteractionPhase.BodyDragSettle, settleHalfway.Phase);
+        Assert.Equal(0.5, settleHalfway.ReleaseProgress, 3);
+        Assert.Equal(new PointD(50, 55), settleHalfway.PointerPosition);
+        Assert.Equal(DirectInteractionSnapshot.None, completed);
+    }
+
+    [Fact]
     public void Drag_release_enters_local_settle_without_retaining_capture()
     {
         var controller = new DirectInteractionController();

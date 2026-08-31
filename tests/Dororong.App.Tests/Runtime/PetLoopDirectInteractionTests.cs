@@ -54,6 +54,39 @@ public sealed class PetLoopDirectInteractionTests
     }
 
     [Fact]
+    public void Body_drag_moves_on_the_threshold_tick_with_original_offset_then_settles_at_clamped_release()
+    {
+        using var harness = new LoopHarness(CreateIdleBrain);
+        harness.Start();
+        var beforePress = harness.WindowPosition;
+
+        harness.Press(DirectInteractionTarget.Body, outwardSign: 0);
+        harness.Tick();
+        harness.MovePointerBy(new PointD(20, 10));
+        harness.Tick();
+
+        var entered = harness.Renders[^1];
+        Assert.Equal(PetState.Dragged, entered.Core.State);
+        Assert.Equal(beforePress + new PointD(20, 10), harness.WindowPosition);
+        Assert.Equal(new PointD(60, 50), entered.Core.GrabOffset);
+        Assert.Equal(DirectInteractionPhase.BodyDragEntry, entered.Direct.Phase);
+        Assert.Equal(1, harness.CaptureCount);
+
+        harness.MovePointerTo(new PointD(900, 700));
+        harness.Tick();
+        Assert.Equal(new PointD(840, 650), harness.WindowPosition);
+
+        harness.Release();
+
+        var released = harness.Renders[^1];
+        Assert.Equal(PetState.Idle, released.Core.State);
+        Assert.Equal(new PointD(680, 500), harness.WindowPosition);
+        Assert.Null(released.Core.GrabOffset);
+        Assert.Equal(DirectInteractionPhase.BodyDragSettle, released.Direct.Phase);
+        Assert.Equal(1, harness.ReleaseCount);
+    }
+
+    [Fact]
     public void Locked_cheek_rejects_a_second_body_press()
     {
         using var harness = new LoopHarness(CreateIdleBrain);
@@ -220,6 +253,12 @@ public sealed class PetLoopDirectInteractionTests
             _elapsed += TimeSpan.FromMilliseconds(16);
             _tick?.Invoke(this, EventArgs.Empty);
         }
+
+        internal void MovePointerBy(PointD delta) =>
+            _pointer = new PointerSample(true, _pointer.Position + delta);
+
+        internal void MovePointerTo(PointD position) =>
+            _pointer = new PointerSample(true, position);
 
         internal void Release()
         {

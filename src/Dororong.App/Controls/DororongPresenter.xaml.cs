@@ -55,6 +55,20 @@ public partial class DororongPresenter : UserControl
     private static readonly PremultipliedFrameSequence ClosedEyesToSleepCrouchSequence = new([ClosedEyesPremultipliedFrame, SleepCrouchClosedPremultipliedFrame]);
     private static readonly PremultipliedFrameSequence SleepCrouchToSleepTuckSequence = new([SleepCrouchClosedPremultipliedFrame, SleepTuckClosedPremultipliedFrame]);
     private static readonly PremultipliedFrameSequence SleepTuckToSettledSleepSequence = new([SleepTuckClosedPremultipliedFrame, SleepPremultipliedFrame]);
+    private static readonly PremultipliedFrameSequence BodyDragEntrySequence = LoadFrameSequence(
+        "body-drag-entry-00-press.png",
+        "body-drag-entry-01-lengthen.png",
+        "body-drag-entry-02-drop.png",
+        "body-drag-entry-03-stretch.png",
+        "body-drag-entry-04-dangle.png",
+        "body-drag-entry-05-near-hang.png",
+        "body-drag-entry-06-hang.png");
+    private static readonly PremultipliedFrameSequence BodyDragSettleSequence = LoadFrameSequence(
+        "body-drag-settle-00-hang.png",
+        "body-drag-settle-01-lift.png",
+        "body-drag-settle-02-gather.png",
+        "body-drag-settle-03-land.png",
+        "body-drag-settle-04-recover.png");
 
     private PetState? _lastRenderedState;
     private bool _sleepEntryComplete;
@@ -69,6 +83,8 @@ public partial class DororongPresenter : UserControl
     private bool _bodyClickWakeClickStarted;
     private double _bodyClickWakeElapsedMilliseconds;
     private double _bodyClickWakeAtClickStartMilliseconds;
+    private bool _bodyDragPresentationActive;
+    private FacingDirection _bodyDragVisibleFacing = FacingDirection.Right;
 
     public DororongPresenter()
     {
@@ -85,6 +101,17 @@ public partial class DororongPresenter : UserControl
         var cycle = Math.Sin(p * Math.PI * 2);
         var bounce = Math.Sin(p * Math.PI);
         var bodyClickPresentationActive = IsBodyClickPresentationActive(snapshot, directInteraction);
+        var bodyDragPresentationActive = IsBodyDragPresentationActive(directInteraction);
+        if (bodyDragPresentationActive && !_bodyDragPresentationActive)
+        {
+            _bodyDragPresentationActive = true;
+            _bodyDragVisibleFacing = _activeFacing;
+        }
+        else if (!bodyDragPresentationActive)
+        {
+            _bodyDragPresentationActive = false;
+        }
+
         if (bodyClickPresentationActive && !_bodyClickPresentationActive)
         {
             _bodyClickPresentationActive = true;
@@ -207,6 +234,7 @@ public partial class DororongPresenter : UserControl
         ApplyBodyClickPresentation(snapshot, directInteraction);
         ApplyWakeBridge(snapshot.State, p);
         ApplyBodyClickWakeBridge(snapshot, directInteraction);
+        ApplyBodyDragPresentation(directInteraction);
         _activeFacing = BodyScaleTransform.ScaleX < 0
             ? FacingDirection.Left
             : FacingDirection.Right;
@@ -221,6 +249,15 @@ public partial class DororongPresenter : UserControl
         {
             Target: DirectInteractionTarget.Body,
             Phase: DirectInteractionPhase.BodyPending
+        };
+
+    private static bool IsBodyDragPresentationActive(DirectInteractionSnapshot directInteraction) =>
+        directInteraction is
+        {
+            Target: DirectInteractionTarget.Body,
+            Phase: DirectInteractionPhase.BodyDragEntry or
+                DirectInteractionPhase.BodyDragHold or
+                DirectInteractionPhase.BodyDragSettle
         };
 
     private void StartBodyClickWake()
@@ -331,6 +368,32 @@ public partial class DororongPresenter : UserControl
         {
             _bodyClickWakeActive = false;
         }
+    }
+
+    private void ApplyBodyDragPresentation(DirectInteractionSnapshot directInteraction)
+    {
+        var source = directInteraction.Phase switch
+        {
+            DirectInteractionPhase.BodyDragEntry => BodyDragEntrySequence.Sample(directInteraction.Strength),
+            DirectInteractionPhase.BodyDragHold => BodyDragEntrySequence.Sample(1),
+            DirectInteractionPhase.BodyDragSettle => BodyDragSettleSequence.Sample(directInteraction.ReleaseProgress),
+            _ => null
+        };
+        if (directInteraction.Target != DirectInteractionTarget.Body || source is null)
+        {
+            return;
+        }
+
+        BodyScaleTransform.ScaleX = _bodyDragVisibleFacing == FacingDirection.Left ? -1 : 1;
+        BodyScaleTransform.ScaleY = 1;
+        BodyRotateTransform.Angle = 0;
+        BodyTranslateTransform.X = 0;
+        BodyTranslateTransform.Y = 0;
+        ImageBreathingScaleTransform.ScaleX = 1;
+        ImageBreathingScaleTransform.ScaleY = 1;
+        DororongImage.Source = source;
+        DororongImage.Opacity = 1;
+        _activeInteractionDescriptor = FrameInteractionDescriptor.Canonical;
     }
 
     internal DirectInteractionTarget ClassifyOpaqueSourcePoint(PointD sourcePosition, bool opaque) =>
@@ -504,6 +567,11 @@ public partial class DororongPresenter : UserControl
         frame.Freeze();
         return frame;
     }
+
+    private static PremultipliedFrameSequence LoadFrameSequence(params string[] fileNames) =>
+        new(fileNames
+            .Select(fileName => PremultipliedFrame.From(LoadFrame(fileName)))
+            .ToArray());
 
     private void OnBodyPrimaryPressed(object sender, MouseButtonEventArgs e)
     {
