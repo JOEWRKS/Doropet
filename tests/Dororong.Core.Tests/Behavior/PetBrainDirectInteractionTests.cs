@@ -7,6 +7,50 @@ namespace Dororong.Core.Tests.Behavior;
 public sealed class PetBrainDirectInteractionTests
 {
     [Fact]
+    public void Local_cheek_interaction_wakes_sleep_and_suppresses_pointer_reaction()
+    {
+        var brain = PetTestInput.CreateSleepingBrain();
+
+        var woke = brain.Update(PetTestInput.At(
+            0.1,
+            pointer: new PointD(460, 150),
+            primaryDown: true,
+            localInteractionActive: true));
+        var approached = brain.Update(PetTestInput.At(
+            0.1,
+            pointer: new PointD(160, 150),
+            primaryDown: true,
+            localInteractionActive: true));
+
+        Assert.Equal(PetState.Idle, woke.State);
+        Assert.Equal(PetState.Idle, approached.State);
+        Assert.Equal(woke.Phase, approached.Phase, precision: 10);
+        Assert.False(approached.IsDirectInteractionPending);
+    }
+
+    [Fact]
+    public void Local_cheek_release_never_emits_click_or_drag()
+    {
+        var brain = PetTestInput.CreateReactionBrain();
+
+        var pressed = brain.Update(PetTestInput.At(
+            0.1,
+            primaryDown: true,
+            localInteractionActive: true));
+        var released = brain.Update(PetTestInput.At(
+            0.1,
+            primaryDown: false,
+            localInteractionActive: true));
+        var settled = brain.Update(PetTestInput.At(0.1));
+
+        Assert.Equal(PetState.Idle, pressed.State);
+        Assert.Equal(PetState.Idle, released.State);
+        Assert.Equal(PetState.Idle, settled.State);
+        Assert.False(settled.IsDirectInteractionPending);
+        Assert.Null(settled.GrabOffset);
+    }
+
+    [Fact]
     public void Confirmed_body_click_outranks_a_simultaneous_fast_approach()
     {
         var brain = PetTestInput.CreateReactionBrain();

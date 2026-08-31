@@ -19,7 +19,8 @@ public partial class MainWindow : Window
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
         Closed += OnClosed;
-        Presenter.BodyPrimaryPressed += OnBodyPrimaryPressed;
+        Presenter.DirectInteractionPressed += OnDirectInteractionPressed;
+        Presenter.LostMouseCapture += OnDirectInteractionCanceled;
         Presenter.ExitRequested += OnExitRequested;
     }
 
@@ -83,9 +84,14 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnBodyPrimaryPressed(object? sender, BodyPressEventArgs e)
+    private void OnDirectInteractionPressed(object? sender, DirectInteractionPressEventArgs e)
     {
-        _loop?.NotifyBodyPressed(e.LocalPosition);
+        _loop?.NotifyDirectInteractionPressed(e);
+    }
+
+    private void OnDirectInteractionCanceled(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        _loop?.NotifyDirectInteractionCanceled();
     }
 
     private void OnExitRequested(object? sender, EventArgs e)
@@ -134,7 +140,8 @@ public partial class MainWindow : Window
             () => SourceInitialized -= OnSourceInitialized,
             () => Loaded -= OnLoaded,
             () => Closed -= OnClosed,
-            () => Presenter.BodyPrimaryPressed -= OnBodyPrimaryPressed,
+            () => Presenter.DirectInteractionPressed -= OnDirectInteractionPressed,
+            () => Presenter.LostMouseCapture -= OnDirectInteractionCanceled,
             () => Presenter.ExitRequested -= OnExitRequested,
             () =>
             {

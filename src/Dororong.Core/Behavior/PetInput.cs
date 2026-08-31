@@ -8,5 +8,6 @@ public readonly record struct PetInput(
     SizeD PetSize,
     PointerSample Pointer,
     bool PrimaryButtonDown,
+    bool LocalInteractionActive,
     PointD? BodyPressPosition,
     SizeD DragThreshold);

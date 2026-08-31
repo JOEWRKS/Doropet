@@ -1,5 +1,6 @@
 using Dororong.Core.Behavior;
 using Dororong.Core.Geometry;
+using Dororong.App.Interaction;
 
 namespace Dororong.App.Runtime;
 
@@ -55,7 +56,7 @@ internal sealed class PetLoopHost
     private readonly Func<bool> _isPrimaryButtonDown;
     private readonly Func<PointD> _getWindowPosition;
     private readonly Action<PointD> _setWindowPosition;
-    private readonly Action<PetSnapshot> _render;
+    private readonly Action<PetSnapshot, DirectInteractionSnapshot> _render;
     private readonly Func<bool> _captureMouse;
     private readonly Action _releaseMouseCapture;
 
@@ -67,7 +68,7 @@ internal sealed class PetLoopHost
         Func<bool> isPrimaryButtonDown,
         Func<PointD> getWindowPosition,
         Action<PointD> setWindowPosition,
-        Action<PetSnapshot> render,
+        Action<PetSnapshot, DirectInteractionSnapshot> render,
         Func<bool> captureMouse,
         Action releaseMouseCapture)
     {
@@ -90,7 +91,8 @@ internal sealed class PetLoopHost
     internal bool IsPrimaryButtonDown() => _isPrimaryButtonDown();
     internal PointD GetWindowPosition() => _getWindowPosition();
     internal void SetWindowPosition(PointD position) => _setWindowPosition(position);
-    internal void Render(PetSnapshot snapshot) => _render(snapshot);
+    internal void Render(PetSnapshot snapshot, DirectInteractionSnapshot directInteraction) =>
+        _render(snapshot, directInteraction);
     internal bool CaptureMouse() => _captureMouse();
     internal void ReleaseMouseCapture() => _releaseMouseCapture();
 }

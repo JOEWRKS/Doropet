@@ -3,14 +3,30 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Dororong.App.Interaction;
 using Dororong.Core.Behavior;
 using Dororong.Core.Geometry;
 
 namespace Dororong.App.Controls;
 
-public sealed class BodyPressEventArgs(PointD localPosition) : EventArgs
+internal sealed class DirectInteractionPressEventArgs : EventArgs
 {
-    public PointD LocalPosition { get; } = localPosition;
+    internal DirectInteractionPressEventArgs(
+        DirectInteractionTarget target,
+        PointD windowLocalPosition,
+        PointD framePosition,
+        double outwardSign)
+    {
+        Target = target;
+        WindowLocalPosition = windowLocalPosition;
+        FramePosition = framePosition;
+        OutwardSign = outwardSign;
+    }
+
+    internal DirectInteractionTarget Target { get; }
+    internal PointD WindowLocalPosition { get; }
+    internal PointD FramePosition { get; }
+    internal double OutwardSign { get; }
 }
 
 public partial class DororongPresenter : UserControl
@@ -34,18 +50,21 @@ public partial class DororongPresenter : UserControl
     private bool _sleepEntryComplete;
     private PetState? _wakeBridgeState;
     private bool _wakeBridgeComplete;
+    private FrameInteractionDescriptor _activeInteractionDescriptor = FrameInteractionDescriptor.Canonical;
+    private FacingDirection _activeFacing = FacingDirection.Right;
 
     public DororongPresenter()
     {
         InitializeComponent();
     }
 
-    public event EventHandler<BodyPressEventArgs>? BodyPrimaryPressed;
+    internal event EventHandler<DirectInteractionPressEventArgs>? DirectInteractionPressed;
 
     public event EventHandler? ExitRequested;
 
-    public void Render(PetSnapshot snapshot)
+    internal void Render(PetSnapshot snapshot, DirectInteractionSnapshot directInteraction)
     {
+        _ = directInteraction;
         var p = Math.Clamp(snapshot.Phase, 0, 1);
         var cycle = Math.Sin(p * Math.PI * 2);
         var bounce = Math.Sin(p * Math.PI);
@@ -134,6 +153,8 @@ public partial class DororongPresenter : UserControl
         }
 
         ApplyWakeBridge(snapshot.State, p);
+        _activeInteractionDescriptor = FrameInteractionDescriptor.Canonical;
+        _activeFacing = snapshot.Facing;
         _lastRenderedState = snapshot.State;
     }
 
@@ -324,10 +345,25 @@ public partial class DororongPresenter : UserControl
 
     private void OnBodyPrimaryPressed(object sender, MouseButtonEventArgs e)
     {
-        var position = e.GetPosition(this);
-        BodyPrimaryPressed?.Invoke(
+        if (!DororongImage.TryGetOpaqueSourcePoint(e.GetPosition(DororongImage), out var framePosition))
+        {
+            return;
+        }
+
+        var target = _activeInteractionDescriptor.Classify(framePosition, _activeFacing, opaque: true);
+        if (target == DirectInteractionTarget.None)
+        {
+            return;
+        }
+
+        var windowPosition = e.GetPosition(this);
+        DirectInteractionPressed?.Invoke(
             this,
-            new BodyPressEventArgs(new PointD(position.X, position.Y)));
+            new DirectInteractionPressEventArgs(
+                target,
+                new PointD(windowPosition.X, windowPosition.Y),
+                framePosition,
+                _activeInteractionDescriptor.GetScreenOutwardSign(target, _activeFacing)));
         e.Handled = true;
     }
 

@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Dororong.Core.Geometry;
 
 namespace Dororong.App.Controls;
 
@@ -15,16 +16,28 @@ public sealed class AlphaHitTestImage : Image
 
     protected override HitTestResult? HitTestCore(PointHitTestParameters hitTestParameters)
     {
-        if (!TryMapToSourcePixel(hitTestParameters.HitPoint, out var pixelX, out var pixelY) ||
+        return TryGetOpaqueSourcePoint(hitTestParameters.HitPoint, out _)
+            ? new PointHitTestResult(this, hitTestParameters.HitPoint)
+            : null;
+    }
+
+    internal bool TryGetOpaqueSourcePoint(Point controlPoint, out PointD sourcePoint)
+    {
+        sourcePoint = default;
+        if (!TryMapToSourcePixel(controlPoint, out var pixelX, out var pixelY) ||
             !TryCachePixels())
         {
-            return null;
+            return false;
         }
 
         var alpha = _pixels![(pixelY * _stride) + (pixelX * 4) + 3];
-        return alpha == 0
-            ? null
-            : new PointHitTestResult(this, hitTestParameters.HitPoint);
+        if (alpha == 0)
+        {
+            return false;
+        }
+
+        sourcePoint = new PointD(pixelX, pixelY);
+        return true;
     }
 
     private bool TryMapToSourcePixel(Point point, out int pixelX, out int pixelY)

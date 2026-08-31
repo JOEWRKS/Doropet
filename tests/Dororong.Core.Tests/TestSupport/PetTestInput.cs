@@ -9,6 +9,7 @@ internal static class PetTestInput
         double seconds,
         PointD? pointer = null,
         bool primaryDown = false,
+        bool localInteractionActive = false,
         PointD? bodyPressPosition = null,
         RectD? workArea = null) => new(
         TimeSpan.FromSeconds(seconds),
@@ -16,6 +17,7 @@ internal static class PetTestInput
         new SizeD(120, 100),
         pointer is { } position ? new PointerSample(true, position) : PointerSample.Unavailable,
         primaryDown,
+        localInteractionActive,
         bodyPressPosition,
         new SizeD(4, 4));
 

@@ -90,6 +90,11 @@ public sealed class PetBrain
             return Current;
         }
 
+        if (input.LocalInteractionActive)
+        {
+            return Current;
+        }
+
         var remaining = delta;
         while (remaining > TimeSpan.Zero)
         {
@@ -171,7 +176,22 @@ public sealed class PetBrain
             _pressPosition = pressPosition;
             _grabOffset = pressPosition - _position;
             ResetInactivity();
+            if (_state == PetState.Sleep)
+            {
+                StartIdle();
+            }
+
             handled = true;
+        }
+        else if (input.LocalInteractionActive)
+        {
+            ResetInactivity();
+            if (_state == PetState.Sleep)
+            {
+                StartIdle();
+            }
+
+            return true;
         }
 
         if (_state == PetState.Dragged)

@@ -280,6 +280,7 @@ function New-PetLoopFixture(
         PrimaryButtonDown = $false
         WindowPosition = [Dororong.Core.Geometry.PointD]::new(0, 0)
         LastSnapshot = $null
+        LastDirectSnapshot = $null
         Trace = [Collections.Generic.List[string]]::new()
     }
 
@@ -341,7 +342,7 @@ function New-PetLoopFixture(
         $state.Trace.Add('position') | Out-Null
     }.GetNewClosure()
     $renderBlock = {
-        param($snapshot)
+        param($snapshot, $directSnapshot)
         $state.Trace.Add('render') | Out-Null
         if ($state.FailRender)
         {
@@ -349,7 +350,15 @@ function New-PetLoopFixture(
         }
 
         $state.LastSnapshot = $snapshot
+        $state.LastDirectSnapshot = $directSnapshot
     }.GetNewClosure()
+    $directSnapshotType = Get-RequiredType $HostType.Assembly 'Dororong.App.Interaction.DirectInteractionSnapshot'
+    $renderDelegateType = [Action``2].MakeGenericType(
+        [Dororong.Core.Behavior.PetSnapshot],
+        $directSnapshotType)
+    $renderDelegate = [Management.Automation.LanguagePrimitives]::ConvertTo(
+        $renderBlock,
+        $renderDelegateType)
     $captureBlock = {
         $state.CaptureCount++
         $state.Trace.Add('capture') | Out-Null
@@ -367,7 +376,7 @@ function New-PetLoopFixture(
         [Func[bool]]$isPrimaryDownBlock,
         [Func[Dororong.Core.Geometry.PointD]]$getWindowPositionBlock,
         [Action[Dororong.Core.Geometry.PointD]]$setWindowPositionBlock,
-        [Action[Dororong.Core.Behavior.PetSnapshot]]$renderBlock,
+        $renderDelegate,
         [Func[bool]]$captureBlock,
         [Action]$releaseBlock))
 
@@ -391,9 +400,31 @@ function New-PetLoopFixture(
         Loop = $loop
         State = $state
         Start = Get-RequiredMethod $LoopType 'Start'
-        Notify = Get-RequiredMethod $LoopType 'NotifyBodyPressed'
+        Notify = Get-RequiredMethod $LoopType 'NotifyDirectInteractionPressed'
+        PressEventType = Get-RequiredType $HostType.Assembly 'Dororong.App.Controls.DirectInteractionPressEventArgs'
+        TargetType = Get-RequiredType $HostType.Assembly 'Dororong.App.Interaction.DirectInteractionTarget'
         Dispose = Get-RequiredMethod $LoopType 'Dispose'
     }
+}
+
+function Send-DirectInteractionPress(
+    $Fixture,
+    [string]$Target,
+    [Dororong.Core.Geometry.PointD]$WindowLocalPosition)
+{
+    $targetValue = [Enum]::Parse($Fixture.TargetType, $Target)
+    $outwardSign = switch ($Target)
+    {
+        'LeftCheek' { 1.0 }
+        'RightCheek' { -1.0 }
+        default { 0.0 }
+    }
+    $press = New-InternalInstance $Fixture.PressEventType ([object[]]@(
+        $targetValue,
+        $WindowLocalPosition,
+        [Dororong.Core.Geometry.PointD]::new(30, 56),
+        $outwardSign))
+    $Fixture.Notify.Invoke($Fixture.Loop, @($press)) | Out-Null
 }
 
 function Invoke-PetLoopTick($Fixture, [double]$Seconds)
@@ -427,9 +458,7 @@ if ($Focus -in @('All', 'PetLoop'))
         $true,
         [Dororong.Core.Geometry.PointD]::new(708, 518))
     $fixture.State.PrimaryButtonDown = $false
-    $fixture.Notify.Invoke(
-        $fixture.Loop,
-        @([Dororong.Core.Geometry.PointD]::new(60, 50))) | Out-Null
+    Send-DirectInteractionPress $fixture 'Body' ([Dororong.Core.Geometry.PointD]::new(60, 50))
     Invoke-PetLoopTick $fixture 0.033
 
     Assert-Equal 'input,position,render' ($fixture.State.Trace -join ',') 'PetLoop tick did not apply input, brain result, window position, then render in order.'
@@ -446,7 +475,7 @@ if ($Focus -in @('All', 'PetLoop'))
         $true,
         [Dororong.Core.Geometry.PointD]::new(708, 518))
     $drag.State.PrimaryButtonDown = $true
-    $drag.Notify.Invoke($drag.Loop, @([Dororong.Core.Geometry.PointD]::new(60, 50))) | Out-Null
+    Send-DirectInteractionPress $drag 'Body' ([Dororong.Core.Geometry.PointD]::new(60, 50))
     Invoke-PetLoopTick $drag 0.033
     $drag.State.Pointer = [Dororong.Core.Behavior.PointerSample]::new(
         $true,
@@ -472,7 +501,7 @@ if ($Focus -in @('All', 'PetLoop'))
                 $true,
                 [Dororong.Core.Geometry.PointD]::new(708, 518))
             $faulted.State.PrimaryButtonDown = $true
-            $faulted.Notify.Invoke($faulted.Loop, @([Dororong.Core.Geometry.PointD]::new(60, 50))) | Out-Null
+            Send-DirectInteractionPress $faulted 'Body' ([Dororong.Core.Geometry.PointD]::new(60, 50))
             Invoke-PetLoopTick $faulted 0.033
             $faulted.State.Pointer = [Dororong.Core.Behavior.PointerSample]::new(
                 $true,
@@ -502,7 +531,7 @@ if ($Focus -in @('All', 'PetLoop'))
         $true,
         [Dororong.Core.Geometry.PointD]::new(708, 518))
     $faultRelease.State.PrimaryButtonDown = $true
-    $faultRelease.Notify.Invoke($faultRelease.Loop, @([Dororong.Core.Geometry.PointD]::new(60, 50))) | Out-Null
+    Send-DirectInteractionPress $faultRelease 'Body' ([Dororong.Core.Geometry.PointD]::new(60, 50))
     Invoke-PetLoopTick $faultRelease 0.033
     $faultRelease.State.Pointer = [Dororong.Core.Behavior.PointerSample]::new(
         $true,
@@ -518,7 +547,7 @@ if ($Focus -in @('All', 'PetLoop'))
         $true,
         [Dororong.Core.Geometry.PointD]::new(708, 518))
     $dispose.State.PrimaryButtonDown = $true
-    $dispose.Notify.Invoke($dispose.Loop, @([Dororong.Core.Geometry.PointD]::new(60, 50))) | Out-Null
+    Send-DirectInteractionPress $dispose 'Body' ([Dororong.Core.Geometry.PointD]::new(60, 50))
     Invoke-PetLoopTick $dispose 0.033
     $dispose.State.Pointer = [Dororong.Core.Behavior.PointerSample]::new(
         $true,

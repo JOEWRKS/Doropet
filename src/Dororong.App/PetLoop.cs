@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using Dororong.App.Controls;
+using Dororong.App.Interaction;
 using Dororong.App.Interop;
 using Dororong.App.Runtime;
 using Dororong.Core.Behavior;
@@ -21,7 +22,8 @@ internal sealed class PetLoop : IDisposable
     private readonly Func<PointD, PetBrain> _brainFactory;
     private readonly EventHandler _tickHandler;
     private readonly PetLoopLifecycle _lifecycle = new();
-    private readonly BodyPressQueue _bodyPressQueue = new();
+    private readonly DirectInteractionController _directInteractionController = new();
+    private DirectInteractionPressEventArgs? _queuedDirectPress;
     private PetBrain? _brain;
     private PetSnapshot _snapshot;
     private TimeSpan _lastElapsed;
@@ -84,7 +86,7 @@ internal sealed class PetLoop : IDisposable
                 ?? throw new InvalidOperationException("The behavior brain factory returned null.");
             _snapshot = _brain.Current;
             _host.SetWindowPosition(_snapshot.Position);
-            _host.Render(_snapshot);
+            _host.Render(_snapshot, _directInteractionController.Current);
 
             _timer.Attach(_tickHandler);
             _timerAttached = true;
@@ -100,17 +102,26 @@ internal sealed class PetLoop : IDisposable
         }
     }
 
-    public void NotifyBodyPressed(PointD localPosition)
+    internal void NotifyDirectInteractionPressed(DirectInteractionPressEventArgs press)
     {
         if (_lifecycle.Phase != PetLoopPhase.Running)
         {
             return;
         }
 
-        var windowPosition = _host.GetWindowPosition();
-        _bodyPressQueue.Enqueue(new PointD(
-            windowPosition.X + localPosition.X,
-            windowPosition.Y + localPosition.Y));
+        _queuedDirectPress = press ?? throw new ArgumentNullException(nameof(press));
+    }
+
+    internal void NotifyDirectInteractionCanceled()
+    {
+        if (_queuedDirectPress is null && !_isMouseCaptured)
+        {
+            return;
+        }
+
+        _queuedDirectPress = null;
+        _directInteractionController.Cancel();
+        ReleaseMouseCapture();
     }
 
     public void Dispose()
@@ -146,7 +157,25 @@ internal sealed class PetLoop : IDisposable
 
             var pointer = _host.SamplePointer();
             var primaryButtonDown = _host.IsPrimaryButtonDown();
-            var bodyPress = _bodyPressQueue.Consume();
+            var queuedPress = _queuedDirectPress;
+            _queuedDirectPress = null;
+            PointD? bodyPress = null;
+            if (queuedPress is not null &&
+                _directInteractionController.Current.Target == DirectInteractionTarget.None)
+            {
+                var windowPosition = _host.GetWindowPosition();
+                var globalPressPosition = windowPosition + queuedPress.WindowLocalPosition;
+                _directInteractionController.Begin(
+                    queuedPress.Target,
+                    globalPressPosition,
+                    queuedPress.OutwardSign);
+                if (queuedPress.Target == DirectInteractionTarget.Body)
+                {
+                    bodyPress = globalPressPosition;
+                }
+            }
+
+            var directBeforeCore = _directInteractionController.Current;
             var previous = _snapshot;
             var current = brain.Update(new PetInput(
                 delta,
@@ -154,12 +183,19 @@ internal sealed class PetLoop : IDisposable
                 _host.GetPetSize(),
                 pointer,
                 primaryButtonDown,
+                IsLocalInteractionActive(directBeforeCore),
                 bodyPress,
                 _host.GetDragThreshold()));
+            var directCurrent = _directInteractionController.Advance(
+                delta,
+                pointer,
+                primaryButtonDown,
+                previous.State,
+                current.State);
 
-            UpdateMouseCapture(previous, current);
+            UpdateMouseCapture(current, directCurrent);
             _host.SetWindowPosition(current.Position);
-            _host.Render(current);
+            _host.Render(current, directCurrent);
             _snapshot = current;
         }
         catch (Exception exception)
@@ -168,28 +204,30 @@ internal sealed class PetLoop : IDisposable
         }
     }
 
-    private void UpdateMouseCapture(PetSnapshot previous, PetSnapshot current)
+    private void UpdateMouseCapture(
+        PetSnapshot current,
+        DirectInteractionSnapshot directInteraction)
     {
-        switch (MouseCaptureTransition.Decide(previous.State, current.State))
+        var requiresCapture = current.State == PetState.Dragged ||
+            directInteraction.Phase is DirectInteractionPhase.CheekPress or DirectInteractionPhase.CheekPull;
+        if (requiresCapture && !_isMouseCaptured)
         {
-            case MouseCaptureChange.Capture when !_host.CaptureMouse():
-                throw new InvalidOperationException("Dororong could not capture the mouse for dragging.");
+            if (!_host.CaptureMouse())
+            {
+                throw new InvalidOperationException("Dororong could not capture the mouse for direct interaction.");
+            }
 
-            case MouseCaptureChange.Capture:
-                _isMouseCaptured = true;
-                break;
-
-            case MouseCaptureChange.Release:
-                ReleaseMouseCapture();
-                break;
-
-            case MouseCaptureChange.None:
-                break;
-
-            default:
-                throw new ArgumentOutOfRangeException(nameof(current), current.State, "Unknown capture transition.");
+            _isMouseCaptured = true;
+        }
+        else if (!requiresCapture)
+        {
+            ReleaseMouseCapture();
         }
     }
+
+    private static bool IsLocalInteractionActive(DirectInteractionSnapshot directInteraction) =>
+        directInteraction.Target is DirectInteractionTarget.LeftCheek or DirectInteractionTarget.RightCheek ||
+        directInteraction.Phase == DirectInteractionPhase.BodyDragSettle;
 
     private void HandleFault(Exception exception)
     {
@@ -242,7 +280,8 @@ internal sealed class PetLoop : IDisposable
             () =>
             {
                 _lastElapsed = TimeSpan.Zero;
-                _bodyPressQueue.Clear();
+                _queuedDirectPress = null;
+                _directInteractionController.Cancel();
                 _brain = null;
             });
     }
