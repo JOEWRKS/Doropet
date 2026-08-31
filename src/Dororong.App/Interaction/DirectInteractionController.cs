@@ -18,6 +18,11 @@ internal sealed class DirectInteractionController
 
     internal void Begin(DirectInteractionTarget target, PointD pointerPosition, double outwardSign)
     {
+        if (Current.Target != DirectInteractionTarget.None)
+        {
+            return;
+        }
+
         _outwardSign = outwardSign;
         _phaseElapsedMilliseconds = 0;
         _releaseStrength = 0;

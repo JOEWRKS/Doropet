@@ -11,14 +11,20 @@ public sealed class DirectInteractionControllerTests
     {
         var controller = new DirectInteractionController();
         controller.Begin(DirectInteractionTarget.LeftCheek, new PointD(10, 10), -1);
+        controller.Begin(DirectInteractionTarget.RightCheek, new PointD(10, 10), 1);
 
         var held = controller.Advance(TimeSpan.Zero, new PointerSample(true, new PointD(30, 10)), true, PetState.Idle, PetState.Idle);
         var released = controller.Advance(TimeSpan.Zero, new PointerSample(true, new PointD(30, 10)), false, PetState.Idle, PetState.Idle);
 
         Assert.Equal(DirectInteractionTarget.LeftCheek, held.Target);
         Assert.Equal(DirectInteractionTarget.LeftCheek, released.Target);
+        controller.Advance(DirectInteractionController.CheekReleaseDuration, PointerSample.Unavailable, false, PetState.Idle, PetState.Idle);
+        controller.Begin(DirectInteractionTarget.RightCheek, new PointD(10, 10), 1);
+        Assert.Equal(DirectInteractionTarget.RightCheek, controller.Current.Target);
         controller.Cancel();
         Assert.Equal(DirectInteractionTarget.None, controller.Current.Target);
+        controller.Begin(DirectInteractionTarget.Body, new PointD(10, 10), 0);
+        Assert.Equal(DirectInteractionTarget.Body, controller.Current.Target);
     }
 
     [Theory]
