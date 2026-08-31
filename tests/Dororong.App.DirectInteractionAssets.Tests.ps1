@@ -69,22 +69,25 @@ function Assert-ProtectedIdentity(
 
 function Assert-FourReadableLegs([System.Drawing.Bitmap]$Frame, [string]$Name, [int]$Bottom)
 {
-    $row = $Bottom - 3
-    foreach ($center in @(31, 44, 57, 73))
+    $fourRunRow = -1
+    for ($row = 72; $row -le $Bottom; $row++)
     {
-        $hasLeg = $false
-        for ($x = $center - 2; $x -le $center + 2; $x++)
+        $runs = [Collections.Generic.List[object]]::new()
+        $start = -1
+        for ($x = 26; $x -le 79; $x++)
         {
-            if ($Frame.GetPixel($x, $row).A -ge 160) { $hasLeg = $true }
+            $on = $Frame.GetPixel($x,$row).A -ge 160
+            if ($on -and $start -lt 0) { $start = $x }
+            if ($start -ge 0 -and ((-not $on) -or $x -eq 79))
+            {
+                $end = if ($on -and $x -eq 79) { $x } else { $x - 1 }
+                if (($end - $start + 1) -ge 2) { $runs.Add([pscustomobject]@{Start=$start;End=$end}) }
+                $start = -1
+            }
         }
-        Assert-True $hasLeg "$Name has no readable hanging leg near x=$center on row $row."
+        if ($runs.Count -eq 4) { $fourRunRow = $row; break }
     }
-
-    foreach ($gap in @(38, 51, 65))
-    {
-        Assert-True ($Frame.GetPixel($gap, $row).A -le 32) `
-            "$Name merges adjacent hanging legs at x=$gap on row $row."
-    }
+    Assert-True ($fourRunRow -ge 0) "$Name never exposes four separated, countable lower-body leg runs."
 }
 
 function Get-ChangedPixelCount([System.Drawing.Bitmap]$Left, [System.Drawing.Bitmap]$Right)
@@ -98,6 +101,37 @@ function Get-ChangedPixelCount([System.Drawing.Bitmap]$Left, [System.Drawing.Bit
         }
     }
     return $changed
+}
+
+function Get-ChangedSilhouettePixelCount([System.Drawing.Bitmap]$Left, [System.Drawing.Bitmap]$Right)
+{
+    $changed = 0
+    for ($y = 0; $y -lt 96; $y++)
+    {
+        for ($x = 0; $x -lt 96; $x++)
+        {
+            if (($Left.GetPixel($x,$y).A -gt 32) -ne ($Right.GetPixel($x,$y).A -gt 32)) { $changed++ }
+        }
+    }
+    return $changed
+}
+
+function Get-LegBottoms([System.Drawing.Bitmap]$Frame)
+{
+    $bottoms = [Collections.Generic.List[int]]::new()
+    foreach ($band in @(@(26,36),@(39,49),@(52,62),@(67,79)))
+    {
+        $bottom = -1
+        for ($y = 55; $y -lt 96; $y++)
+        {
+            for ($x = $band[0]; $x -le $band[1]; $x++)
+            {
+                if ($Frame.GetPixel($x,$y).A -ge 160) { $bottom = [Math]::Max($bottom,$y) }
+            }
+        }
+        $bottoms.Add($bottom)
+    }
+    return [int[]]$bottoms.ToArray()
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -175,18 +209,51 @@ try
             "Settle torso jumps more than four pixels between adjacent keys."
     }
 
-    foreach ($name in @($entryNames[1..6] + $settleNames[0..3]))
+    foreach ($name in @($entryNames[2..6] + $settleNames[0..2]))
     {
         Assert-FourReadableLegs $bitmapByName[$name] $name $boundsByName[$name].MaxY
     }
+
+    $entryEndpointChanged = Get-ChangedPixelCount $bitmapByName[$entryNames[0]] $bitmapByName[$entryNames[1]]
+    $entryEndpointSilhouetteChanged = Get-ChangedSilhouettePixelCount $bitmapByName[$entryNames[0]] $bitmapByName[$entryNames[1]]
+    Assert-True ($entryEndpointChanged -le 750) `
+        "First changed entry key replaces too much of the rounded canonical body: $entryEndpointChanged pixels."
+    Assert-True ($entryEndpointSilhouetteChanged -le 300) `
+        "First changed entry key jumps its silhouette across $entryEndpointSilhouetteChanged pixels."
+
+    $settleEndpointChanged = Get-ChangedPixelCount $bitmapByName[$settleNames[3]] $bitmapByName[$settleNames[4]]
+    $settleEndpointSilhouetteChanged = Get-ChangedSilhouettePixelCount $bitmapByName[$settleNames[3]] $bitmapByName[$settleNames[4]]
+    Assert-True ($settleEndpointChanged -le 750) `
+        "Final land key is not close enough to canonical recovery: $settleEndpointChanged pixels change."
+    Assert-True ($settleEndpointSilhouetteChanged -le 300) `
+        "Final land key jumps its silhouette into canonical across $settleEndpointSilhouetteChanged pixels."
 
     $timeline = @($entryNames + $settleNames[1..4])
     for ($i = 1; $i -lt $timeline.Count; $i++)
     {
         $changed = Get-ChangedPixelCount $bitmapByName[$timeline[$i-1]] $bitmapByName[$timeline[$i]]
         Assert-True ($changed -gt 0) "Adjacent keys $($timeline[$i-1]) and $($timeline[$i]) are identical."
-        Assert-True ($changed -le 1250) `
+        Assert-True ($changed -le 850) `
             "Adjacent keys $($timeline[$i-1]) and $($timeline[$i]) jump across $changed pixels."
+    }
+
+    $hangLegBottoms = Get-LegBottoms $bitmapByName[$entryNames[6]]
+    $distinctHangLegBottoms = @($hangLegBottoms | Sort-Object -Unique)
+    Assert-True ($distinctHangLegBottoms.Count -ge 3) `
+        "Full hang uses parallel comb-like leg tips: $($hangLegBottoms -join ',')."
+    Assert-True ((($hangLegBottoms | Measure-Object -Maximum).Maximum - ($hangLegBottoms | Measure-Object -Minimum).Minimum) -le 4) `
+        "Full hang leg-tip variation is unstable: $($hangLegBottoms -join ',')."
+
+    $legTimeline = @($entryNames[2..6] + $settleNames[1..2])
+    for ($i = 1; $i -lt $legTimeline.Count; $i++)
+    {
+        $before = Get-LegBottoms $bitmapByName[$legTimeline[$i-1]]
+        $after = Get-LegBottoms $bitmapByName[$legTimeline[$i]]
+        for ($leg = 0; $leg -lt 4; $leg++)
+        {
+            Assert-True ([Math]::Abs($after[$leg] - $before[$leg]) -le 3) `
+                "Leg $($leg+1) jumps between $($legTimeline[$i-1]) and $($legTimeline[$i]): $($before[$leg]) to $($after[$leg])."
+        }
     }
 
     Assert-Equal (Get-FileHash $canonicalPath -Algorithm SHA256).Hash `

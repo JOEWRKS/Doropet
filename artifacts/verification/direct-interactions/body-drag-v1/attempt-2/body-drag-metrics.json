@@ -1,0 +1,89 @@
+{
+  "Candidate": "body-drag-v1-attempt-2-canonical-body-warp-provisional-unverified",
+  "FrameCount": 12,
+  "FrameWidth": 96,
+  "FrameHeight": 96,
+  "TimelineMs": {
+    "Entry": 380,
+    "Hold": 160,
+    "Settle": 260,
+    "Total": 800
+  },
+  "CanonicalSha256": "699348D1973709F228D843341AC5312AA7F449D57B9BFC76576256231E259A78",
+  "GeneratedSilhouetteReferencePath": "D:\\JOEWRKS\\.worktrees\\DororongDesktopPet-m1-expression-animation\\artifacts\\candidates\\direct-interactions\\body-drag-v1\\attempt-1\\generated-sheet-attempt-2.png",
+  "GeneratedSilhouetteReferenceSha256": "A01188C35421680EF80FDCD14D36486FF36806B38E928FDEB7920B2FC88F445F",
+  "Frames": [
+    {
+      "Index": 0,
+      "Name": "body-drag-entry-00-press.png",
+      "WarpProgress": 0.0,
+      "Sha256": "699348D1973709F228D843341AC5312AA7F449D57B9BFC76576256231E259A78"
+    },
+    {
+      "Index": 1,
+      "Name": "body-drag-entry-01-lengthen.png",
+      "WarpProgress": 0.25,
+      "Sha256": "862C1EA03B2368FBF2163F0C07E3B3A717389A6580EF2C282F65B86EA99B5879"
+    },
+    {
+      "Index": 2,
+      "Name": "body-drag-entry-02-drop.png",
+      "WarpProgress": 0.4,
+      "Sha256": "0DDC8554E1E8F589C6A83230712B30160A38524C5E25773788D13C195E3519EE"
+    },
+    {
+      "Index": 3,
+      "Name": "body-drag-entry-03-stretch.png",
+      "WarpProgress": 0.55,
+      "Sha256": "319311A9452C188DB4E1BD7F91C6FDD78FB6812FACE227CB2A9DF1743F9EE8F3"
+    },
+    {
+      "Index": 4,
+      "Name": "body-drag-entry-04-dangle.png",
+      "WarpProgress": 0.7,
+      "Sha256": "4619F665B8AD71C4D629A7D5B43F8362110CD6ECB38F7E3A57E68E290F5472C9"
+    },
+    {
+      "Index": 5,
+      "Name": "body-drag-entry-05-near-hang.png",
+      "WarpProgress": 0.85,
+      "Sha256": "C28E4E6E4E6C6060885C26E3D807D3CE77A2D563EE5F94477C21D984080BE4EA"
+    },
+    {
+      "Index": 6,
+      "Name": "body-drag-entry-06-hang.png",
+      "WarpProgress": 1.0,
+      "Sha256": "6F9968FE05EA9E92D657ACD9E0B74333C408493D811A2F42CAE3707D53DCE94A"
+    },
+    {
+      "Index": 7,
+      "Name": "body-drag-settle-00-hang.png",
+      "WarpProgress": 1.0,
+      "Sha256": "6F9968FE05EA9E92D657ACD9E0B74333C408493D811A2F42CAE3707D53DCE94A"
+    },
+    {
+      "Index": 8,
+      "Name": "body-drag-settle-01-lift.png",
+      "WarpProgress": 0.84,
+      "Sha256": "BAA74DE388AE97E2A125C9E1B0AC4A9F4C7CC74E3A75C50F1CEB185045316C24"
+    },
+    {
+      "Index": 9,
+      "Name": "body-drag-settle-02-gather.png",
+      "WarpProgress": 0.6,
+      "Sha256": "4BCEE1ED2480BB9D3083A122C57BF7F585596376E5749AC8E5535A901C2C40D3"
+    },
+    {
+      "Index": 10,
+      "Name": "body-drag-settle-03-land.png",
+      "WarpProgress": 0.25,
+      "Sha256": "862C1EA03B2368FBF2163F0C07E3B3A717389A6580EF2C282F65B86EA99B5879"
+    },
+    {
+      "Index": 11,
+      "Name": "body-drag-settle-04-recover.png",
+      "WarpProgress": 0.0,
+      "Sha256": "699348D1973709F228D843341AC5312AA7F449D57B9BFC76576256231E259A78"
+    }
+  ]
+}
