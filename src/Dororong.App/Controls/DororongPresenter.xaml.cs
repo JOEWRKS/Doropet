@@ -57,19 +57,19 @@ public partial class DororongPresenter : UserControl
     private static readonly PremultipliedFrameSequence SleepTuckToSettledSleepSequence = new([SleepTuckClosedPremultipliedFrame, SleepPremultipliedFrame]);
     private static readonly PremultipliedFrameSequence BodyDragEntrySequence = LoadFrameSequence(
         "body-drag-entry-00-press.png",
-        "body-drag-entry-01-lengthen.png",
-        "body-drag-entry-02-drop.png",
-        "body-drag-entry-03-stretch.png",
-        "body-drag-entry-04-dangle.png",
-        "body-drag-entry-05-near-hang.png",
-        "body-drag-entry-06-hang.png");
+        "body-drag-entry-01-release.png",
+        "body-drag-entry-02-lengthen.png",
+        "body-drag-entry-03-drop.png",
+        "body-drag-entry-04-stretch.png",
+        "body-drag-entry-05-dangle.png",
+        "body-drag-entry-06-near-hang.png",
+        "body-drag-entry-07-hang.png");
     private static readonly PremultipliedFrameSequence BodyDragSettleSequence = LoadFrameSequence(
         "body-drag-settle-00-hang.png",
         "body-drag-settle-01-lift.png",
         "body-drag-settle-02-gather.png",
         "body-drag-settle-03-land.png",
         "body-drag-settle-04-recover.png");
-
     private PetState? _lastRenderedState;
     private bool _sleepEntryComplete;
     private PetState? _wakeBridgeState;

@@ -167,32 +167,33 @@ Assert-True $rest.Source.EndsWith('dororong-canonical.png', [StringComparison]::
 
 $entryKeys = @(
     'body-drag-entry-00-press.png',
-    'body-drag-entry-01-lengthen.png',
-    'body-drag-entry-02-drop.png',
-    'body-drag-entry-03-stretch.png',
-    'body-drag-entry-04-dangle.png',
-    'body-drag-entry-05-near-hang.png',
-    'body-drag-entry-06-hang.png')
+    'body-drag-entry-01-release.png',
+    'body-drag-entry-02-lengthen.png',
+    'body-drag-entry-03-drop.png',
+    'body-drag-entry-04-stretch.png',
+    'body-drag-entry-05-dangle.png',
+    'body-drag-entry-06-near-hang.png',
+    'body-drag-entry-07-hang.png')
 for ($index = 0; $index -lt $entryKeys.Count; $index++) {
     $progress = $index / [double]($entryKeys.Count - 1)
     $direct = New-DirectSnapshot 'BodyDragEntry' $progress 0
     $render.Invoke($presenter, [object[]]@((New-Snapshot $state::Dragged 0), $direct)) | Out-Null
     Assert-True $image.Source.ToString().EndsWith($entryKeys[$index], [StringComparison]::OrdinalIgnoreCase) "Body drag entry progress $progress did not select $($entryKeys[$index])."
     Assert-Near 1.0 ([double]$image.Opacity) 0.000001 "Body drag entry key $index changed whole-character opacity."
-    Assert-Near 1.0 ([double]$bodyScale.ScaleY) 0.000001 "Body drag entry key $index retained the old procedural stretch."
-    Assert-Near 0.0 ([double]$translation.Y) 0.000001 "Body drag entry key $index moved the complete-character surface away from its fixed anchor."
+    Assert-Near 1.0 ([double]$bodyScale.ScaleY) 0.000001 "Body drag entry key $index retained procedural body stretch."
+    Assert-Near 0.0 ([double]$translation.Y) 0.000001 "Body drag entry key $index moved the whole-character surface away from its fixed anchor."
     Assert-Near 1.0 ([double]$imageScale.ScaleX) 0.000001 "Body drag entry key $index retained breathing or click scale X."
     Assert-Near 1.0 ([double]$imageScale.ScaleY) 0.000001 "Body drag entry key $index retained breathing or click scale Y."
 }
 
-$midEntry = New-DirectSnapshot 'BodyDragEntry' (1.0 / 12.0) 0
+$midEntry = New-DirectSnapshot 'BodyDragEntry' (1.0 / 14.0) 0
 $render.Invoke($presenter, [object[]]@((New-Snapshot $state::Dragged 0), $midEntry)) | Out-Null
 Assert-Equal ([Windows.Media.PixelFormats]::Pbgra32) $image.Source.Format 'Body drag entry interpolation did not use one premultiplied Pbgra32 surface.'
 Assert-Near 1.0 ([double]$image.Opacity) 0.000001 'Body drag entry interpolation changed whole-character opacity.'
 
 $hold = New-DirectSnapshot 'BodyDragHold' 1 0
 $render.Invoke($presenter, [object[]]@((New-Snapshot $state::Dragged 0), $hold)) | Out-Null
-Assert-True $image.Source.ToString().EndsWith('body-drag-entry-06-hang.png', [StringComparison]::OrdinalIgnoreCase) 'Body drag hold did not retain the exact full-hang key.'
+Assert-True $image.Source.ToString().EndsWith('body-drag-entry-07-hang.png', [StringComparison]::OrdinalIgnoreCase) 'Body drag hold did not retain the exact approved full-hang key.'
 
 $render.Invoke($presenter, [object[]]@((New-Snapshot $state::Idle 0), $none)) | Out-Null
 $facing = [Dororong.Core.Behavior.FacingDirection]::Left
@@ -223,4 +224,4 @@ $render.Invoke($presenter, [object[]]@((New-Snapshot $state::Idle 0.2), $none)) 
 Assert-True $image.Source.ToString().EndsWith('dororong-canonical.png', [StringComparison]::OrdinalIgnoreCase) 'Body drag completion did not recover the canonical source.'
 Assert-True ([double]$imageScale.ScaleX -gt 1.0) 'Body drag completion did not restore ordinary idle breathing.'
 
-Write-Output "DIRECT INTERACTION RENDER PASS: $script:assertionCount assertions covered exact accepted sources, one opaque surface, pending compression, continuous 500ms hop, seven-key drag entry, full-hang hold, five-key settle, facing, and exact recovery."
+Write-Output "DIRECT INTERACTION RENDER PASS: $script:assertionCount assertions covered exact accepted sources, one character surface, pending compression, continuous 500ms hop, eight-key drag entry, approved full-hang hold, five-key settle, facing, and exact recovery."
