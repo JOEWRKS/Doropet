@@ -57,8 +57,18 @@ internal sealed class PetLoopHost
     private readonly Func<PointD> _getWindowPosition;
     private readonly Action<PointD> _setWindowPosition;
     private readonly Action<PetSnapshot, DirectInteractionSnapshot> _render;
+    private readonly Action<PetSnapshot, DirectInteractionSnapshot, TimeSpan>? _timedRender;
     private readonly Func<bool> _captureMouse;
     private readonly Action _releaseMouseCapture;
+
+    internal PetLoopHost(
+        Func<RectD> getWorkArea, Func<SizeD> getPetSize, Func<SizeD> getDragThreshold,
+        Func<PointerSample> samplePointer, Func<bool> isPrimaryButtonDown,
+        Func<PointD> getWindowPosition, Action<PointD> setWindowPosition,
+        Action<PetSnapshot, DirectInteractionSnapshot> render, Func<bool> captureMouse,
+        Action releaseMouseCapture)
+        : this(getWorkArea, getPetSize, getDragThreshold, samplePointer, isPrimaryButtonDown,
+            getWindowPosition, setWindowPosition, render, captureMouse, releaseMouseCapture, null) { }
 
     internal PetLoopHost(
         Func<RectD> getWorkArea,
@@ -70,7 +80,8 @@ internal sealed class PetLoopHost
         Action<PointD> setWindowPosition,
         Action<PetSnapshot, DirectInteractionSnapshot> render,
         Func<bool> captureMouse,
-        Action releaseMouseCapture)
+        Action releaseMouseCapture,
+        Action<PetSnapshot, DirectInteractionSnapshot, TimeSpan>? timedRender)
     {
         _getWorkArea = getWorkArea ?? throw new ArgumentNullException(nameof(getWorkArea));
         _getPetSize = getPetSize ?? throw new ArgumentNullException(nameof(getPetSize));
@@ -80,6 +91,7 @@ internal sealed class PetLoopHost
         _getWindowPosition = getWindowPosition ?? throw new ArgumentNullException(nameof(getWindowPosition));
         _setWindowPosition = setWindowPosition ?? throw new ArgumentNullException(nameof(setWindowPosition));
         _render = render ?? throw new ArgumentNullException(nameof(render));
+        _timedRender = timedRender;
         _captureMouse = captureMouse ?? throw new ArgumentNullException(nameof(captureMouse));
         _releaseMouseCapture = releaseMouseCapture ?? throw new ArgumentNullException(nameof(releaseMouseCapture));
     }
@@ -93,6 +105,11 @@ internal sealed class PetLoopHost
     internal void SetWindowPosition(PointD position) => _setWindowPosition(position);
     internal void Render(PetSnapshot snapshot, DirectInteractionSnapshot directInteraction) =>
         _render(snapshot, directInteraction);
+    internal void Render(PetSnapshot snapshot, DirectInteractionSnapshot directInteraction, TimeSpan elapsed)
+    {
+        if (_timedRender is { } render) render(snapshot, directInteraction, elapsed);
+        else _render(snapshot, directInteraction);
+    }
     internal bool CaptureMouse() => _captureMouse();
     internal void ReleaseMouseCapture() => _releaseMouseCapture();
 }

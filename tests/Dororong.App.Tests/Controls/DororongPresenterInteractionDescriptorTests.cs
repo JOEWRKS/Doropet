@@ -8,6 +8,42 @@ namespace Dororong.App.Tests.Controls;
 
 public sealed class DororongPresenterInteractionDescriptorTests
 {
+    [Fact]
+    public void Distance_partial_release_renders_the_last_entry_pixels_then_reverses_toward_rest()
+    {
+        RunOnSta(() =>
+        {
+            var presenter = new DororongPresenter();
+            var image = Assert.IsAssignableFrom<System.Windows.Controls.Image>(presenter.FindName("DororongImage"));
+            var controller = new DirectInteractionController();
+            controller.BeginDistanceBody(new(100, 100), new(4, 4));
+            var entry = controller.Advance(TimeSpan.FromMilliseconds(16), new(true, new(142, 100)), true, PetState.Idle, PetState.Dragged);
+            presenter.Render(Snapshot(PetState.Dragged, FacingDirection.Right, 0), entry);
+            var heldPixels = Pixels(image);
+            var release = controller.Advance(TimeSpan.Zero, PointerSample.Unavailable, false, PetState.Dragged, PetState.Idle);
+            presenter.Render(Snapshot(PetState.Idle, FacingDirection.Right, 0), release);
+            Assert.Equal(heldPixels, Pixels(image));
+
+            var half = controller.Advance(TimeSpan.FromMilliseconds(90), PointerSample.Unavailable, false, PetState.Idle, PetState.Idle);
+            presenter.Render(Snapshot(PetState.Idle, FacingDirection.Right, 0), half);
+            var halfPixels = Pixels(image);
+            presenter.Render(Snapshot(PetState.Dragged, FacingDirection.Right, 0), entry with { Strength = 0.25 });
+            Assert.Equal(Pixels(image), halfPixels);
+            var completed = controller.Advance(TimeSpan.FromMilliseconds(90), PointerSample.Unavailable, false, PetState.Idle, PetState.Idle);
+            presenter.Render(Snapshot(PetState.Idle, FacingDirection.Right, 0), completed);
+            AssertFrame(image, "dororong-canonical.png");
+        });
+    }
+
+    private static byte[] Pixels(System.Windows.Controls.Image image)
+    {
+        var source = Assert.IsAssignableFrom<System.Windows.Media.Imaging.BitmapSource>(image.Source);
+        var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap(source, System.Windows.Media.PixelFormats.Pbgra32, null, 0);
+        var pixels = new byte[source.PixelWidth * source.PixelHeight * 4];
+        converted.CopyPixels(pixels, source.PixelWidth * 4, 0);
+        return pixels;
+    }
+
     private static readonly DirectInteractionSnapshot BodyPending = new(
         DirectInteractionTarget.Body,
         DirectInteractionPhase.BodyPending,
@@ -53,14 +89,15 @@ public sealed class DororongPresenterInteractionDescriptorTests
             var presenter = new DororongPresenter();
             presenter.Render(Snapshot(PetState.Walk, FacingDirection.Left, phase: 0.1), DirectInteractionSnapshot.None);
 
-            var actual = presenter.ClassifyOpaqueSourcePoint(new PointD(39, 56), opaque: true);
+            // Actual selected cheek skin, not the former rectangle's mouth edge.
+            var actual = presenter.ClassifyOpaqueSourcePoint(new PointD(16, 58), opaque: true);
 
             Assert.Equal(DirectInteractionTarget.RightCheek, actual);
         });
     }
 
     [Fact]
-    public void Sleep_entry_crossfade_interpolates_the_visible_cheek_region()
+    public void Sleep_entry_selected_side_uses_body_wake_instead_of_a_canonical_cheek_mask()
     {
         RunOnSta(() =>
         {
@@ -69,7 +106,7 @@ public sealed class DororongPresenterInteractionDescriptorTests
 
             var actual = presenter.ClassifyOpaqueSourcePoint(new PointD(20, 52), opaque: true);
 
-            Assert.Equal(DirectInteractionTarget.RightCheek, actual);
+            Assert.Equal(DirectInteractionTarget.Body, actual);
         });
     }
 

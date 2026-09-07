@@ -5,7 +5,8 @@ internal enum DirectInteractionTarget
     None,
     Body,
     LeftCheek,
-    RightCheek
+    RightCheek,
+    FiveRegionBody
 }
 
 internal enum DirectInteractionPhase
@@ -17,5 +18,7 @@ internal enum DirectInteractionPhase
     BodyDragSettle,
     CheekPress,
     CheekPull,
-    CheekRelease
+    CheekRelease,
+    BodyLocalPull,
+    BodyLocalSettle
 }

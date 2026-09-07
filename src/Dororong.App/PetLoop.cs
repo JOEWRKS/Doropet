@@ -28,6 +28,7 @@ internal sealed class PetLoop : IDisposable
     private PetSnapshot _snapshot;
     private TimeSpan _lastElapsed;
     private bool _isMouseCaptured;
+    private bool _releasingMouseCapture;
     private bool _timerAttached;
     private bool _timerStarted;
     private bool _clockStarted;
@@ -114,14 +115,21 @@ internal sealed class PetLoop : IDisposable
 
     internal void NotifyDirectInteractionCanceled()
     {
-        if (_queuedDirectPress is null && !_isMouseCaptured)
+        if (_releasingMouseCapture) return;
+        if (_queuedDirectPress is null && !_isMouseCaptured && _directInteractionController.Current.Target == DirectInteractionTarget.None)
         {
             return;
         }
 
         _queuedDirectPress = null;
         _directInteractionController.Cancel();
+        if (_brain is not null)
+        {
+            _brain.CancelDirectInteraction();
+            _snapshot = _brain.Current;
+        }
         ReleaseMouseCapture();
+        if (_brain is not null) _host.Render(_snapshot, DirectInteractionSnapshot.None);
     }
 
     public void Dispose()
@@ -165,27 +173,50 @@ internal sealed class PetLoop : IDisposable
             {
                 var windowPosition = _host.GetWindowPosition();
                 var globalPressPosition = windowPosition + queuedPress.WindowLocalPosition;
-                _directInteractionController.Begin(
-                    queuedPress.Target,
-                    globalPressPosition,
-                    queuedPress.OutwardSign);
+                if (queuedPress.Target == DirectInteractionTarget.FiveRegionBody && queuedPress.BodyCapture is { } bodyCapture)
+                {
+                    _directInteractionController.BeginBodyPull(bodyCapture, windowPosition, globalPressPosition);
+                }
+                else if (queuedPress.Target == DirectInteractionTarget.RightCheek && queuedPress.CheekCapture is { } cheekCapture)
+                {
+                    _directInteractionController.BeginCheekCarry(cheekCapture, windowPosition, globalPressPosition);
+                }
+                else if (queuedPress.Target == DirectInteractionTarget.Body)
+                {
+                    _directInteractionController.BeginDistanceBody(globalPressPosition, _host.GetDragThreshold());
+                }
+                else
+                {
+                    _directInteractionController.Begin(queuedPress.Target, globalPressPosition, queuedPress.OutwardSign);
+                }
                 if (queuedPress.Target == DirectInteractionTarget.Body)
                 {
                     bodyPress = globalPressPosition;
                 }
             }
 
+            var workArea = _host.GetWorkArea();
+            var petSize = _host.GetPetSize();
+            var bodyWasActive = _directInteractionController.Current.Target == DirectInteractionTarget.FiveRegionBody;
+            var cheekWasActive = _directInteractionController.HasCheekCarry;
+            PointD? bodyPosition = bodyWasActive
+                ? _directInteractionController.AdvanceBodyPull(delta, pointer, primaryButtonDown, workArea, petSize)
+                : cheekWasActive
+                    ? _directInteractionController.AdvanceCheekCarry(delta, pointer, primaryButtonDown, workArea, petSize)
+                    : _directInteractionController.AdvanceHeadLanding(delta, workArea, petSize);
             var directBeforeCore = _directInteractionController.Current;
             var previous = _snapshot;
             var current = brain.Update(new PetInput(
                 delta,
-                _host.GetWorkArea(),
-                _host.GetPetSize(),
+                workArea,
+                petSize,
                 pointer,
                 primaryButtonDown,
-                IsLocalInteractionActive(directBeforeCore),
+                bodyWasActive || cheekWasActive || IsLocalInteractionActive(directBeforeCore),
                 bodyPress,
-                _host.GetDragThreshold()));
+                _host.GetDragThreshold(),
+                bodyPosition,
+                DistanceDrivenBodyDrag: true));
             var directCurrent = _directInteractionController.Advance(
                 delta,
                 pointer,
@@ -193,9 +224,13 @@ internal sealed class PetLoop : IDisposable
                 previous.State,
                 current.State);
 
+            // The release tick must first let the brain leave DRAGGED. Later
+            // landing positions use its existing local-interaction position seam.
+            directCurrent = _directInteractionController.BeginHeadLanding(current.Position, workArea, petSize);
+
             UpdateMouseCapture(current, directCurrent);
             _host.SetWindowPosition(current.Position);
-            _host.Render(current, directCurrent);
+            _host.Render(current, directCurrent, delta);
             _snapshot = current;
         }
         catch (Exception exception)
@@ -225,7 +260,7 @@ internal sealed class PetLoop : IDisposable
     }
 
     private static bool IsLocalInteractionActive(DirectInteractionSnapshot directInteraction) =>
-        directInteraction.Target is DirectInteractionTarget.LeftCheek or DirectInteractionTarget.RightCheek ||
+        directInteraction.Target is DirectInteractionTarget.LeftCheek or DirectInteractionTarget.RightCheek or DirectInteractionTarget.FiveRegionBody ||
         directInteraction.Phase == DirectInteractionPhase.BodyDragSettle;
 
     private void HandleFault(Exception exception)
@@ -278,6 +313,19 @@ internal sealed class PetLoop : IDisposable
             ReleaseMouseCapture,
             () =>
             {
+                if (_directInteractionController.Current.Target is DirectInteractionTarget.FiveRegionBody or DirectInteractionTarget.Body ||
+                    _directInteractionController.Current.CheekPull is not null)
+                {
+                    if (_brain is not null)
+                    {
+                        _brain.CancelDirectInteraction();
+                        _snapshot = _brain.Current;
+                    }
+                    _host.Render(_snapshot, DirectInteractionSnapshot.None);
+                }
+            },
+            () =>
+            {
                 _lastElapsed = TimeSpan.Zero;
                 _queuedDirectPress = null;
                 _directInteractionController.Cancel();
@@ -293,7 +341,9 @@ internal sealed class PetLoop : IDisposable
         }
 
         _isMouseCaptured = false;
-        _host.ReleaseMouseCapture();
+        _releasingMouseCapture = true;
+        try { _host.ReleaseMouseCapture(); }
+        finally { _releasingMouseCapture = false; }
     }
 
     private static ProductionRuntime CreateProductionRuntime(
@@ -308,6 +358,7 @@ internal sealed class PetLoop : IDisposable
         var source = PresentationSource.FromVisual(window) as HwndSource
             ?? throw new InvalidOperationException("The WPF window source is unavailable.");
         var stopwatch = new Stopwatch();
+        var viewport = new PetWindowViewport(window, presenter);
         var dispatcherTimer = new DispatcherTimer(DispatcherPriority.Normal, window.Dispatcher)
         {
             Interval = TickInterval
@@ -324,23 +375,18 @@ internal sealed class PetLoop : IDisposable
             dispatcherTimer.Stop);
         var host = new PetLoopHost(
             GetWorkArea,
-            () => new SizeD(window.ActualWidth, window.ActualHeight),
+            viewport.GetPetSize,
             () => new SizeD(
                 SystemParameters.MinimumHorizontalDragDistance,
                 SystemParameters.MinimumVerticalDragDistance),
-            () => input.TryGetPointerInDips(source, out var pointerPosition)
-                ? new PointerSample(true, pointerPosition)
-                : PointerSample.Unavailable,
+            () => input.SamplePointer(source),
             input.IsPrimaryButtonDown,
-            () => new PointD(window.Left, window.Top),
-            position =>
-            {
-                window.Left = position.X;
-                window.Top = position.Y;
-            },
+            viewport.GetPosition,
+            viewport.SetPosition,
             presenter.Render,
             presenter.CaptureMouse,
-            presenter.ReleaseMouseCapture);
+            presenter.ReleaseMouseCapture,
+            presenter.Render);
 
         return new ProductionRuntime(clock, timer, host);
     }

@@ -7,6 +7,28 @@ namespace Dororong.App.Tests.Interaction;
 public sealed class DirectInteractionControllerTests
 {
     [Fact]
+    public void Distance_mode_locks_target_and_does_not_advance_on_stationary_or_invalid_samples()
+    {
+        var controller = new DirectInteractionController();
+        controller.BeginDistanceBody(new(100, 100), new(4, 4));
+        var held = controller.Advance(TimeSpan.Zero, new(true, new(142, 100)), true, PetState.Idle, PetState.Dragged);
+        Assert.Equal(0.5, held.Strength, 8);
+        controller.Begin(DirectInteractionTarget.LeftCheek, new(100, 100), -1);
+        foreach (var pointer in new[] { PointerSample.Unavailable, new PointerSample(true, new(double.MaxValue, double.MaxValue)) })
+        {
+            var next = controller.Advance(TimeSpan.FromSeconds(1), pointer, true, PetState.Dragged, PetState.Dragged);
+            Assert.Equal(held, next);
+        }
+        controller.Cancel();
+        controller.BeginDistanceBody(new(100, 100), new(4, 4));
+        var full = controller.Advance(TimeSpan.Zero, new(true, new(148, 164)), true, PetState.Idle, PetState.Dragged);
+        Assert.Equal(1, full.Strength);
+        Assert.Equal(DirectInteractionPhase.BodyDragHold, full.Phase);
+        var reverse = controller.Advance(TimeSpan.Zero, new(true, new(100, 100)), true, PetState.Dragged, PetState.Dragged);
+        Assert.Equal(1, reverse.Strength);
+    }
+
+    [Fact]
     public void Begin_locks_target_until_release_or_cancel()
     {
         var controller = new DirectInteractionController();

@@ -16,6 +16,7 @@ public sealed class PetBrain
     private PointD _startledRetreatDirection;
     private PointD? _pressPosition;
     private PointD? _grabOffset;
+    private bool _distanceDrivenBodyDrag;
     private TimeSpan _inactivity;
 
     public PetBrain(BehaviorTuning tuning, IRandomSource random, PointD initialPosition)
@@ -48,6 +49,12 @@ public sealed class PetBrain
 
     public PetSnapshot Update(PetInput input)
     {
+        if (input.LocalInteractionActive && input.LocalInteractionPosition is { } localPosition &&
+            double.IsFinite(localPosition.X) && double.IsFinite(localPosition.Y))
+        {
+            _position = input.WorkArea.ClampTopLeft(localPosition, input.PetSize);
+        }
+
         var delta = ClampDelta(input.Delta);
         if (delta == TimeSpan.Zero)
         {
@@ -168,13 +175,18 @@ public sealed class PetBrain
 
     private bool ProcessDirectInteraction(PetInput input)
     {
+        if ((input.DistanceDrivenBodyDrag || _distanceDrivenBodyDrag) &&
+            input.Pointer.IsAvailable && !HeadPullDistance.IsFinite(input.Pointer.Position))
+            input = input with { Pointer = PointerSample.Unavailable };
         var handled = false;
         if (input.BodyPressPosition is { } pressPosition &&
+            (!input.DistanceDrivenBodyDrag || HeadPullDistance.IsFinite(pressPosition)) &&
             !_pressPosition.HasValue &&
             _state != PetState.Dragged)
         {
             _pressPosition = pressPosition;
             _grabOffset = pressPosition - _position;
+            _distanceDrivenBodyDrag = input.DistanceDrivenBodyDrag;
             ResetInactivity();
             if (_state == PetState.Sleep)
             {
@@ -202,9 +214,7 @@ public sealed class PetBrain
                 ResetInactivity();
                 if (input.Pointer.IsAvailable && _grabOffset is { } dragOffset)
                 {
-                    _position = input.WorkArea.ClampTopLeft(
-                        input.Pointer.Position - dragOffset,
-                        input.PetSize);
+                    FollowBodyDrag(input, dragOffset);
                 }
             }
             else
@@ -224,9 +234,10 @@ public sealed class PetBrain
         }
 
         handled = true;
-        var crossedDragThreshold = input.Pointer.IsAvailable &&
-            (Math.Abs(input.Pointer.Position.X - savedPressPosition.X) >= input.DragThreshold.Width ||
-             Math.Abs(input.Pointer.Position.Y - savedPressPosition.Y) >= input.DragThreshold.Height);
+        var crossedDragThreshold = input.Pointer.IsAvailable && (_distanceDrivenBodyDrag
+            ? HeadPullDistance.TryMeasure(savedPressPosition, input.Pointer.Position, input.DragThreshold, out var pull) && pull.OutsideDeadzone
+            : Math.Abs(input.Pointer.Position.X - savedPressPosition.X) >= input.DragThreshold.Width ||
+              Math.Abs(input.Pointer.Position.Y - savedPressPosition.Y) >= input.DragThreshold.Height);
 
         if (input.PrimaryButtonDown)
         {
@@ -236,9 +247,7 @@ public sealed class PetBrain
                 _state = PetState.Dragged;
                 _stateElapsed = TimeSpan.Zero;
                 _stateDuration = TimeSpan.MaxValue;
-                _position = input.WorkArea.ClampTopLeft(
-                    input.Pointer.Position - dragOffset,
-                    input.PetSize);
+                FollowBodyDrag(input, dragOffset);
             }
 
             return handled;
@@ -262,6 +271,27 @@ public sealed class PetBrain
     {
         _pressPosition = null;
         _grabOffset = null;
+        _distanceDrivenBodyDrag = false;
+    }
+
+    public void CancelDirectInteraction()
+    {
+        ClearDirectInteraction();
+        if (_state == PetState.Dragged) StartIdle();
+    }
+
+    private void FollowBodyDrag(PetInput input, PointD dragOffset)
+    {
+        if (_distanceDrivenBodyDrag)
+        {
+            if (_pressPosition is not { } origin ||
+                !HeadPullDistance.TryMeasure(origin, input.Pointer.Position, input.DragThreshold, out _)) return;
+        }
+        // Extension controls the pose, never the window's following distance.
+        // Keep the original grab offset throughout partial and full extension.
+        var position = input.Pointer.Position - dragOffset;
+        if (!_distanceDrivenBodyDrag || HeadPullDistance.IsFinite(position))
+            _position = input.WorkArea.ClampTopLeft(position, input.PetSize);
     }
 
     private void StartClickReaction()

@@ -6,6 +6,14 @@
 
   <ItemGroup>
     <Resource Include="Assets\dororong-canonical.png" />
+    <Resource Include="Assets\user-body-drag\01.png" />
+    <Resource Include="Assets\user-body-drag\02.png" />
+    <Resource Include="Assets\user-body-drag\03.png" />
+    <Resource Include="Assets\user-body-drag\04.png" />
+    <Resource Include="Assets\user-body-drag\05.png" />
+    <Resource Include="Assets\user-body-drag\06.png" />
+    <Resource Include="Assets\user-body-drag\07.png" />
+    <Resource Include="Assets\user-body-drag\08.png" />
     <Resource Include="Assets\dororong-blink-squint.png" />
     <Resource Include="Assets\dororong-closed-eyes.png" />
     <Resource Include="Assets\dororong-sleep.png" />

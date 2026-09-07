@@ -483,12 +483,40 @@ if ($Focus -in @('All', 'PetLoop'))
     Invoke-PetLoopTick $drag 0.066
     Assert-Equal 'Dragged' $drag.State.LastSnapshot.State.ToString() 'Threshold crossing did not enter DRAGGED through the real loop and brain.'
     Assert-Equal 1 $drag.State.CaptureCount 'DRAGGED entry did not capture exactly once.'
-    Assert-Equal ([Dororong.Core.Geometry.PointD]::new(653, 468)) $drag.State.WindowPosition 'DRAGGED did not preserve the grab offset in the applied window position.'
+    Assert-Equal ([Dororong.Core.Geometry.PointD]::new(653, 468)) $drag.State.WindowPosition 'The 5-DIP head drag did not immediately follow the pointer.'
     Invoke-PetLoopTick $drag 0.099
     Assert-Equal 1 $drag.State.CaptureCount 'A continuing DRAGGED tick captured again.'
-    $drag.State.PrimaryButtonDown = $false
+    Assert-Equal ([Dororong.Core.Geometry.PointD]::new(653, 468)) $drag.State.WindowPosition 'A stationary partial head stretch moved the window.'
+    $drag.State.Pointer = [Dororong.Core.Behavior.PointerSample]::new(
+        $true,
+        [Dororong.Core.Geometry.PointD]::new(668, 518))
     Invoke-PetLoopTick $drag 0.132
+    Assert-Equal ([Dororong.Core.Geometry.PointD]::new(608, 468)) $drag.State.WindowPosition 'Exactly 40 DIPs changed the original pointer grab offset.'
+    Assert-Equal 1 $drag.State.CaptureCount 'Full head extension captured again.'
+    $drag.State.Pointer = [Dororong.Core.Behavior.PointerSample]::new(
+        $true,
+        [Dororong.Core.Geometry.PointD]::new(648, 518))
+    Invoke-PetLoopTick $drag 0.165
+    Assert-Equal ([Dororong.Core.Geometry.PointD]::new(588, 468)) $drag.State.WindowPosition 'The 60-DIP head pull did not follow the entire pointer movement.'
+    Invoke-PetLoopTick $drag 0.198
+    Assert-Equal ([Dororong.Core.Geometry.PointD]::new(588, 468)) $drag.State.WindowPosition 'Stationary head carry changed the applied window position.'
+    Assert-Equal 1 $drag.State.CaptureCount 'A continuing head carry captured again.'
+    $drag.State.PrimaryButtonDown = $false
+    Invoke-PetLoopTick $drag 0.231
     Assert-Equal 1 $drag.State.ReleaseCount 'Leaving DRAGGED did not release capture.'
+    Assert-Equal ([Dororong.Core.Geometry.PointD]::new(588, 468)) $drag.State.WindowPosition 'Head release lost the final carried position.'
+    Assert-Equal ([Dororong.Core.Geometry.PointD]::new(588, 468)) $drag.State.LastSnapshot.Position 'Head release did not preserve the final position in the brain snapshot.'
+    Invoke-PetLoopTick $drag 0.264
+    Assert-Equal 588.0 $drag.State.WindowPosition.X 'Head landing changed horizontal position.'
+    # The60DIP partial pull has14/19strength:36*(14/19)*(33/220)^2 fall after33ms.
+    Assert-True ([Math]::Abs($drag.State.WindowPosition.Y - 468.59684210526314) -lt 0.00000001) 'Head landing did not apply elapsed-time fall to the brain/window.'
+    # Probe just beyond220ms contact, avoiding FromSeconds truncation at the exact boundary.
+    Invoke-PetLoopTick $drag 0.452
+    Assert-True ([Math]::Abs($drag.State.WindowPosition.Y - 494.5263157894737) -lt 0.00000001) 'Partial head landing did not stop at its shorter drop target.'
+    Invoke-PetLoopTick $drag 0.672
+    Assert-Equal 'None' $drag.State.LastDirectSnapshot.Target.ToString() 'Head landing did not complete after440ms.'
+    Assert-Equal $drag.State.WindowPosition $drag.State.LastSnapshot.Position 'Landed position was not retained by the brain.'
+    Assert-Equal 1 $drag.State.ReleaseCount 'Head settle released capture more than once.'
 
     foreach ($failureKind in @('input', 'render', 'capture'))
     {
@@ -540,6 +568,12 @@ if ($Focus -in @('All', 'PetLoop'))
     $faultRelease.State.FailInput = $true
     Invoke-PetLoopTick $faultRelease 0.099
     Assert-Equal 1 $faultRelease.State.ReleaseCount 'A fault while DRAGGED did not release capture.'
+    Assert-Equal 'Idle' $faultRelease.State.LastSnapshot.State.ToString() 'The fault cleanup render retained DRAGGED.'
+    Assert-True ($null -eq $faultRelease.State.LastSnapshot.GrabOffset) 'The fault cleanup render retained the grab offset.'
+    Assert-True (-not $faultRelease.State.LastSnapshot.IsDirectInteractionPending) 'The fault cleanup render retained core interaction ownership.'
+    Assert-Equal 'None' $faultRelease.State.LastDirectSnapshot.Target.ToString() 'The fault cleanup render retained a direct target.'
+    Assert-Equal 'None' $faultRelease.State.LastDirectSnapshot.Phase.ToString() 'The fault cleanup render retained a direct phase.'
+    Assert-True (-not $faultRelease.State.LastDirectSnapshot.RequiresCapture) 'The fault cleanup render retained a capture requirement.'
 
     $dispose = New-PetLoopFixture $clockType $timerType $hostType $petLoopType
     $dispose.Start.Invoke($dispose.Loop, @()) | Out-Null
@@ -566,10 +600,17 @@ if ($Focus -in @('All', 'PetLoop'))
     }
 
     Assert-True $disposeFailureObserved 'The injected Dispose cleanup failure did not propagate.'
-    Assert-Equal 'timer-stop,timer-detach,clock-stop,release' ($dispose.State.Trace -join ',') 'Dispose stopped cleanup after one injected failure.'
+    Assert-Equal 'timer-stop,timer-detach,clock-stop,release,render' ($dispose.State.Trace -join ',') 'Dispose did not finish ordered cleanup and its final cleared render after one injected failure.'
+    Assert-Equal 'Idle' $dispose.State.LastSnapshot.State.ToString() 'The Dispose cleanup render retained DRAGGED.'
+    Assert-True ($null -eq $dispose.State.LastSnapshot.GrabOffset) 'The Dispose cleanup render retained the grab offset.'
+    Assert-True (-not $dispose.State.LastSnapshot.IsDirectInteractionPending) 'The Dispose cleanup render retained core interaction ownership.'
+    Assert-Equal 'None' $dispose.State.LastDirectSnapshot.Target.ToString() 'The Dispose cleanup render retained a direct target.'
+    Assert-Equal 'None' $dispose.State.LastDirectSnapshot.Phase.ToString() 'The Dispose cleanup render retained a direct phase.'
+    Assert-True (-not $dispose.State.LastDirectSnapshot.RequiresCapture) 'The Dispose cleanup render retained a capture requirement.'
     $cleanupCounts = "$($dispose.State.TimerStopCount),$($dispose.State.TimerDetachCount),$($dispose.State.ClockStopCount),$($dispose.State.ReleaseCount)"
     $dispose.Dispose.Invoke($dispose.Loop, @()) | Out-Null
     Assert-Equal $cleanupCounts "$($dispose.State.TimerStopCount),$($dispose.State.TimerDetachCount),$($dispose.State.ClockStopCount),$($dispose.State.ReleaseCount)" 'A second Dispose repeated cleanup side effects.'
+    Assert-Equal 'timer-stop,timer-detach,clock-stop,release,render' ($dispose.State.Trace -join ',') 'A second Dispose repeated the final cleared render.'
 }
 
 $resultDetail = switch ($Focus)

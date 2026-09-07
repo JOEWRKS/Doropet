@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Dororong.Core/Dororong.Core.csproj" />
+    <Compile Include="../../src/Dororong.App/Interaction/BodyRegionMap.cs" Link="BodyRegionMap.cs" />
+    <Compile Include="../../src/Dororong.App/Interaction/BodyPullSession.cs" Link="BodyPullSession.cs" />
+    <Compile Include="../../src/Dororong.App/Controls/BodyPullGeometry.cs" Link="BodyPullGeometry.cs" />
+    <Compile Include="../../src/Dororong.App/Controls/BodyPullRenderer.cs" Link="BodyPullRenderer.cs" />
+  </ItemGroup>
+</Project>

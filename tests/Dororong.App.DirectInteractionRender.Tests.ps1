@@ -57,6 +57,51 @@ function Assert-ApprovedSource([Windows.Controls.Image]$Image, [string]$State) {
     Assert-True $approved "$State selected a non-approved body-click image: $source"
 }
 
+function Assert-SuppliedSource([Windows.Controls.Image]$Image, [string]$Asset, [int]$OffsetY, [int]$ForegroundCount) {
+    $original = [Windows.Media.Imaging.BitmapImage]::new([Uri](Join-Path $assetRoot $Asset))
+    $from = [Windows.Media.Imaging.FormatConvertedBitmap]::new($original, [Windows.Media.PixelFormats]::Pbgra32, $null, 0)
+    $to = [Windows.Media.Imaging.FormatConvertedBitmap]::new($Image.Source, [Windows.Media.PixelFormats]::Pbgra32, $null, 0)
+    Assert-Equal 96 $to.PixelWidth "Aligned $Asset changed width."
+    Assert-Equal 96 $to.PixelHeight "Aligned $Asset changed height."
+    $sourcePixels = [byte[]]::new(100 * 100 * 4)
+    $actual = [byte[]]::new(96 * 96 * 4)
+    $from.CopyPixels($sourcePixels, 400, 0)
+    $to.CopyPixels($actual, 384, 0)
+    $opaque = 0
+    for ($index = 3; $index -lt $actual.Length; $index += 4) { if ($actual[$index] -ne 0) { $opaque++ } }
+    Assert-Equal $ForegroundCount $opaque "Supplied $Asset foreground count changed."
+    for ($y = 0; $y -lt 100; $y++) {
+        for ($x = 0; $x -lt 100; $x++) {
+            $s = ($y * 100 + $x) * 4
+            if ([Math]::Min($sourcePixels[$s], [Math]::Min($sourcePixels[$s+1], $sourcePixels[$s+2])) -lt 240) {
+                $targetY = $y + $OffsetY
+                Assert-True ($targetY -ge 0 -and $targetY -lt 96 -and ($x + 3) -lt 96) "Supplied $Asset clipped source."
+                $d = ($targetY * 96 + $x + 3) * 4
+                $alpha = [int]$actual[$d+3]
+                if ($alpha -lt 255) {
+                    $boundary = $false
+                    for ($dy = -1; $dy -le 1; $dy++) {
+                        for ($dx = -1; $dx -le 1; $dx++) {
+                            $nx = $x + 3 + $dx; $ny = $targetY + $dy
+                            if ($nx -lt 0 -or $nx -ge 96 -or $ny -lt 0 -or $ny -ge 96 -or $actual[($ny*96+$nx)*4+3] -eq 0) { $boundary = $true }
+                        }
+                    }
+                    Assert-True $boundary "Supplied $Asset changed an interior texel($x,$y)."
+                    Assert-True ($alpha -gt 0) "Supplied $Asset erased an outline texel($x,$y)."
+                    for ($channel = 0; $channel -lt 3; $channel++) {
+                        Assert-True ($actual[$d+$channel] -le $alpha) "Invalid premultiplied edge in $Asset."
+                        Assert-Equal $sourcePixels[$s+$channel] ($actual[$d+$channel]+255-$alpha) "Supplied $Asset changed white-composite texel($x,$y)."
+                    }
+                } else {
+                    for ($channel = 0; $channel -lt 4; $channel++) {
+                        Assert-Equal $sourcePixels[$s+$channel] $actual[$d+$channel] "Supplied $Asset changed interior texel($x,$y), channel$channel."
+                    }
+                }
+            }
+        }
+    }
+}
+
 function New-DirectSnapshot([string]$Phase, [double]$Strength, [double]$ReleaseProgress) {
     return New-InternalInstance $directSnapshotType ([object[]]@(
         [Enum]::Parse($directTargetType, 'Body'),
@@ -166,19 +211,15 @@ Assert-Near 0.0 $rest.TranslationY 0.000001 'CLICK_REACTION completion did not r
 Assert-True $rest.Source.EndsWith('dororong-canonical.png', [StringComparison]::OrdinalIgnoreCase) 'CLICK_REACTION completion did not restore the exact canonical source.'
 
 $entryKeys = @(
-    'body-drag-entry-00-press.png',
-    'body-drag-entry-01-release.png',
-    'body-drag-entry-02-lengthen.png',
-    'body-drag-entry-03-drop.png',
-    'body-drag-entry-04-stretch.png',
-    'body-drag-entry-05-dangle.png',
-    'body-drag-entry-06-near-hang.png',
-    'body-drag-entry-07-hang.png')
+    'user-body-drag/01.png', 'user-body-drag/02.png', 'user-body-drag/03.png', 'user-body-drag/04.png',
+    'user-body-drag/05.png', 'user-body-drag/06.png', 'user-body-drag/07.png', 'user-body-drag/08.png')
+$entryOffsets = @(-13, -9, -9, -10, -10, -10, -10, -10)
+$entryForegroundCounts = @(3316, 3553, 3628, 3732, 3728, 3722, 3658, 3634)
 for ($index = 0; $index -lt $entryKeys.Count; $index++) {
     $progress = $index / [double]($entryKeys.Count - 1)
     $direct = New-DirectSnapshot 'BodyDragEntry' $progress 0
     $render.Invoke($presenter, [object[]]@((New-Snapshot $state::Dragged 0), $direct)) | Out-Null
-    Assert-True $image.Source.ToString().EndsWith($entryKeys[$index], [StringComparison]::OrdinalIgnoreCase) "Body drag entry progress $progress did not select $($entryKeys[$index])."
+    Assert-SuppliedSource $image $entryKeys[$index] $entryOffsets[$index] $entryForegroundCounts[$index]
     Assert-Near 1.0 ([double]$image.Opacity) 0.000001 "Body drag entry key $index changed whole-character opacity."
     Assert-Near 1.0 ([double]$bodyScale.ScaleY) 0.000001 "Body drag entry key $index retained procedural body stretch."
     Assert-Near 0.0 ([double]$translation.Y) 0.000001 "Body drag entry key $index moved the whole-character surface away from its fixed anchor."
@@ -193,7 +234,7 @@ Assert-Near 1.0 ([double]$image.Opacity) 0.000001 'Body drag entry interpolation
 
 $hold = New-DirectSnapshot 'BodyDragHold' 1 0
 $render.Invoke($presenter, [object[]]@((New-Snapshot $state::Dragged 0), $hold)) | Out-Null
-Assert-True $image.Source.ToString().EndsWith('body-drag-entry-07-hang.png', [StringComparison]::OrdinalIgnoreCase) 'Body drag hold did not retain the exact approved full-hang key.'
+Assert-SuppliedSource $image 'user-body-drag/08.png' -10 3634
 
 $render.Invoke($presenter, [object[]]@((New-Snapshot $state::Idle 0), $none)) | Out-Null
 $facing = [Dororong.Core.Behavior.FacingDirection]::Left
@@ -205,16 +246,15 @@ Assert-Near -1.0 ([double]$bodyScale.ScaleX) 0.000001 'Body drag did not preserv
 $facing = [Dororong.Core.Behavior.FacingDirection]::Right
 
 $settleKeys = @(
-    'body-drag-settle-00-hang.png',
-    'body-drag-settle-01-lift.png',
-    'body-drag-settle-02-gather.png',
-    'body-drag-settle-03-land.png',
-    'body-drag-settle-04-recover.png')
+    'user-body-drag/08.png', 'user-body-drag/07.png', 'user-body-drag/06.png', 'user-body-drag/05.png',
+    'user-body-drag/04.png', 'user-body-drag/03.png', 'user-body-drag/02.png', 'user-body-drag/01.png')
+$settleOffsets = @(-10, -10, -10, -10, -10, -9, -9, -13)
+$settleForegroundCounts = @(3634, 3658, 3722, 3728, 3732, 3628, 3553, 3316)
 for ($index = 0; $index -lt $settleKeys.Count; $index++) {
     $progress = $index / [double]($settleKeys.Count - 1)
     $direct = New-DirectSnapshot 'BodyDragSettle' 1 $progress
     $render.Invoke($presenter, [object[]]@((New-Snapshot $state::Idle 0.2), $direct)) | Out-Null
-    Assert-True $image.Source.ToString().EndsWith($settleKeys[$index], [StringComparison]::OrdinalIgnoreCase) "Body drag settle progress $progress did not select $($settleKeys[$index])."
+    Assert-SuppliedSource $image $settleKeys[$index] $settleOffsets[$index] $settleForegroundCounts[$index]
     Assert-Near 1.0 ([double]$image.Opacity) 0.000001 "Body drag settle key $index changed whole-character opacity."
     Assert-Near 1.0 ([double]$imageScale.ScaleX) 0.000001 "Body drag settle key $index retained idle breathing scale X."
     Assert-Near 1.0 ([double]$imageScale.ScaleY) 0.000001 "Body drag settle key $index retained idle breathing scale Y."
@@ -224,4 +264,4 @@ $render.Invoke($presenter, [object[]]@((New-Snapshot $state::Idle 0.2), $none)) 
 Assert-True $image.Source.ToString().EndsWith('dororong-canonical.png', [StringComparison]::OrdinalIgnoreCase) 'Body drag completion did not recover the canonical source.'
 Assert-True ([double]$imageScale.ScaleX -gt 1.0) 'Body drag completion did not restore ordinary idle breathing.'
 
-Write-Output "DIRECT INTERACTION RENDER PASS: $script:assertionCount assertions covered exact accepted sources, one character surface, pending compression, continuous 500ms hop, eight-key drag entry, approved full-hang hold, five-key settle, facing, and exact recovery."
+Write-Output "DIRECT INTERACTION RENDER PASS: $script:assertionCount assertions covered supplied8 interior/white-composite identity, exterior-only premultiplied alpha and silhouette counts, integer foot registration, one character surface, pending compression, continuous500ms hop,8-key entry, supplied8 hold, reverse8 settle, facing, and idle recovery."
