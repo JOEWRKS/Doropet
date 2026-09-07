@@ -1,0 +1,126 @@
+{
+  "sourceSHA256": "699348D1973709F228D843341AC5312AA7F449D57B9BFC76576256231E259A78",
+  "total": 16,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "neutral-exact",
+      "ok": true,
+      "observed": 0
+    },
+    {
+      "name": "release220-exact",
+      "ok": true,
+      "observed": 0
+    },
+    {
+      "name": "cancel-exact",
+      "ok": true,
+      "observed": 0
+    },
+    {
+      "name": "source-buffer-unchanged",
+      "ok": true,
+      "observed": 0
+    },
+    {
+      "name": "whole-selected-eye-rigid-transfer-at-max",
+      "ok": true,
+      "observed": {
+        "eyeCount": 87,
+        "eyeErrors": 0,
+        "delta": [
+          -1,
+          2
+        ]
+      }
+    },
+    {
+      "name": "mouth-rigid-transfer-at-max",
+      "ok": true,
+      "observed": {
+        "pixels": 45,
+        "mouthErrors": 0,
+        "delta": [
+          -1,
+          2
+        ]
+      }
+    },
+    {
+      "name": "inner-skin-follows-outside-feature-destinations",
+      "ok": true,
+      "observed": {
+        "before": "F6F4FFFF",
+        "after": "F8F9FAFF",
+        "note": "outside moved eye and mouth"
+      }
+    },
+    {
+      "name": "approved-exterior-alpha-envelope-retained",
+      "ok": true,
+      "observed": "broader interior, no extra hair occlusion"
+    },
+    {
+      "name": "upper-hair-accessories-opposite-face-body-fixed",
+      "ok": true,
+      "observed": 0
+    },
+    {
+      "name": "outward-clamp",
+      "ok": true,
+      "observed": "20vs200DIP"
+    },
+    {
+      "name": "inward-preserves-accepted-renderer",
+      "ok": true,
+      "observed": "no new inward art"
+    },
+    {
+      "name": "release-has-intermediate",
+      "ok": true,
+      "observed": 290
+    },
+    {
+      "name": "sweep-alpha-equal-approved-envelope",
+      "ok": true,
+      "observed": {
+        "samples": 81,
+        "alphaErrors": 0
+      }
+    },
+    {
+      "name": "sweep-accepted-contour-ink-exact",
+      "ok": true,
+      "observed": {
+        "samples": 81,
+        "inkErrors": 0
+      }
+    },
+    {
+      "name": "sweep-exact-complement-of-declared-editable-set",
+      "ok": true,
+      "observed": {
+        "samples": 81,
+        "outsideErrors": 0
+      }
+    },
+    {
+      "name": "sweep-observed-bang-boundary-pixels-fixed",
+      "ok": true,
+      "observed": {
+        "samples": 81,
+        "hairEdgeErrors": 0,
+        "probes": [
+          "19,45",
+          "18,46",
+          "18,47",
+          "17,48"
+        ]
+      }
+    }
+  ],
+  "productApplication": "NOT APPLIED",
+  "visualStatus": "UNVERIFIED",
+  "userAcceptance": "UNVERIFIED"
+}

@@ -1,0 +1,547 @@
+{
+  "geometrySource": "AUTHOR_SELECTED_FROM_OBSERVED_TEXELS",
+  "confidence": "AUTHORED_NOT_ANATOMICAL_PROOF",
+  "eye": [
+    {
+      "Item1": 20,
+      "Item2": 45
+    },
+    {
+      "Item1": 21,
+      "Item2": 45
+    },
+    {
+      "Item1": 22,
+      "Item2": 45
+    },
+    {
+      "Item1": 23,
+      "Item2": 45
+    },
+    {
+      "Item1": 19,
+      "Item2": 46
+    },
+    {
+      "Item1": 20,
+      "Item2": 46
+    },
+    {
+      "Item1": 21,
+      "Item2": 46
+    },
+    {
+      "Item1": 22,
+      "Item2": 46
+    },
+    {
+      "Item1": 23,
+      "Item2": 46
+    },
+    {
+      "Item1": 19,
+      "Item2": 47
+    },
+    {
+      "Item1": 20,
+      "Item2": 47
+    },
+    {
+      "Item1": 21,
+      "Item2": 47
+    },
+    {
+      "Item1": 22,
+      "Item2": 47
+    },
+    {
+      "Item1": 23,
+      "Item2": 47
+    },
+    {
+      "Item1": 24,
+      "Item2": 47
+    },
+    {
+      "Item1": 18,
+      "Item2": 48
+    },
+    {
+      "Item1": 19,
+      "Item2": 48
+    },
+    {
+      "Item1": 20,
+      "Item2": 48
+    },
+    {
+      "Item1": 21,
+      "Item2": 48
+    },
+    {
+      "Item1": 22,
+      "Item2": 48
+    },
+    {
+      "Item1": 23,
+      "Item2": 48
+    },
+    {
+      "Item1": 24,
+      "Item2": 48
+    },
+    {
+      "Item1": 18,
+      "Item2": 49
+    },
+    {
+      "Item1": 19,
+      "Item2": 49
+    },
+    {
+      "Item1": 20,
+      "Item2": 49
+    },
+    {
+      "Item1": 21,
+      "Item2": 49
+    },
+    {
+      "Item1": 22,
+      "Item2": 49
+    },
+    {
+      "Item1": 23,
+      "Item2": 49
+    },
+    {
+      "Item1": 24,
+      "Item2": 49
+    },
+    {
+      "Item1": 25,
+      "Item2": 49
+    },
+    {
+      "Item1": 17,
+      "Item2": 50
+    },
+    {
+      "Item1": 18,
+      "Item2": 50
+    },
+    {
+      "Item1": 19,
+      "Item2": 50
+    },
+    {
+      "Item1": 20,
+      "Item2": 50
+    },
+    {
+      "Item1": 21,
+      "Item2": 50
+    },
+    {
+      "Item1": 22,
+      "Item2": 50
+    },
+    {
+      "Item1": 23,
+      "Item2": 50
+    },
+    {
+      "Item1": 24,
+      "Item2": 50
+    },
+    {
+      "Item1": 25,
+      "Item2": 50
+    },
+    {
+      "Item1": 26,
+      "Item2": 50
+    },
+    {
+      "Item1": 17,
+      "Item2": 51
+    },
+    {
+      "Item1": 18,
+      "Item2": 51
+    },
+    {
+      "Item1": 19,
+      "Item2": 51
+    },
+    {
+      "Item1": 20,
+      "Item2": 51
+    },
+    {
+      "Item1": 21,
+      "Item2": 51
+    },
+    {
+      "Item1": 22,
+      "Item2": 51
+    },
+    {
+      "Item1": 23,
+      "Item2": 51
+    },
+    {
+      "Item1": 24,
+      "Item2": 51
+    },
+    {
+      "Item1": 25,
+      "Item2": 51
+    },
+    {
+      "Item1": 26,
+      "Item2": 51
+    },
+    {
+      "Item1": 27,
+      "Item2": 51
+    },
+    {
+      "Item1": 17,
+      "Item2": 52
+    },
+    {
+      "Item1": 18,
+      "Item2": 52
+    },
+    {
+      "Item1": 19,
+      "Item2": 52
+    },
+    {
+      "Item1": 20,
+      "Item2": 52
+    },
+    {
+      "Item1": 21,
+      "Item2": 52
+    },
+    {
+      "Item1": 22,
+      "Item2": 52
+    },
+    {
+      "Item1": 23,
+      "Item2": 52
+    },
+    {
+      "Item1": 24,
+      "Item2": 52
+    },
+    {
+      "Item1": 25,
+      "Item2": 52
+    },
+    {
+      "Item1": 26,
+      "Item2": 52
+    },
+    {
+      "Item1": 18,
+      "Item2": 53
+    },
+    {
+      "Item1": 19,
+      "Item2": 53
+    },
+    {
+      "Item1": 20,
+      "Item2": 53
+    },
+    {
+      "Item1": 21,
+      "Item2": 53
+    },
+    {
+      "Item1": 22,
+      "Item2": 53
+    },
+    {
+      "Item1": 23,
+      "Item2": 53
+    },
+    {
+      "Item1": 24,
+      "Item2": 53
+    },
+    {
+      "Item1": 25,
+      "Item2": 53
+    },
+    {
+      "Item1": 26,
+      "Item2": 53
+    },
+    {
+      "Item1": 19,
+      "Item2": 54
+    },
+    {
+      "Item1": 20,
+      "Item2": 54
+    },
+    {
+      "Item1": 21,
+      "Item2": 54
+    },
+    {
+      "Item1": 22,
+      "Item2": 54
+    },
+    {
+      "Item1": 23,
+      "Item2": 54
+    },
+    {
+      "Item1": 24,
+      "Item2": 54
+    },
+    {
+      "Item1": 25,
+      "Item2": 54
+    },
+    {
+      "Item1": 26,
+      "Item2": 54
+    },
+    {
+      "Item1": 20,
+      "Item2": 55
+    },
+    {
+      "Item1": 21,
+      "Item2": 55
+    },
+    {
+      "Item1": 22,
+      "Item2": 55
+    },
+    {
+      "Item1": 23,
+      "Item2": 55
+    },
+    {
+      "Item1": 24,
+      "Item2": 55
+    },
+    {
+      "Item1": 25,
+      "Item2": 55
+    },
+    {
+      "Item1": 21,
+      "Item2": 56
+    },
+    {
+      "Item1": 22,
+      "Item2": 56
+    },
+    {
+      "Item1": 23,
+      "Item2": 56
+    }
+  ],
+  "mouth": [
+    {
+      "Item1": 25,
+      "Item2": 57
+    },
+    {
+      "Item1": 26,
+      "Item2": 57
+    },
+    {
+      "Item1": 27,
+      "Item2": 57
+    },
+    {
+      "Item1": 28,
+      "Item2": 57
+    },
+    {
+      "Item1": 29,
+      "Item2": 57
+    },
+    {
+      "Item1": 30,
+      "Item2": 57
+    },
+    {
+      "Item1": 31,
+      "Item2": 57
+    },
+    {
+      "Item1": 32,
+      "Item2": 57
+    },
+    {
+      "Item1": 33,
+      "Item2": 57
+    },
+    {
+      "Item1": 25,
+      "Item2": 58
+    },
+    {
+      "Item1": 26,
+      "Item2": 58
+    },
+    {
+      "Item1": 27,
+      "Item2": 58
+    },
+    {
+      "Item1": 28,
+      "Item2": 58
+    },
+    {
+      "Item1": 29,
+      "Item2": 58
+    },
+    {
+      "Item1": 30,
+      "Item2": 58
+    },
+    {
+      "Item1": 31,
+      "Item2": 58
+    },
+    {
+      "Item1": 32,
+      "Item2": 58
+    },
+    {
+      "Item1": 33,
+      "Item2": 58
+    },
+    {
+      "Item1": 25,
+      "Item2": 59
+    },
+    {
+      "Item1": 26,
+      "Item2": 59
+    },
+    {
+      "Item1": 27,
+      "Item2": 59
+    },
+    {
+      "Item1": 28,
+      "Item2": 59
+    },
+    {
+      "Item1": 29,
+      "Item2": 59
+    },
+    {
+      "Item1": 30,
+      "Item2": 59
+    },
+    {
+      "Item1": 31,
+      "Item2": 59
+    },
+    {
+      "Item1": 32,
+      "Item2": 59
+    },
+    {
+      "Item1": 33,
+      "Item2": 59
+    },
+    {
+      "Item1": 25,
+      "Item2": 60
+    },
+    {
+      "Item1": 26,
+      "Item2": 60
+    },
+    {
+      "Item1": 27,
+      "Item2": 60
+    },
+    {
+      "Item1": 28,
+      "Item2": 60
+    },
+    {
+      "Item1": 29,
+      "Item2": 60
+    },
+    {
+      "Item1": 30,
+      "Item2": 60
+    },
+    {
+      "Item1": 31,
+      "Item2": 60
+    },
+    {
+      "Item1": 32,
+      "Item2": 60
+    },
+    {
+      "Item1": 33,
+      "Item2": 60
+    },
+    {
+      "Item1": 25,
+      "Item2": 61
+    },
+    {
+      "Item1": 26,
+      "Item2": 61
+    },
+    {
+      "Item1": 27,
+      "Item2": 61
+    },
+    {
+      "Item1": 28,
+      "Item2": 61
+    },
+    {
+      "Item1": 29,
+      "Item2": 61
+    },
+    {
+      "Item1": 30,
+      "Item2": 61
+    },
+    {
+      "Item1": 31,
+      "Item2": 61
+    },
+    {
+      "Item1": 32,
+      "Item2": 61
+    },
+    {
+      "Item1": 33,
+      "Item2": 61
+    }
+  ],
+  "featureTranslationAtMax": {
+    "x": -1,
+    "y": 2
+  },
+  "motionPath": "0..10DIP: smoothstep down 0..2px;10..20DIP: smoothstep left 0..1px; same eye/mouth translation",
+  "interpolation": "local bilinear rigid feature translation only; no feature scale",
+  "vacatedPixelFill": "nearby original colours; authored reconstruction inside vacated feature footprints",
+  "contour": "approved renderer envelope retained; exact approved 1.5px geometric boundary collar",
+  "input": "horizontal outward0..20DIP; gain0.5;220ms restore",
+  "inward": "unchanged approved algorithm",
+  "productApplication": "NOT APPLIED"
+}

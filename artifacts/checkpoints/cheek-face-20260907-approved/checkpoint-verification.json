@@ -1,0 +1,10 @@
+{
+  "Status": "ACCEPTED_PREVIEW_CHECKPOINT",
+  "ReproducedFiles": 69,
+  "Checks": 16,
+  "Failed": 0,
+  "ProductApplied": false,
+  "SourceTestToolUnchanged": 185,
+  "PriorCarryEvidenceUnchanged": 1283,
+  "OriginalZipSHA256": "FAF0DFB6CC3475D808EA3BDC6F3A61AF1D3888E067E9BF3557D724AE0D81EB1F"
+}
