@@ -111,7 +111,7 @@ public class ForelegFlutterTests
 
     internal static void Export(BitmapSource source, string name)
     {
-        var directory=Path.Combine(EdgePerchPresentationTests.ProjectRoot(),"artifacts","repro","perch-flutter-outline-20260909","proof");
+        var directory=Path.Combine(EdgePerchPresentationTests.ProjectRoot(),"artifacts","repro","alternating-forelegs-20260909","proof");
         Directory.CreateDirectory(directory);
         var image=new Image{Source=source,Width=768,Height=768};
         RenderOptions.SetBitmapScalingMode(image,BitmapScalingMode.NearestNeighbor);

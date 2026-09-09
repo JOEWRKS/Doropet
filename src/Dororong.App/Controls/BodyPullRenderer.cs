@@ -33,16 +33,22 @@ internal static class BodyPullRenderer
         for (var y = 40; y < 108; y++) for (var x = -11; x < 108; x++)
             {
                 if (x >= 0 && x < 96 && y < 96 && Protected[y * 96 + x]) continue;
-                var uv = flow.Map(new(x + .5, y + .5), -1); var ix = (int)Math.Floor(uv.X); var iy = (int)Math.Floor(uv.Y);
-                var sample = Texture(texture, ix, iy); var darkness = Darkness(sample);
-                for (var sx = -1; sx <= 1; sx += 2) for (var sy = -1; sy <= 1; sy += 2)
-                    {
-                        var tx = (int)Math.Floor(uv.X + sx * .35); var ty = (int)Math.Floor(uv.Y + sy * .35);
-                        var candidate = Texture(texture, tx, ty); var dark = Darkness(candidate);
-                        if (dark < darkness) { sample = candidate; darkness = dark; }
-                    }
-                var o = Offset(x, y); output.AsSpan(o, 4).Clear();
-                if (!sample.IsEmpty) sample.CopyTo(output.AsSpan(o, 4));
+                var uv = flow.Map(new(x + .5, y + .5), -1);
+                // Flow coordinates address pixel centers. Interpolate premultiplied
+                // color and coverage together; darkest-neighbor selection dilates
+                // ink and switches whole texels during subpixel movement.
+                var u = uv.X - .5; var v = uv.Y - .5;
+                var ix = (int)Math.Floor(u); var iy = (int)Math.Floor(v);
+                var fx = u - ix; var fy = v - iy;
+                var a = Texture(texture, ix, iy); var b = Texture(texture, ix + 1, iy);
+                var c = Texture(texture, ix, iy + 1); var d = Texture(texture, ix + 1, iy + 1);
+                var o = Offset(x, y);
+                for (var channel = 0; channel < 4; channel++)
+                {
+                    var top = (a.IsEmpty ? 0 : a[channel]) * (1 - fx) + (b.IsEmpty ? 0 : b[channel]) * fx;
+                    var bottom = (c.IsEmpty ? 0 : c[channel]) * (1 - fx) + (d.IsEmpty ? 0 : d[channel]) * fx;
+                    output[o + channel] = (byte)Math.Clamp(Math.Round(top * (1 - fy) + bottom * fy), 0, 255);
+                }
             }
     }
     private static ReadOnlySpan<byte> Texture(ReadOnlySpan<byte> source, int x, int y) => x >= 0 && x < 96 && y >= 0 && y < 96 ? source.Slice((y * 96 + x) * 4, 4) : ReadOnlySpan<byte>.Empty;

@@ -225,7 +225,7 @@ internal sealed class PetLoop : IDisposable
                 {
                     _directInteractionController.Begin(queuedPress.Target, globalPressPosition, queuedPress.OutwardSign);
                 }
-                _directInteractionController.SetPressContext(queuedPress.PressFacing, attachedCheek);
+                _directInteractionController.SetPressContext(queuedPress.PressFacing, attachedCheek, queuedPress.StartsHanging);
                 if (queuedPress.Target == DirectInteractionTarget.Body)
                 {
                     bodyPress = globalPressPosition;

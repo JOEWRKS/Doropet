@@ -24,8 +24,9 @@ internal sealed class DirectInteractionController
     private double _headLandingDistance;
 
     internal DirectInteractionSnapshot Current { get; private set; } = DirectInteractionSnapshot.None;
-    internal void SetPressContext(FacingDirection? facing, bool attachedCheek) =>
-        Current = Current with { PressFacing = facing, IsAttachedCheek = attachedCheek };
+    internal void SetPressContext(FacingDirection? facing, bool attachedCheek, bool startsHanging = false) =>
+        Current = Current with { PressFacing = facing, IsAttachedCheek = attachedCheek,
+            StartsHanging = startsHanging && Current.Target == DirectInteractionTarget.Body };
     internal bool IsWholeCarry =>
         Current.Phase == DirectInteractionPhase.BodyDragHold ||
         Current.BodyPull is { Phase: BodyPullPhase.Carried } ||
@@ -416,7 +417,9 @@ internal sealed class DirectInteractionController
         }
 
         HeadPullDistance.TryMeasure(Current.PressOrigin, pointerPosition, _headDragThreshold, out var pull);
-        var carry = Current.Phase == DirectInteractionPhase.BodyDragHold || pull.Distance >= HeadPullDistance.FullExtension;
+        // Regrabbing a perch already has a fully extended body. Keep the normal
+        // click/drag deadzone, but do not replay the ground-to-hanging keys.
+        var carry = Current.StartsHanging || Current.Phase == DirectInteractionPhase.BodyDragHold || pull.Distance >= HeadPullDistance.FullExtension;
         Current = Current with
         {
             Phase = carry ? DirectInteractionPhase.BodyDragHold : DirectInteractionPhase.BodyDragEntry,

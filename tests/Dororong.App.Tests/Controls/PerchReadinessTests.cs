@@ -51,7 +51,7 @@ public class PerchReadinessTests
             Assert.False(poses[2].SequenceEqual(poses[8]));
         }
         sheet.Measure(new(sheet.Width,sheet.Height));sheet.Arrange(new(0,0,sheet.Width,sheet.Height));sheet.UpdateLayout();
-        var directory=Path.Combine(EdgePerchPresentationTests.ProjectRoot(),"artifacts","repro","perch-flutter-outline-20260909","proof");Directory.CreateDirectory(directory);
+        var directory=Path.Combine(EdgePerchPresentationTests.ProjectRoot(),"artifacts","repro","alternating-forelegs-20260909","proof");Directory.CreateDirectory(directory);
         foreach(var scale in new[]{1,3})
         {
             var bitmap=new RenderTargetBitmap((int)sheet.Width*scale,(int)sheet.Height*scale,96*scale,96*scale,PixelFormats.Pbgra32);bitmap.Render(sheet);

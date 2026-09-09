@@ -12,6 +12,10 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     internal static extern short GetAsyncKeyState(int virtualKey);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetForegroundWindow(IntPtr window);
+
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
     private static extern int GetWindowLong32(IntPtr window, int index);
 
@@ -75,6 +79,7 @@ internal static class NativeMethods
     internal const long WsExNoActivate = 0x08000000L;
     internal const long WsExTopmost = 0x00000008L;
     internal const int WmMouseActivate = 0x0021;
+    internal const int WmLButtonDown = 0x0201;
     internal const int MaNoActivate = 3;
     internal const int VkLButton = 0x01;
     internal const uint SwpNoSize = 0x0001;

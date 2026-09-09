@@ -39,11 +39,18 @@ internal sealed class WindowActivationGuard : IDisposable
         _hook = null;
     }
 
-    internal static bool TryHandleMessage(int message, out IntPtr result)
+    internal static bool TryHandleMessage(int message, out IntPtr result,
+        bool primaryButtonDown = true, Action? activateForPress = null)
     {
+        // UIPI can return zero for a real held press when an elevated window is
+        // foreground. Explicit activation is necessary for WS_EX_NOACTIVATE;
+        // MA_ACTIVATE alone does not restore polling on that window style.
+        // Request it only on a delivered left-down, before WPF queues the press.
+        if (message == NativeMethods.WmLButtonDown && !primaryButtonDown)
+            activateForPress?.Invoke();
+
         if (message == NativeMethods.WmMouseActivate)
         {
-            // MA_NOACTIVATE prevents activation without discarding the following mouse message.
             result = new IntPtr(NativeMethods.MaNoActivate);
             return true;
         }
@@ -55,7 +62,10 @@ internal sealed class WindowActivationGuard : IDisposable
     private static IntPtr WindowProcedure(
         IntPtr window, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        handled = TryHandleMessage(message, out var result);
+        var buttonDown = message != NativeMethods.WmLButtonDown ||
+            (NativeMethods.GetAsyncKeyState(NativeMethods.VkLButton) & 0x8000) != 0;
+        handled = TryHandleMessage(message, out var result, buttonDown,
+            () => NativeMethods.SetForegroundWindow(window));
         return result;
     }
 

@@ -14,6 +14,64 @@ namespace Dororong.App.Tests.Runtime;
 public partial class PetLoopPlatformTests
 {
     [Theory]
+    [InlineData(FacingDirection.Left)] [InlineData(FacingDirection.Right)]
+    public void Perch_regrab_displays_supplied_eight_before_any_pointer_movement(FacingDirection facing) => CheekProductTests.Sta(() =>
+    {
+        using var h=PerchLocalAttach(facing);var p=h.Presenter!;
+        var expected=PerchExpressionTests.Pixels(ForelegFlutterTests.Source());
+        var position=h.Position;
+        var press=PressImage(h,p.EdgePerchImage,new(40,70));
+        var anchor=HeadPullAnchoring.Capture(p.EdgePerchImage,p,press.WindowLocalPosition,facing);
+        Assert.NotNull(anchor);h.Tick();
+        Assert.Equal(DirectInteractionPhase.BodyPending,h.Direct.Phase);
+        Assert.Equal(position,h.Position);
+        var image=VisibleImages(p).Single();
+        Assert.Equal(expected,PerchExpressionTests.Pixels((BitmapSource)image.Source));
+        Assert.Equal(facing==FacingDirection.Left?-1:1,Orientation(image,p));
+        var correction=HeadPullAnchoring.Correction(image,p,anchor!);
+        Assert.InRange(Math.Abs(correction.X),0,.01);Assert.InRange(Math.Abs(correction.Y),0,.01);
+        h.Pointer=new(true,h.Pointer.Position+new PointD(1,0));h.Tick();
+        Assert.Equal(DirectInteractionPhase.BodyPending,h.Direct.Phase);
+        Assert.False(h.Direct.IsPerchReady);
+    });
+
+    [Fact]
+    public void Perch_regrab_context_does_not_leak_into_the_next_ground_head_drag()
+    {
+        var controller=new DirectInteractionController();
+        controller.BeginDistanceBody(new(100,100),new(4,4));
+        controller.SetPressContext(FacingDirection.Left,false,true);
+        controller.Cancel();
+        controller.BeginDistanceBody(new(100,100),new(4,4));
+        controller.SetPressContext(FacingDirection.Right,false);
+        var current=controller.Advance(TimeSpan.FromMilliseconds(16),new(true,new(100,88)),true,PetState.Idle,PetState.Dragged);
+        Assert.Equal(DirectInteractionPhase.BodyDragEntry,current.Phase);
+        Assert.InRange(current.Strength,0.01,.5);
+        Assert.False(current.StartsHanging);
+    }
+
+    [Theory]
+    [InlineData(FacingDirection.Left)] [InlineData(FacingDirection.Right)]
+    public void Perch_regrab_short_drag_stays_fully_hanging_and_releases_from_that_pose(FacingDirection facing) => CheekProductTests.Sta(() =>
+    {
+        using var h=PerchLocalAttach(facing);var p=h.Presenter!;
+        PressImage(h,p.EdgePerchImage,new(40,70));h.Tick();
+        var origin=h.Pointer.Position;
+        h.Pointer=new(true,origin+new PointD(0,-12));h.Tick();
+        Assert.Equal(DirectInteractionPhase.BodyDragHold,h.Direct.Phase);
+        Assert.Equal(1,h.Direct.Strength);
+        Assert.Equal(facing,h.Direct.PressFacing);
+        Assert.Equal(EdgePerchPhase.None,h.Platforms.PerchPhase);
+        Assert.Single(VisibleImages(p));
+        h.Pointer=new(true,origin);h.Tick();
+        Assert.Equal(DirectInteractionPhase.BodyDragHold,h.Direct.Phase);
+        h.Native.Scene=Scene(windows:false);h.Down=false;h.Tick(80);
+        Assert.Equal(DirectInteractionPhase.BodyDragSettle,h.Direct.Phase);
+        Assert.False(h.Direct.IsPartialDragSettle);
+        Assert.Equal(1,h.Direct.Strength);
+    });
+
+    [Theory]
     [InlineData("cancel")] [InlineData("dispose")]
     public void PerchLocalInteraction_explicit_cleanup_clears_local_capture_and_owned_visibility(string action) => CheekProductTests.Sta(() =>
     {

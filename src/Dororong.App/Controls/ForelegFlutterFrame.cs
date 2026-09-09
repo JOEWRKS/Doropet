@@ -71,7 +71,9 @@ internal static class ForelegFlutterFrame
                     Array.Clear(result, at, 4);
             }
             // Native art faces left; the existing presenter mirror handles right.
-            var angle = (52 + 13 * Math.Sin(phase * Math.PI * 2 + armIndex * .55)) * Math.PI / 180;
+            // Half a beat apart: one paw reaches up while the other comes down.
+            // Both keep the same four-Hz cycle and approved forward angle range.
+            var angle = (52 + 13 * Math.Sin(phase * Math.PI * 2 - armIndex * Math.PI)) * Math.PI / 180;
             layers.Add((arm, layer, angle));
         }
         foreach (var (arm, layer, angle) in layers)

@@ -12,6 +12,26 @@ namespace Dororong.App.Tests.Controls;
 
 public sealed class SuppliedBodyDragFramesTests
 {
+    [Theory]
+    [InlineData(74, 37)] [InlineData(75, 37)]
+    [InlineData(74, 38)] [InlineData(75, 38)] [InlineData(76, 38)]
+    [InlineData(74, 39)] [InlineData(75, 39)] [InlineData(75, 40)]
+    public void Hanging_ribbon_middle_loop_retains_authored_white_on_black(int x, int y) => RunOnSta(() =>
+    {
+        var presenter = new DororongPresenter();
+        var raw = PremultipliedFrame.From(new BitmapImage(new Uri(
+            "pack://application:,,,/Dororong.App;component/Assets/user-body-drag/08.png")));
+        var expected = raw.Pixels.AsSpan((y * 100 + x) * 4, 4).ToArray();
+        Assert.Equal(255, expected[3]);
+        foreach (var phase in new[] { DirectInteractionPhase.BodyDragEntry, DirectInteractionPhase.BodyDragHold })
+        {
+            var actual = Render(presenter, phase, 1);
+            Assert.Equal(expected, actual.Pixels.AsSpan(((y - 10) * 96 + x + 3) * 4, 4).ToArray());
+            // Just outside the open lower corner is background, not ribbon.
+            Assert.Equal(0, actual.Pixels[(31 * 96 + 78) * 4 + 3]);
+        }
+    });
+
     // Independently measured from the eight supplied100px source files.
     [Theory]
     [InlineData(1, -13, 3316, "7A326475A80D34A49B5123300C8752874A2B0FDD83130F914115E0A378AC6F11")]
@@ -21,7 +41,7 @@ public sealed class SuppliedBodyDragFramesTests
     [InlineData(5, -10, 3728, "F21CE8CF8C45E1F9F8E1A8A46BBF9A3CFD3FAC8DB12F02B015E5A8FA41B9738A")]
     [InlineData(6, -10, 3722, "BDBB0418F996514BEA5EFC588C71EF366541C12889D5A013A2BE2925A7ED080C")]
     [InlineData(7, -10, 3658, "787054C28417D7D6544554F7875018DA6FEBFC48CDFF7794A7173C36FB5EB53A")]
-    [InlineData(8, -10, 3634, "DAF9726E9DBA7A2274EF421828826BD56CF556B9DC6801B2428D6D74BBCF2E56")]
+    [InlineData(8, -10, 3642, "DAF9726E9DBA7A2274EF421828826BD56CF556B9DC6801B2428D6D74BBCF2E56")]
     public void Actual_presenter_keeps_supplied_interior_and_removes_only_exterior_white_matte(
         int number, int offsetY, int foregroundCount, string sha256)
     {
@@ -130,20 +150,45 @@ public sealed class SuppliedBodyDragFramesTests
         return false;
     }
 
-    [Fact]
-    public void Intermediate_strengths_select_one_authored_key_not_a_blended_head()
+    // Approved browser rasters, independently captured before desktop integration.
+    // Catches accidentally retaining the old eight-key selector in the presenter.
+    [Theory]
+    [InlineData(9, "A5CCEE6826BC037E655FF9736853291C38F133287294402F8020D4056E82BE60")]
+    [InlineData(25, "4FE4E90D27D162C1863191A9C6C72D347779477F179BCB16BB0D1A8AC04874C4")]
+    [InlineData(35, "4128CE30A961C7B64F148FDC38FBF803328E617BCF380694D58B89EE8DBCC978")]
+    [InlineData(41, "B7DAD527BA563800C5AFA557E96554091D9C616F5950FA22E14B83CFBA2052BF")]
+    [InlineData(49, "5F6E1D9D028B7475EAFF43C196D5F0651601A42C30257BB3D72DBF508EF304E9")]
+    [InlineData(57, "13EA0DD6CDDE64DC5CE260BA26CF5D6F151048B7E0F7AD1E69A8450C71EDD926")]
+    public void Intermediate_strengths_render_the_selected_layered_preview(int frame, string sha)
     {
         RunOnSta(() =>
         {
             var presenter = new DororongPresenter();
-            var keys = Enumerable.Range(0, 8).Select(i => Render(presenter, DirectInteractionPhase.BodyDragEntry, i / 7.0).Pixels).ToArray();
-            for (var i = 0; i <= 112; i++)
+            var strength = (frame - 1) / 112d;
+            foreach (var phase in new[] { DirectInteractionPhase.BodyDragEntry, DirectInteractionPhase.BodyDragSettle })
             {
-                var pixels = Render(presenter, DirectInteractionPhase.BodyDragEntry, i / 112.0).Pixels;
-                Assert.Contains(keys, key => key.AsSpan().SequenceEqual(pixels));
+                var pixels = Render(presenter, phase, strength, 1 - strength).Pixels;
+                Assert.Equal(sha, Convert.ToHexString(SHA256.HashData(pixels)));
             }
         });
     }
+
+    [Fact]
+    public void Captured_intermediate_release_retraces_layered_pose_instead_of_old_mesh() => RunOnSta(() =>
+    {
+        var (presenter, pet, direct) = HeadTiltSamplingTests.Setup(false);
+        direct = direct with { Phase = DirectInteractionPhase.BodyDragEntry, Strength = 40 / 112d };
+        presenter.Render(pet, direct, TimeSpan.Zero);
+        presenter.Render(pet with { State = PetState.Idle }, direct with
+        {
+            Phase = DirectInteractionPhase.BodyDragSettle, RequiresCapture = false,
+            IsPartialDragSettle = true, ReleaseProgress = 2 / 7d
+        }, TimeSpan.Zero);
+        var pixels = PremultipliedFrame.From((BitmapSource)((Image)presenter.FindName("DororongImage")).Source).Pixels;
+        // From pose41 to pose25: 2.5 authored intervals - (2/7)*3.5 = 1.5.
+        Assert.Equal("4FE4E90D27D162C1863191A9C6C72D347779477F179BCB16BB0D1A8AC04874C4",
+            Convert.ToHexString(SHA256.HashData(pixels)));
+    });
 
     private static PremultipliedFrame Render(DororongPresenter presenter, DirectInteractionPhase phase, double strength, double release = 0)
     {

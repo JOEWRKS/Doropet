@@ -35,10 +35,17 @@ public class RecoveryAnchorContinuityTests
     [Theory]
     [InlineData(false, 0)] [InlineData(true, 0)]
     [InlineData(false, 14)] [InlineData(true, -14)]
-    public void Button_up_without_elapsed_time_preserves_the_composed_partial_pose(bool mirror, double angle) => CheekProductTests.Sta(() =>
+    [InlineData(false, 0, 8)] [InlineData(true, 0, 8)]
+    [InlineData(false, 0, 24)] [InlineData(true, 0, 24)]
+    [InlineData(false, 0, 40)] [InlineData(true, 0, 40)]
+    [InlineData(false, 0, 56)] [InlineData(true, 0, 56)]
+    [InlineData(false, 0, 72)] [InlineData(true, 0, 72)]
+    [InlineData(false, 0, 88)] [InlineData(true, 0, 88)]
+    [InlineData(false, 0, 104)] [InlineData(true, 0, 104)]
+    public void Button_up_without_elapsed_time_preserves_the_composed_partial_pose(bool mirror, double angle, int frameIndex = -1) => CheekProductTests.Sta(() =>
     {
         var (presenter, pet, direct) = HeadTiltSamplingTests.Setup(mirror);
-        direct = direct with { Phase=DirectInteractionPhase.BodyDragEntry, Strength=.4, HeadSwingDegrees=angle };
+        direct = direct with { Phase=DirectInteractionPhase.BodyDragEntry, Strength=frameIndex<0?.4:frameIndex/112d, HeadSwingDegrees=angle };
         presenter.Render(pet, direct, TimeSpan.Zero);
         CheekProductTests.Layout(presenter);
         var held = HeadTiltSamplingTests.Raster(presenter);

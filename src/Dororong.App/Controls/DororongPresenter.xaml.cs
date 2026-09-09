@@ -43,6 +43,7 @@ internal sealed class DirectInteractionPressEventArgs : EventArgs
     internal CheekPullCapture? CheekCapture { get; init; }
     internal FacingDirection? PressFacing { get; init; }
     internal bool IsAttachedCheek { get; init; }
+    internal bool StartsHanging { get; init; }
 }
 
 public partial class DororongPresenter : UserControl
@@ -100,7 +101,7 @@ public partial class DororongPresenter : UserControl
     private double _headSwingReleaseAngle;
     private bool _headSwingSettling;
     private BitmapSource? _lastHeadSource;
-    private HeadRecoveryFrame? _headRecovery;
+    private Func<double, BitmapSource>? _headRecovery;
     private bool _headLandingPresentationActive;
     private FacingDirection? _postHeadLandingIdleFacing;
     private BodyPullPresentation? _bodyPullPresentation;
@@ -306,7 +307,7 @@ public partial class DororongPresenter : UserControl
         _platformContact.Restore();
         _extremeLanding.RestoreFrame();
         _pendingClickPresentation = directInteraction.Target == DirectInteractionTarget.Body &&
-            directInteraction.Phase == DirectInteractionPhase.BodyPending;
+            directInteraction.Phase == DirectInteractionPhase.BodyPending && !directInteraction.StartsHanging;
         _directOwnsPresentation = directInteraction.RequiresCapture ||
             directInteraction.Phase == DirectInteractionPhase.BodyPending || directInteraction.HeadLanding is not null;
         if (directInteraction.CheekPull is { } cheek)
@@ -483,11 +484,17 @@ public partial class DororongPresenter : UserControl
         directInteraction is
         {
             Target: DirectInteractionTarget.Body,
-            Phase: DirectInteractionPhase.BodyPending
+            Phase: DirectInteractionPhase.BodyPending,
+            StartsHanging: false
         };
 
     private static bool IsBodyDragPresentationActive(DirectInteractionSnapshot directInteraction) =>
         directInteraction is
+        {
+            Target: DirectInteractionTarget.Body,
+            Phase: DirectInteractionPhase.BodyPending,
+            StartsHanging: true
+        } || directInteraction is
         {
             Target: DirectInteractionTarget.Body,
             Phase: DirectInteractionPhase.BodyDragEntry or
@@ -609,6 +616,7 @@ public partial class DororongPresenter : UserControl
     {
         var source = directInteraction.Phase switch
         {
+            DirectInteractionPhase.BodyPending when directInteraction.StartsHanging => BodyDragFrames.Sample(1),
             DirectInteractionPhase.BodyDragEntry => BodyDragFrames.Sample(directInteraction.Strength),
             DirectInteractionPhase.BodyDragHold => BodyDragFrames.Sample(1),
             DirectInteractionPhase.BodyDragSettle when directInteraction.IsPartialDragSettle => BodyDragFrames.Sample(directInteraction.Strength),
@@ -622,9 +630,8 @@ public partial class DororongPresenter : UserControl
 
         if (directInteraction.Phase == DirectInteractionPhase.BodyDragSettle && _headAnchor is not null)
         {
-            _headRecovery ??= new(BodyDragFrames.RecoveryFrom(_lastHeadSource ?? source, CanonicalFrame),
-                directInteraction.IsPartialDragSettle ? BodyDragFrames.AnatomicalKey(_lastHeadSource ?? source) : null);
-            source = _headRecovery.Sample(directInteraction.ReleaseProgress);
+            _headRecovery ??= BodyDragFrames.CreateRecovery(_lastHeadSource ?? source, CanonicalFrame);
+            source = _headRecovery(directInteraction.ReleaseProgress);
         }
         else
         {
@@ -691,7 +698,8 @@ public partial class DororongPresenter : UserControl
             RenderOptions.SetBitmapScalingMode(DororongImage,
                 directInteraction.Phase == DirectInteractionPhase.BodyDragSettle
                     ? _beforeHeadSampling
-                    : BodyRotateTransform.Angle != 0 ? BitmapScalingMode.Linear : BitmapScalingMode.NearestNeighbor);
+                    : BodyRotateTransform.Angle != 0 ? BitmapScalingMode.Linear
+                    : BodyDragFrames.AnatomicalKey(source) is null ? _beforeHeadSampling : BitmapScalingMode.NearestNeighbor);
             _headSamplingOverride = true;
         }
         if (directInteraction.HeadLanding is { Compression: not 0 } landing)
@@ -977,7 +985,8 @@ public partial class DororongPresenter : UserControl
                 framePosition,
                 _activeInteractionDescriptor.GetScreenOutwardSign(target, facing),
                 bodyCapture) { CheekCapture = cheekCapture, PressFacing=facing,
-                    IsAttachedCheek=perchHit && _edgePerch.IsAttached && cheekCapture is not null };
+                    IsAttachedCheek=perchHit && _edgePerch.IsAttached && cheekCapture is not null,
+                    StartsHanging=perchHit && _edgePerch.IsAttached && target == DirectInteractionTarget.Body };
     }
 
     private void OnExitClicked(object sender, RoutedEventArgs e)

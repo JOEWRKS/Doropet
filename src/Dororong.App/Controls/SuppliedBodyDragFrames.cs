@@ -1,5 +1,6 @@
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Runtime.CompilerServices;
 
 namespace Dororong.App.Controls;
 
@@ -8,6 +9,8 @@ namespace Dororong.App.Controls;
 internal sealed class SuppliedBodyDragFrames
 {
     private readonly BitmapSource[] _frames;
+    private sealed record Position(double Value);
+    private readonly ConditionalWeakTable<BitmapSource, Position> _positions = new();
 
     internal SuppliedBodyDragFrames(PremultipliedFrame footReference)
     {
@@ -19,16 +22,36 @@ internal sealed class SuppliedBodyDragFrames
             source.CacheOption = BitmapCacheOption.OnLoad;
             source.EndInit();
             source.Freeze();
-            return Prepare(PremultipliedFrame.From(source), footReference);
+            return Prepare(PremultipliedFrame.From(source), footReference, number);
         }).ToArray();
     }
 
     internal BitmapSource Sample(double progress)
     {
         if (!double.IsFinite(progress)) throw new ArgumentOutOfRangeException(nameof(progress));
-        // Display one authored image. Blending whole heads would invent ghosted shapes.
-        var index = (int)Math.Round(Math.Clamp(progress, 0, 1) * 7, MidpointRounding.AwayFromZero);
-        return _frames[index];
+        var value = Math.Clamp(progress, 0, 1);
+        var key = value * 7;
+        var nearest = (int)Math.Round(key);
+        var source = Math.Abs(key-nearest) < 1e-9 ? _frames[nearest] : LayeredPullFrames.Sample(value);
+        _positions.GetValue(source, _ => new(value));
+        return source;
+    }
+
+    internal Func<double, BitmapSource> CreateRecovery(BitmapSource source, BitmapSource canonical)
+    {
+        if (!_positions.TryGetValue(source, out var position))
+            return new HeadRecoveryFrame([source, canonical]).Sample;
+        // One original-key interval for the final pose01 -> canonical bridge.
+        // The rest retraces the very same dense bank used during the drag.
+        var span = position.Value * 7;
+        var bridge = new HeadRecoveryFrame([_frames[0], canonical], suppliedSource: 1);
+        return progress =>
+        {
+            if (!double.IsFinite(progress)) throw new ArgumentOutOfRangeException(nameof(progress));
+            if (progress <= 0) return source;
+            var remaining = span - Math.Clamp(progress, 0, 1) * (span + 1);
+            return remaining >= 0 ? Sample(remaining / 7) : bridge.Sample(-remaining);
+        };
     }
 
     internal BitmapSource[] RecoveryFrom(BitmapSource source, BitmapSource canonical)
@@ -44,7 +67,7 @@ internal sealed class SuppliedBodyDragFrames
         return index < 0 ? null : index + 1;
     }
 
-    internal static BitmapSource Prepare(PremultipliedFrame source, PremultipliedFrame footReference)
+    internal static BitmapSource Prepare(PremultipliedFrame source, PremultipliedFrame footReference, int anatomicalKey = 0)
     {
         if (source.Source.PixelWidth != 100 || source.Source.PixelHeight != 100)
             throw new ArgumentException("Supplied body-drag artwork must be100x100 pixels.", nameof(source));
@@ -56,6 +79,17 @@ internal sealed class SuppliedBodyDragFrames
             if (x < 0 || x >= 100 || y < 0 || y >= 100) return;
             var index = y * 100 + x;
             if (exterior[index]) return;
+            // The middle ribbon loop in authored08 has a light/open lower corner.
+            // Protect its eight measured interior texels from the background flood;
+            // retain their original RGB, not a white rectangle or a new outline.
+            // This source-coordinate ownership is deliberately limited to that key.
+            if (anatomicalKey == 8 && (y switch
+                {
+                    37 or 39 => x is 74 or 75,
+                    38 => x is >= 74 and <= 76,
+                    40 => x == 75,
+                    _ => false
+                })) return;
             var pixel = y * source.Stride + x * 4;
             if (pixels[pixel] < 240 || pixels[pixel + 1] < 240 || pixels[pixel + 2] < 240) return;
             exterior[index] = true;
