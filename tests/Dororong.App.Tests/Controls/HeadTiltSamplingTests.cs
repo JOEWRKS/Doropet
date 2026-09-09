@@ -34,7 +34,7 @@ public sealed class HeadTiltSamplingTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void Release_remains_smooth_until_zero_angle_and_exit_restores_original_sampling(bool mirror) => CheekProductTests.Sta(() =>
+    public void Release_uses_smooth_rest_sampling_through_zero_angle_and_exit(bool mirror) => CheekProductTests.Sta(() =>
     {
         var (presenter, pet, direct) = Setup(mirror);
         var image = (Image)presenter.FindName("DororongImage");
@@ -44,10 +44,16 @@ public sealed class HeadTiltSamplingTests
         presenter.Render(pet, release, TimeSpan.Zero);
         presenter.Render(pet, release with { ReleaseProgress = .5 }, TimeSpan.FromMilliseconds(100));
         Assert.NotEqual(0, ((RotateTransform)presenter.FindName("BodyRotateTransform")).Angle);
-        Assert.Equal(BitmapScalingMode.Linear, RenderOptions.GetBitmapScalingMode(image));
+        Assert.Equal(originalMode, RenderOptions.GetBitmapScalingMode(image));
+        CheekProductTests.Layout(presenter);
+        var smoothRelease = Raster(presenter);
+        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
+        var nearestRelease = Raster(presenter);
+        RenderOptions.SetBitmapScalingMode(image, originalMode);
+        Assert.False(smoothRelease.SequenceEqual(nearestRelease), "Released tilt must remain smoothly sampled");
         presenter.Render(pet, release with { ReleaseProgress = 1 }, TimeSpan.FromMilliseconds(100));
         Assert.Equal(0, ((RotateTransform)presenter.FindName("BodyRotateTransform")).Angle);
-        Assert.Equal(BitmapScalingMode.NearestNeighbor, RenderOptions.GetBitmapScalingMode(image));
+        Assert.Equal(originalMode, RenderOptions.GetBitmapScalingMode(image));
         presenter.Render(pet, DirectInteractionSnapshot.None);
         Assert.Equal(originalMode, RenderOptions.GetBitmapScalingMode(image));
     });

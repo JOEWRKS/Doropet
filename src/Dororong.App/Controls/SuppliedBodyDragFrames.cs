@@ -31,6 +31,19 @@ internal sealed class SuppliedBodyDragFrames
         return _frames[index];
     }
 
+    internal BitmapSource[] RecoveryFrom(BitmapSource source, BitmapSource canonical)
+    {
+        var index = Array.IndexOf(_frames, source);
+        return index < 0 ? [source, canonical]
+            : _frames.Take(index + 1).Reverse().Append(canonical).ToArray();
+    }
+
+    internal int? AnatomicalKey(BitmapSource source)
+    {
+        var index = Array.IndexOf(_frames, source);
+        return index < 0 ? null : index + 1;
+    }
+
     internal static BitmapSource Prepare(PremultipliedFrame source, PremultipliedFrame footReference)
     {
         if (source.Source.PixelWidth != 100 || source.Source.PixelHeight != 100)

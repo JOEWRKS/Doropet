@@ -36,6 +36,14 @@ internal static class HeadPullAnchoring
     internal static PointD SourcePoint(BitmapSource source, CapturedHeadAnchor capture) =>
         Landmarks.GetValue(source, Measure).Point + capture.RelativePoint;
 
+    internal static PointD RegistrationPoint(BitmapSource source) => Landmarks.GetValue(source, Measure).Point;
+
+    // Generated recovery images already know their correspondence. Re-detecting
+    // a rounded centroid from their antialiased pixels introduces one-pixel jumps.
+    // Keep measured ink bounds, but carry the continuous authored registration.
+    internal static void RegisterRecoveryPoint(BitmapSource source, PointD point) =>
+        Landmarks.Add(source, Measure(source) with { Point = point });
+
     internal static PointD Correction(Image image, FrameworkElement presenter, CapturedHeadAnchor capture, BitmapSource? registrationSource = null)
     {
         if (image.Source is not BitmapSource source) return default;

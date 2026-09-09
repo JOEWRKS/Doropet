@@ -24,6 +24,12 @@ internal sealed class DirectInteractionController
     private double _headLandingDistance;
 
     internal DirectInteractionSnapshot Current { get; private set; } = DirectInteractionSnapshot.None;
+    internal void SetPressContext(FacingDirection? facing, bool attachedCheek) =>
+        Current = Current with { PressFacing = facing, IsAttachedCheek = attachedCheek };
+    internal bool IsWholeCarry =>
+        Current.Phase == DirectInteractionPhase.BodyDragHold ||
+        Current.BodyPull is { Phase: BodyPullPhase.Carried } ||
+        _cheekCarry?.HasCarried == true;
 
     internal void BeginCheekPull(CheekPullCapture capture, PointD pointerPosition)
     {

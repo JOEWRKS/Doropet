@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\dororong-canonical.png" />
+    <Resource Include="Assets\dororong-edge-perch-09.png" />
     <Resource Include="Assets\user-body-drag\01.png" />
     <Resource Include="Assets\user-body-drag\02.png" />
     <Resource Include="Assets\user-body-drag\03.png" />

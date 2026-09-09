@@ -68,8 +68,9 @@ public sealed class HeadPullAnchoringTests
         p.Render(new(PetState.Idle,new(180,100),FacingDirection.Right,0,false,null),direct with {Phase=DirectInteractionPhase.BodyDragSettle,RequiresCapture=false});Layout(p);
         Assert.Equal(-11,transform.X,6);Assert.Equal(16,transform.Y,6);
         p.Render(new(PetState.Idle,new(180,100),FacingDirection.Right,0,false,null),direct with {Phase=DirectInteractionPhase.BodyDragSettle,RequiresCapture=false,ReleaseProgress=.5});Layout(p);
-        // Half release selects key5; that key's(-4,+13) correction is half released.
-        Assert.Equal(-2,transform.X,6);Assert.Equal(6.5,transform.Y,6);
+        // Recovery now follows registered adjacent keys, not a rounded key5
+        // switch. The grab correction must relax, not retain the held offset.
+        Assert.InRange(transform.X,-5.5,0);Assert.InRange(transform.Y,0,8);
         p.Render(new(PetState.Idle,new(180,100),FacingDirection.Right,0,false,null),DirectInteractionSnapshot.None);Layout(p);
         Assert.Equal(0,transform.X);Assert.Equal(0,transform.Y);
     });

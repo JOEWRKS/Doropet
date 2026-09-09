@@ -9,6 +9,7 @@ namespace Dororong.App.Controls;
 internal sealed class CheekPullPresentation(Canvas canvas, AlphaHitTestImage original)
 {
     private Image? _overlay;
+    internal Image? VisibleImage => _overlay;
     private Visibility _originalVisibility;
     private readonly FaceFollowMotion _follow = new();
     private bool _releasing;

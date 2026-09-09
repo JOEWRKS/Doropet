@@ -8,6 +8,7 @@ using Dororong.App.Interop;
 using Dororong.App.Runtime;
 using Dororong.Core.Behavior;
 using Dororong.Core.Geometry;
+using Dororong.Core.Platforms;
 
 namespace Dororong.App;
 
@@ -33,6 +34,7 @@ internal sealed class PetLoop : IDisposable
     private bool _timerStarted;
     private bool _clockStarted;
     private bool _cleanupComplete;
+    private bool _primaryWasDown;
 
     public PetLoop(Window window, DororongPresenter presenter, DesktopInput input)
         : this(
@@ -75,8 +77,11 @@ internal sealed class PetLoop : IDisposable
 
         try
         {
-            var workArea = _host.GetWorkArea();
             var petSize = _host.GetPetSize();
+            var platforms = _host.Platforms;
+            if (platforms is not null)
+                platforms.BeginFrame(_clock.Elapsed, _host.GetWindowPosition(), _host.SamplePointer(), false);
+            var workArea = platforms?.GetMovementArea(_host.GetWindowPosition(), platforms.Contact, petSize) ?? _host.GetWorkArea();
             var initialPosition = workArea.ClampTopLeft(
                 new PointD(
                     workArea.Right - petSize.Width - InitialMargin,
@@ -88,6 +93,7 @@ internal sealed class PetLoop : IDisposable
             _snapshot = _brain.Current;
             _host.SetWindowPosition(_snapshot.Position);
             _host.Render(_snapshot, _directInteractionController.Current);
+            _host.Platforms?.AfterRender(null, null);
 
             _timer.Attach(_tickHandler);
             _timerAttached = true;
@@ -96,6 +102,7 @@ internal sealed class PetLoop : IDisposable
             _lastElapsed = _clock.Elapsed;
             _timer.Start();
             _timerStarted = true;
+            _primaryWasDown = _host.IsPrimaryButtonDown();
         }
         catch (Exception exception)
         {
@@ -130,6 +137,7 @@ internal sealed class PetLoop : IDisposable
         }
         ReleaseMouseCapture();
         if (_brain is not null) _host.Render(_snapshot, DirectInteractionSnapshot.None);
+        _host.Platforms?.Clear(_host.GetWindowPosition());
     }
 
     public void Dispose()
@@ -163,8 +171,35 @@ internal sealed class PetLoop : IDisposable
             var delta = elapsed - _lastElapsed;
             _lastElapsed = elapsed;
 
-            var pointer = _host.SamplePointer();
+            var displayed = _host.GetWindowPosition();
+            var platforms = _host.Platforms;
             var primaryButtonDown = _host.IsPrimaryButtonDown();
+            var releasedWholeCarry = _primaryWasDown && !primaryButtonDown && _directInteractionController.IsWholeCarry;
+            var releasedFacing = _directInteractionController.Current.PressFacing;
+            var attachedCheek = _directInteractionController.Current.IsAttachedCheek ||
+                (_queuedDirectPress is { IsAttachedCheek: true } && platforms?.PerchPhase == EdgePerchPhase.Attached);
+            var capturedAtEntry = OwnsCapturedPosition(_snapshot, _directInteractionController.Current);
+            var canBeginPress = _queuedDirectPress is not null &&
+                _directInteractionController.Current.Target == DirectInteractionTarget.None;
+            var directAtEntry = platforms is null
+                ? OwnsPosition(_snapshot, _directInteractionController.Current) || _queuedDirectPress is not null
+                : !attachedCheek && primaryButtonDown && (capturedAtEntry || canBeginPress);
+            var pointer = _host.SamplePointer();
+            if (platforms is not null)
+            {
+                // A release (including a press+release between two ticks) drops
+                // the old surface owner before its pending translation can apply.
+                if (!attachedCheek && !primaryButtonDown && (canBeginPress || capturedAtEntry)) platforms.Reset(displayed);
+                pointer = platforms.BeginFrame(elapsed, displayed, pointer, directAtEntry,
+                    attachedCheek || _directInteractionController.Current.Target == DirectInteractionTarget.None,
+                    _directInteractionController.Current is
+                        { Phase: DirectInteractionPhase.BodyDragSettle, IsPartialDragSettle: true });
+                if (!directAtEntry)
+                {
+                    displayed=platforms.FramePosition;
+                    _snapshot = brain.ApplyPlatformPosition(displayed);
+                }
+            }
             var queuedPress = _queuedDirectPress;
             _queuedDirectPress = null;
             PointD? bodyPress = null;
@@ -179,7 +214,8 @@ internal sealed class PetLoop : IDisposable
                 }
                 else if (queuedPress.Target == DirectInteractionTarget.RightCheek && queuedPress.CheekCapture is { } cheekCapture)
                 {
-                    _directInteractionController.BeginCheekCarry(cheekCapture, windowPosition, globalPressPosition);
+                    if(attachedCheek) _directInteractionController.BeginCheekPull(cheekCapture,globalPressPosition);
+                    else _directInteractionController.BeginCheekCarry(cheekCapture, windowPosition, globalPressPosition);
                 }
                 else if (queuedPress.Target == DirectInteractionTarget.Body)
                 {
@@ -189,14 +225,15 @@ internal sealed class PetLoop : IDisposable
                 {
                     _directInteractionController.Begin(queuedPress.Target, globalPressPosition, queuedPress.OutwardSign);
                 }
+                _directInteractionController.SetPressContext(queuedPress.PressFacing, attachedCheek);
                 if (queuedPress.Target == DirectInteractionTarget.Body)
                 {
                     bodyPress = globalPressPosition;
                 }
             }
 
-            var workArea = _host.GetWorkArea();
             var petSize = _host.GetPetSize();
+            var workArea = platforms?.GetMovementArea(displayed, platforms.Contact, petSize) ?? _host.GetWorkArea();
             var bodyWasActive = _directInteractionController.Current.Target == DirectInteractionTarget.FiveRegionBody;
             var cheekWasActive = _directInteractionController.HasCheekCarry;
             PointD? bodyPosition = bodyWasActive
@@ -204,6 +241,10 @@ internal sealed class PetLoop : IDisposable
                 : cheekWasActive
                     ? _directInteractionController.AdvanceCheekCarry(delta, pointer, primaryButtonDown, workArea, petSize)
                     : _directInteractionController.AdvanceHeadLanding(delta, workArea, petSize);
+            // Released shape recovery is visual only. Physics must not receive
+            // the captured carry session's now-stale window position.
+            if (platforms is not null && (!primaryButtonDown ||
+                !OwnsCapturedPosition(_snapshot, _directInteractionController.Current))) bodyPosition = null;
             var directBeforeCore = _directInteractionController.Current;
             var previous = _snapshot;
             var current = brain.Update(new PetInput(
@@ -216,7 +257,9 @@ internal sealed class PetLoop : IDisposable
                 bodyPress,
                 _host.GetDragThreshold(),
                 bodyPosition,
-                DistanceDrivenBodyDrag: true));
+                DistanceDrivenBodyDrag: true,
+                SuspendAutonomousMotion: platforms?.SuspendsAutonomousMotion ?? false,
+                SurfaceBoundMotion: platforms is not null));
             var directCurrent = _directInteractionController.Advance(
                 delta,
                 pointer,
@@ -226,12 +269,58 @@ internal sealed class PetLoop : IDisposable
 
             // The release tick must first let the brain leave DRAGGED. Later
             // landing positions use its existing local-interaction position seam.
-            directCurrent = _directInteractionController.BeginHeadLanding(current.Position, workArea, petSize);
+            if (platforms is null)
+                directCurrent = _directInteractionController.BeginHeadLanding(current.Position, workArea, petSize);
 
             UpdateMouseCapture(current, directCurrent);
+            PlatformPose? platformPose = null;
+            double? targetSole = null;
+            if (platforms is not null)
+            {
+                var directOwns = !attachedCheek && primaryButtonDown && OwnsCapturedPosition(current, directCurrent);
+                var beganPerch = platforms.TryBeginPerch(displayed,releasedFacing ?? current.Facing,releasedWholeCarry,pointer.IsAvailable);
+                if(beganPerch)
+                {
+                    _directInteractionController.Cancel();brain.CancelDirectInteraction();directCurrent=DirectInteractionSnapshot.None;
+                    ReleaseMouseCapture();
+                }
+                if(platforms.TryAdvancePerch(beganPerch ? TimeSpan.Zero : delta,displayed,out var perchPosition))
+                {
+                    current=brain.ApplyPlatformPosition(perchPosition);
+                }
+                else
+                {
+                    if(attachedCheek)
+                    {
+                        _directInteractionController.Cancel();brain.CancelDirectInteraction();
+                        directCurrent=DirectInteractionSnapshot.None;current=brain.Current;
+                        ReleaseMouseCapture();
+                    }
+                    targetSole = platforms.Contact.SoleY;
+                    var clickHop = current.State == PetState.ClickReaction
+                        ? BodyClickTransformSampler.SampleConfirmedClick(current.Phase).TranslationY : 0;
+                    var pose = platforms.Advance(elapsed, delta, displayed, current.Position, platforms.Contact, directOwns, clickHop);
+                    if (!directOwns)
+                    {
+                        current = brain.ApplyPlatformPosition(pose.Position);
+                        platformPose = pose;
+                    }
+                }
+            }
+            directCurrent = directCurrent with
+            {
+                IsPerchReady = platforms?.CanBeginPerch(current.Position,
+                    directCurrent.PressFacing ?? current.Facing,
+                    primaryButtonDown && _directInteractionController.IsWholeCarry,
+                    pointer.IsAvailable) == true
+            };
             _host.SetWindowPosition(current.Position);
             _host.Render(current, directCurrent, delta);
+            platforms?.AfterRender(platformPose, targetSole);
+            if (platforms?.PerchPhase is EdgePerchPhase.Entering or EdgePerchPhase.Attached)
+                _host.MaintainPerchLayer?.Invoke();
             _snapshot = current;
+            _primaryWasDown=primaryButtonDown;
         }
         catch (Exception exception)
         {
@@ -262,6 +351,14 @@ internal sealed class PetLoop : IDisposable
     private static bool IsLocalInteractionActive(DirectInteractionSnapshot directInteraction) =>
         directInteraction.Target is DirectInteractionTarget.LeftCheek or DirectInteractionTarget.RightCheek or DirectInteractionTarget.FiveRegionBody ||
         directInteraction.Phase == DirectInteractionPhase.BodyDragSettle;
+
+    private static bool OwnsPosition(PetSnapshot core, DirectInteractionSnapshot direct) =>
+        core.State == PetState.Dragged || core.IsDirectInteractionPending ||
+        direct.Target != DirectInteractionTarget.None || direct.HeadLanding is not null;
+
+    private static bool OwnsCapturedPosition(PetSnapshot core, DirectInteractionSnapshot direct) =>
+        core.State == PetState.Dragged || core.IsDirectInteractionPending || direct.RequiresCapture ||
+        direct.Phase == DirectInteractionPhase.BodyPending;
 
     private void HandleFault(Exception exception)
     {
@@ -311,6 +408,7 @@ internal sealed class PetLoop : IDisposable
                 }
             },
             ReleaseMouseCapture,
+            () => _host.Platforms?.Clear(_host.GetWindowPosition()),
             () =>
             {
                 if (_directInteractionController.Current.Target is DirectInteractionTarget.FiveRegionBody or DirectInteractionTarget.Body ||
@@ -386,7 +484,14 @@ internal sealed class PetLoop : IDisposable
             presenter.Render,
             presenter.CaptureMouse,
             presenter.ReleaseMouseCapture,
-            presenter.Render);
+            presenter.Render)
+        {
+            MaintainPerchLayer = () => PerchTaskbarLayerGuard.EnsureAboveOverlappingTaskbar(source.Handle),
+            Platforms = new PetPlatformRuntime(new DesktopSceneSource(new DesktopSceneNative(source.Handle), background: true),
+                position => DesktopCoordinateMap.FromPresenter(presenter, position),
+                presenter.MeasurePlatformGeometry, presenter.ApplyPlatformPose, DesktopMetadataReader.ReadMonitorBounds,
+                presenter.MeasureEdgePerchContact, presenter.ApplyEdgePerch)
+        };
 
         return new ProductionRuntime(clock, timer, host);
     }

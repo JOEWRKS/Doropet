@@ -13,6 +13,7 @@ internal sealed class BodyPullPresentation
     private readonly Canvas _canvas;
     private readonly AlphaHitTestImage _original;
     private AlphaHitTestImage? _overlay;
+    internal Image? VisibleImage => _overlay;
     private Visibility _originalVisibility;
     private readonly SurroundingPullMotion _motion = new();
     private BodyPullCapture? _capture;

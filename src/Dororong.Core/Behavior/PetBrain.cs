@@ -47,6 +47,14 @@ public sealed class PetBrain
         IsDirectInteractionPending: _pressPosition.HasValue,
         GrabOffset: _grabOffset);
 
+    public PetSnapshot ApplyPlatformPosition(PointD position)
+    {
+        if (!double.IsFinite(position.X) || !double.IsFinite(position.Y))
+            throw new ArgumentOutOfRangeException(nameof(position));
+        _position = position;
+        return Current;
+    }
+
     public PetSnapshot Update(PetInput input)
     {
         if (input.LocalInteractionActive && input.LocalInteractionPosition is { } localPosition &&
@@ -61,7 +69,7 @@ public sealed class PetBrain
             return Current;
         }
 
-        if (_state != PetState.Dragged)
+        if (_state != PetState.Dragged && !input.SuspendAutonomousMotion)
         {
             NormalizePosition(input.WorkArea, input.PetSize);
         }
@@ -74,7 +82,11 @@ public sealed class PetBrain
             petCenter,
             simulationDelta: delta,
             observationDelta: input.Delta,
-            isDirectInteractionPending: handledDirectInteraction || _pressPosition.HasValue || _state == PetState.Dragged);
+            isDirectInteractionPending: handledDirectInteraction || _pressPosition.HasValue || _state == PetState.Dragged || input.SuspendAutonomousMotion);
+        // Keep pointer history current, but airborne/landing ownership freezes
+        // autonomous reactions, facing and timers as well as walking position.
+        // Direct presses, carry and release above remain operational.
+        if (input.SuspendAutonomousMotion) return Current;
         if (reaction.EnteredNearZone || reaction.Reaction == PointerReaction.Startled)
         {
             ResetInactivity();
@@ -116,13 +128,13 @@ public sealed class PetBrain
                 : TimeSpan.MaxValue;
             var consumed = Min(remaining, untilStateBoundary, untilSleepBoundary);
 
-            if (_state == PetState.Walk)
+            if (_state == PetState.Walk && !input.SuspendAutonomousMotion)
             {
-                Move(consumed, input.WorkArea, input.PetSize);
+                Move(consumed, input.WorkArea, input.PetSize, input.SurfaceBoundMotion);
             }
-            else if (_state == PetState.Startled)
+            else if (_state == PetState.Startled && !input.SuspendAutonomousMotion)
             {
-                Retreat(consumed, input.WorkArea, input.PetSize);
+                Retreat(consumed, input.WorkArea, input.PetSize, input.SurfaceBoundMotion);
             }
 
             _stateElapsed += consumed;
@@ -365,8 +377,9 @@ public sealed class PetBrain
         _stateDuration = _tuning.StartledDuration;
     }
 
-    private void Move(TimeSpan delta, RectD workArea, SizeD petSize)
+    private void Move(TimeSpan delta, RectD workArea, SizeD petSize, bool surfaceBound)
     {
+        if (surfaceBound) _heading = new(_heading.X < 0 ? -1 : 1, 0);
         var distance = _tuning.WalkSpeed * delta.TotalSeconds;
         var maximumX = Math.Max(workArea.X, workArea.Right - petSize.Width);
         var maximumY = Math.Max(workArea.Y, workArea.Bottom - petSize.Height);
@@ -419,7 +432,7 @@ public sealed class PetBrain
             : (minimum + period - phase, -heading);
     }
 
-    private void Retreat(TimeSpan delta, RectD workArea, SizeD petSize)
+    private void Retreat(TimeSpan delta, RectD workArea, SizeD petSize, bool surfaceBound)
     {
         if (_tuning.StartledDuration <= TimeSpan.Zero)
         {
@@ -427,7 +440,7 @@ public sealed class PetBrain
         }
 
         var distance = _tuning.StartleRetreatDistance * delta.TotalSeconds / _tuning.StartledDuration.TotalSeconds;
-        _position += new PointD(_startledRetreatDirection.X * distance, _startledRetreatDirection.Y * distance);
+        _position += new PointD(_startledRetreatDirection.X * distance, surfaceBound ? 0 : _startledRetreatDirection.Y * distance);
         NormalizePosition(workArea, petSize);
     }
 

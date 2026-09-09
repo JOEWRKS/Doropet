@@ -6,6 +6,7 @@ using System.Windows.Media.Imaging;
 using Dororong.App.Interaction;
 using Dororong.Core.Behavior;
 using Dororong.Core.Geometry;
+using Dororong.Core.Platforms;
 
 namespace Dororong.App.Controls;
 
@@ -40,6 +41,8 @@ internal sealed class DirectInteractionPressEventArgs : EventArgs
     internal double OutwardSign { get; }
     internal BodyPullCapture? BodyCapture { get; }
     internal CheekPullCapture? CheekCapture { get; init; }
+    internal FacingDirection? PressFacing { get; init; }
+    internal bool IsAttachedCheek { get; init; }
 }
 
 public partial class DororongPresenter : UserControl
@@ -90,24 +93,93 @@ public partial class DororongPresenter : UserControl
     private PointD? _lastRenderedWindowPosition;
     private PointD? _headPressOrigin;
     private CapturedHeadAnchor? _headAnchor;
+    private AlphaHitTestImage? _pendingHeadCaptureImage;
     private bool _headSamplingOverride;
     private BitmapScalingMode _beforeHeadSampling;
     private double _lastHeadSwingAngle;
     private double _headSwingReleaseAngle;
     private bool _headSwingSettling;
+    private BitmapSource? _lastHeadSource;
+    private HeadRecoveryFrame? _headRecovery;
     private bool _headLandingPresentationActive;
     private FacingDirection? _postHeadLandingIdleFacing;
     private BodyPullPresentation? _bodyPullPresentation;
     private readonly HeadSurroundingPresentation _headSurrounding = new();
     private CheekPullPresentation? _cheekPullPresentation;
     private FacingDirection? _postCheekIdleFacing;
+    private readonly PlatformContactPresentation _platformContact = new();
+    private readonly EdgePerchPresentation _edgePerch;
+    private readonly ExtremeLandingPresentation _extremeLanding;
+    private bool _directOwnsPresentation;
+    private bool _pendingClickPresentation;
+    private readonly PerchReadinessPresentation _perchReadiness = new();
 
     public DororongPresenter()
     {
         InitializeComponent();
+        _extremeLanding = new(BodyGroup, DororongImage);
+        _edgePerch = new((Canvas)Content, DororongImage, OnBodyPrimaryPressed);
+        Unloaded += (_, _) => { _edgePerch.Restore(); _platformContact.Restore(); _extremeLanding.Reset(); };
     }
 
     internal event EventHandler<DirectInteractionPressEventArgs>? DirectInteractionPressed;
+
+    internal FootContact? MeasurePlatformContact()
+        => MeasurePlatformGeometry()?.Contact;
+
+    internal (FootContact Contact, RectD Bounds)? MeasurePlatformGeometry()
+    {
+        var image = _extremeLanding.VisibleImage ?? _bodyPullPresentation?.VisibleImage ?? _cheekPullPresentation?.VisibleImage ?? DororongImage;
+        if (image.Visibility != Visibility.Visible || image.Source is not BitmapSource source ||
+            image.ActualWidth <= 0 || image.ActualHeight <= 0) return null;
+        var scale = Math.Min(image.ActualWidth / source.PixelWidth, image.ActualHeight / source.PixelHeight);
+        var transform = new GeneralTransformGroup();
+        transform.Children.Add(new ScaleTransform(scale, scale));
+        transform.Children.Add(new TranslateTransform((image.ActualWidth - source.PixelWidth * scale) / 2,
+            (image.ActualHeight - source.PixelHeight * scale) / 2));
+        transform.Children.Add(image.TransformToAncestor(this));
+        var contact = _platformContact.Measure(source, transform);
+        return double.IsFinite(contact.SoleY) ? (contact, _platformContact.VisibleBounds) : null;
+    }
+
+    internal PerchContact? MeasureEdgePerchContact(FacingDirection facing) => _edgePerch.Measure(facing, this);
+    internal AlphaHitTestImage EdgePerchImage => _edgePerch.Image;
+
+    internal void ApplyEdgePerch(EdgePerchPhase phase, FacingDirection facing, TimeSpan delta, bool immediateRestore) =>
+        _edgePerch.Apply(phase, facing, delta, immediateRestore);
+
+    internal AlphaHitTestImage ResolvePrimaryPressedImage(object? eventSource)
+    {
+        var perch = _edgePerch.VisibleImage;
+        var extreme = _extremeLanding.VisibleImage;
+        return eventSource is AlphaHitTestImage eventImage &&
+            (ReferenceEquals(eventImage, perch) || ReferenceEquals(eventImage, extreme) || ReferenceEquals(eventImage, DororongImage))
+                ? eventImage
+                : perch ?? extreme ?? DororongImage;
+    }
+
+    internal void ApplyPlatformPose(PlatformPose? pose, double? targetSoleY = null)
+    {
+        _platformContact.Restore();
+        _extremeLanding.RestoreFrame();
+        if (!_directOwnsPresentation && pose is { IsExtremeLanding: true } extreme && targetSoleY is not null)
+            _extremeLanding.Apply(extreme.LegSpread);
+        else _extremeLanding.Reset();
+        // The authored pending press scales about a point one pixel below the
+        // true sole. Pin that subpixel change before release, otherwise a tap
+        // starts below a window edge and is mistaken for a real support loss.
+        if (_pendingClickPresentation && targetSoleY is { } pressedSole && MeasurePlatformContact() is { } pressedContact)
+        {
+            _platformContact.Apply(BodyGroup, pressedContact, pressedSole, 0, 0);
+            return;
+        }
+        // Position belongs to motion. Its same local contact is the explicit
+        // target; a pose alone cannot reconstruct it from the support identity.
+        if (_directOwnsPresentation || pose is not { Phase: not PlatformPhase.Suspended } platform ||
+            targetSoleY is not { } target || MeasurePlatformContact() is not { } current) return;
+        FrameworkElement body = _bodyPullPresentation?.VisibleImage ?? _cheekPullPresentation?.VisibleImage ?? (FrameworkElement)BodyGroup;
+        _platformContact.Apply(body, current, target, platform.Squash, platform.Sway, platform.IsExtremeLanding);
+    }
 
     internal bool TryCreateBodyPullCapture(PointD sourcePosition, out BodyPullCapture? capture)
     {
@@ -127,7 +199,7 @@ public partial class DororongPresenter : UserControl
         return true;
     }
 
-    private bool CanUseBodyMap => _lastRenderedState != PetState.Sleep && !_bodyDragPresentationActive &&
+    private bool CanUseBodyMap => _extremeLanding.VisibleImage is null && _lastRenderedState != PetState.Sleep && !_bodyDragPresentationActive &&
         ReferenceEquals(_activeInteractionDescriptor, FrameInteractionDescriptor.Canonical) && DororongImage.Visibility == Visibility.Visible;
 
     private bool CanUseCheek => CanUseBodyMap &&
@@ -136,6 +208,7 @@ public partial class DororongPresenter : UserControl
 
     internal bool TryCreateCheekPullCapture(PointD sourcePosition, out CheekPullCapture? capture)
     {
+        if(_edgePerch.IsAttached) return _edgePerch.TryCaptureCheek(sourcePosition,this,out capture);
         capture = null;
         if (!CanUseCheek || !InteractionHitMap.IsSelectedCheek(sourcePosition) || DororongImage.Source is not BitmapSource source) return false;
         var scale = Math.Min(DororongImage.ActualWidth / 96, DororongImage.ActualHeight / 96);
@@ -159,9 +232,30 @@ public partial class DororongPresenter : UserControl
 
     internal void Render(PetSnapshot snapshot, DirectInteractionSnapshot directInteraction, TimeSpan elapsed)
     {
-        // Runtime landing ends in idle: retain its last visible facing instead
-        // of letting ResetPose turn a left-facing landing around on its last tick.
-        if (_headLandingPresentationActive && directInteraction.HeadLanding is null)
+        _perchReadiness.Restore();
+        RenderPose(snapshot, directInteraction, elapsed);
+        var image = _bodyPullPresentation?.VisibleImage ?? _cheekPullPresentation?.VisibleImage ?? DororongImage;
+        Point? pinnedSource = null;
+        if (directInteraction.IsPerchReady && image.Source is BitmapSource bitmap && image.ActualWidth > 0 && image.ActualHeight > 0)
+        {
+            var localPointer = directInteraction.PointerPosition - snapshot.Position;
+            if (image.TransformToAncestor(this).Inverse is { } inverse)
+            {
+                var point = inverse.Transform(new Point(localPointer.X, localPointer.Y));
+                pinnedSource = new Point(point.X * bitmap.PixelWidth / image.ActualWidth,
+                    point.Y * bitmap.PixelHeight / image.ActualHeight);
+            }
+        }
+        _perchReadiness.Apply(image, directInteraction.IsPerchReady,
+            directInteraction.Target == DirectInteractionTarget.Body, elapsed, pinnedSource);
+    }
+
+    private void RenderPose(PetSnapshot snapshot, DirectInteractionSnapshot directInteraction, TimeSpan elapsed)
+    {
+        // Retain head-release facing independently of the legacy timed landing:
+        // platform-owned falls finish shape recovery while still airborne.
+        if ((_headLandingPresentationActive && directInteraction.HeadLanding is null) ||
+            (_bodyDragPresentationActive && directInteraction.Target != DirectInteractionTarget.Body))
         {
             _postHeadLandingIdleFacing = _activeFacing;
         }
@@ -175,6 +269,9 @@ public partial class DororongPresenter : UserControl
         // a first-tick overshoot changes it. Core owns window following/clamping.
         if (directInteraction.Target != DirectInteractionTarget.Body)
         {
+            _pendingHeadCaptureImage = null;
+            _lastHeadSource = null;
+            _headRecovery = null;
             _headSurrounding.Reset();
             _headPressOrigin = null;
             _headAnchor = null;
@@ -183,15 +280,35 @@ public partial class DororongPresenter : UserControl
         }
         else if (_headPressOrigin != directInteraction.PressOrigin)
         {
+            _lastHeadSource = null;
+            _headRecovery = null;
             _headSurrounding.Reset();
             _headPressOrigin = directInteraction.PressOrigin;
             _lastHeadSwingAngle = _headSwingReleaseAngle = 0;
             _headSwingSettling = false;
+            var captureImage = _pendingHeadCaptureImage ?? _edgePerch.VisibleImage ?? _extremeLanding.VisibleImage ?? DororongImage;
+            _pendingHeadCaptureImage = null;
             _headAnchor = _lastRenderedWindowPosition is { } previousWindow
-                ? HeadPullAnchoring.Capture(DororongImage, this, directInteraction.PressOrigin - previousWindow, _activeFacing)
+                ? HeadPullAnchoring.Capture(captureImage, this, directInteraction.PressOrigin - previousWindow, directInteraction.PressFacing ?? _activeFacing)
                 : null;
         }
         _lastRenderedWindowPosition = snapshot.Position;
+        // Regrab capture above must see the still-composed perch source and its
+        // live transform. Retire that ownership before a body/cheek overlay can
+        // hide the canonical image; the later idempotent runtime restore must
+        // not resurrect canonical underneath the new direct presentation.
+        if (directInteraction.Target != DirectInteractionTarget.None && !directInteraction.IsAttachedCheek) _edgePerch.Restore();
+        _edgePerch.RenderLocalCheek(directInteraction.IsAttachedCheek ? directInteraction.CheekPull : null,directInteraction.Phase,elapsed);
+        if(directInteraction.IsAttachedCheek) return;
+        // Body/cheek captures were taken at press; head capture above must still
+        // see the actual displayed platform pose. Only now retire this layer,
+        // including before either overlay's early return.
+        _platformContact.Restore();
+        _extremeLanding.RestoreFrame();
+        _pendingClickPresentation = directInteraction.Target == DirectInteractionTarget.Body &&
+            directInteraction.Phase == DirectInteractionPhase.BodyPending;
+        _directOwnsPresentation = directInteraction.RequiresCapture ||
+            directInteraction.Phase == DirectInteractionPhase.BodyPending || directInteraction.HeadLanding is not null;
         if (directInteraction.CheekPull is { } cheek)
         {
             _bodyPullPresentation?.Restore();
@@ -217,7 +334,7 @@ public partial class DororongPresenter : UserControl
         if (bodyDragPresentationActive && !_bodyDragPresentationActive)
         {
             _bodyDragPresentationActive = true;
-            _bodyDragVisibleFacing = _activeFacing;
+            _bodyDragVisibleFacing = directInteraction.PressFacing ?? _activeFacing;
         }
         else if (!bodyDragPresentationActive)
         {
@@ -227,7 +344,7 @@ public partial class DororongPresenter : UserControl
         if (bodyClickPresentationActive && !_bodyClickPresentationActive)
         {
             _bodyClickPresentationActive = true;
-            _bodyClickVisibleFacing = _activeFacing;
+            _bodyClickVisibleFacing = directInteraction.PressFacing ?? _activeFacing;
             _postBodyClickIdleFacing = null;
         }
         else if (!bodyClickPresentationActive)
@@ -503,6 +620,18 @@ public partial class DororongPresenter : UserControl
             return;
         }
 
+        if (directInteraction.Phase == DirectInteractionPhase.BodyDragSettle && _headAnchor is not null)
+        {
+            _headRecovery ??= new(BodyDragFrames.RecoveryFrom(_lastHeadSource ?? source, CanonicalFrame),
+                directInteraction.IsPartialDragSettle ? BodyDragFrames.AnatomicalKey(_lastHeadSource ?? source) : null);
+            source = _headRecovery.Sample(directInteraction.ReleaseProgress);
+        }
+        else
+        {
+            _lastHeadSource = source;
+            _headRecovery = null;
+        }
+
         BodyScaleTransform.ScaleX = (_headAnchor?.Facing ?? _bodyDragVisibleFacing) == FacingDirection.Left ? -1 : 1;
         BodyScaleTransform.ScaleY = 1;
         BodyRotateTransform.Angle = 0;
@@ -556,10 +685,13 @@ public partial class DororongPresenter : UserControl
             }
             _lastHeadSwingAngle = BodyRotateTransform.Angle;
             _beforeHeadSampling = RenderOptions.GetBitmapScalingMode(DororongImage);
-            // Keep upright pixel art exact, but blend samples during the actual
-            // displayed tilt so thin contours do not jump between source pixels.
-            RenderOptions.SetBitmapScalingMode(DororongImage, BodyRotateTransform.Angle != 0
-                ? BitmapScalingMode.Linear : BitmapScalingMode.NearestNeighbor);
+            // Release returns to the rest sampling mode before impact, avoiding
+            // a contour-weight switch halfway through a short-drop rebound.
+            // Held poses retain their approved upright/tilted sampling.
+            RenderOptions.SetBitmapScalingMode(DororongImage,
+                directInteraction.Phase == DirectInteractionPhase.BodyDragSettle
+                    ? _beforeHeadSampling
+                    : BodyRotateTransform.Angle != 0 ? BitmapScalingMode.Linear : BitmapScalingMode.NearestNeighbor);
             _headSamplingOverride = true;
         }
         if (directInteraction.HeadLanding is { Compression: not 0 } landing)
@@ -599,6 +731,12 @@ public partial class DororongPresenter : UserControl
 
     internal DirectInteractionTarget ClassifyOpaqueSourcePoint(PointD sourcePosition, bool opaque)
     {
+        if(_edgePerch.IsAttached)
+        {
+            if(!opaque)return DirectInteractionTarget.None;
+            return InteractionHitMap.IsSelectedCheek(new(sourcePosition.X-8,sourcePosition.Y+6))
+                ? DirectInteractionTarget.RightCheek : DirectInteractionTarget.Body;
+        }
         if (!opaque || !InteractionHitMap.InSource(sourcePosition)) return DirectInteractionTarget.None;
         if (CanUseBodyMap && DororongImage.Source is BitmapSource source)
         {
@@ -795,38 +933,51 @@ public partial class DororongPresenter : UserControl
 
     private void OnBodyPrimaryPressed(object sender, MouseButtonEventArgs e)
     {
-        if (!DororongImage.TryGetOpaqueSourcePoint(e.GetPosition(DororongImage), out var sourcePosition))
+        var image=ResolvePrimaryPressedImage(e.OriginalSource);
+        var press=CreateDirectPress(image,e.GetPosition(image));
+        if(press is null)return;
+        DirectInteractionPressed?.Invoke(this,press);
+        e.Handled=true;
+    }
+
+    internal DirectInteractionPressEventArgs? CreateDirectPress(AlphaHitTestImage pressedImage, Point imagePosition)
+    {
+        var perch = _edgePerch.VisibleImage;
+        var extreme = _extremeLanding.VisibleImage;
+        if (!pressedImage.TryGetOpaqueSourcePoint(imagePosition, out var sourcePosition))
         {
-            return;
+            return null;
         }
 
-        var framePosition = GetVisibleFramePoint(sourcePosition);
-        var target = ClassifyOpaqueSourcePoint(sourcePosition, opaque: true);
+        var perchHit = ReferenceEquals(pressedImage, perch);
+        var splat = ReferenceEquals(pressedImage, extreme);
+        var framePosition = perchHit ? new PointD(48, 48) : splat ? new PointD(40,40) : GetVisibleFramePoint(sourcePosition);
+        var target = splat || (perchHit && !_edgePerch.IsAttached) ? DirectInteractionTarget.Body : ClassifyOpaqueSourcePoint(sourcePosition, opaque: true);
         if (target == DirectInteractionTarget.None)
         {
-            return;
+            return null;
         }
+        _pendingHeadCaptureImage = target == DirectInteractionTarget.Body ? pressedImage : null;
 
-        var windowPosition = e.GetPosition(this);
+        var windowPosition = pressedImage.TranslatePoint(imagePosition,this);
+        var facing=perchHit ? _edgePerch.Facing : _activeFacing;
         BodyPullCapture? bodyCapture = null;
         CheekPullCapture? cheekCapture = null;
-        if (target == DirectInteractionTarget.RightCheek && !TryCreateCheekPullCapture(sourcePosition, out cheekCapture)) return;
+        if (target == DirectInteractionTarget.RightCheek && !TryCreateCheekPullCapture(sourcePosition, out cheekCapture)) return null;
         if (target == DirectInteractionTarget.FiveRegionBody)
         {
-            var actual = e.GetPosition(DororongImage);
+            var actual = pressedImage.TranslatePoint(imagePosition,DororongImage);
             var scale = Math.Min(DororongImage.ActualWidth / 96, DororongImage.ActualHeight / 96);
             var precise = new PointD((actual.X - (DororongImage.ActualWidth - 96 * scale) / 2) / scale, (actual.Y - (DororongImage.ActualHeight - 96 * scale) / 2) / scale);
-            if (!TryCreateBodyPullCapture(precise, out bodyCapture)) return;
+            if (!TryCreateBodyPullCapture(precise, out bodyCapture)) return null;
         }
-        DirectInteractionPressed?.Invoke(
-            this,
-            new DirectInteractionPressEventArgs(
+        return new DirectInteractionPressEventArgs(
                 target,
                 new PointD(windowPosition.X, windowPosition.Y),
                 framePosition,
-                _activeInteractionDescriptor.GetScreenOutwardSign(target, _activeFacing),
-                bodyCapture) { CheekCapture = cheekCapture });
-        e.Handled = true;
+                _activeInteractionDescriptor.GetScreenOutwardSign(target, facing),
+                bodyCapture) { CheekCapture = cheekCapture, PressFacing=facing,
+                    IsAttachedCheek=perchHit && _edgePerch.IsAttached && cheekCapture is not null };
     }
 
     private void OnExitClicked(object sender, RoutedEventArgs e)

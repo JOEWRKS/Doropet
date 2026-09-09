@@ -1,0 +1,14 @@
+# Perch expressions and local cheek interaction
+
+Approved in chat: user explicitly accepts entry motion/blink and adds visible-facing continuity plus attached-only cheek pulling, then says ㄱㄱ. No further art or hit-band redesign.
+
+- Preserve the actual displayed facing at press, through pending/lift/carry and perch attachment. Never infer facing from mouse velocity; preserve ordinary autonomous turning outside the interaction.
+- Keep current attachment eligibility exactly: whole carry release, neutral grip0..20DIP below eligible visible edge, both paws contained, headroom,160ms entry and500ms expiry. Do not widen hit/entry bands.
+- Add a short~300ms contact response: upper body gives slightly then small rebound, grip line pinned. The motion is presentation-only and does not move the physics owner or replay landing. Clamp interruption cleanly and restore on regrab/natural detach.
+- Blink while attached using existing authored eye states (open/squint/closed/squint/open). Preserve image09's remaining source pixels and complete paws; do not generate/repaint artwork. Use a bounded independent visual clock because the autonomous brain is suspended when attached.
+- Attached cheek press keeps attachment and owner following. Reuse approved cheek deformation; no whole-character carry at any pull length. Front paws/body remain unchanged in source and anchored to the owner. During pull/release, eyes stay open; resume blink after release finishes. Preserve both facings and transparent hit testing.
+- Non-cheek visible head/body press detaches and starts existing drag at the displayed position. Owner disappearance during a cheek pull cancels that local session and performs one ordinary detach/fall. Moving owner continues to move the whole attached pet; 'body fixed' means no motion from cheek pull, not ignore a moving support.
+- Source9 and all existing assets remain byte-exact. Registered runtime eye composition/cheek normalization may operate on copies only; source dimensions/opaque pixels must not be cropped. Existing grounded cheek/body/head interactions and accepted low-head touchdown remain unchanged.
+- No unrelated resume/tooltip work, git commit/push/reset/cleanup, or overwritten old runtime. Build a new trial runtime after review, preserve the current runtime, and distinguish automated/rendered tests from native user trial.
+
+Architecture: semantic press-facing and attached-cheek intent travel with the existing direct-input snapshot rather than relying on mutable hidden canonical state. Perch keeps position ownership during its local cheek interaction; its presentation owns the visual motion/blink/cheek lifecycle. Existing ground interactions retain their defaults. New focused helper files keep timers/registered eye composition separate from the already-large presenter.

@@ -12,6 +12,7 @@ internal sealed class CheekCarrySession
     private PointD _target, _lead, _filtered;
     private double _pending;
     private bool _carried;
+    internal bool HasCarried => _carried;
     internal PointD WindowPosition { get; private set; }
     internal double PullDips { get; private set; }
 

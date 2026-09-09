@@ -1,4 +1,5 @@
 using Dororong.Core.Geometry;
+using Dororong.Core.Behavior;
 
 namespace Dororong.App.Interaction;
 
@@ -16,6 +17,9 @@ internal readonly record struct DirectInteractionSnapshot(
     internal double HeadSwingDegrees { get; init; }
     internal HeadLandingSnapshot? HeadLanding { get; init; }
     internal CheekPullSnapshot? CheekPull { get; init; }
+    internal FacingDirection? PressFacing { get; init; }
+    internal bool IsAttachedCheek { get; init; }
+    internal bool IsPerchReady { get; init; }
 
     // Keep the existing seven-argument runtime/reflection contract for legacy renders.
     internal DirectInteractionSnapshot(DirectInteractionTarget Target, DirectInteractionPhase Phase,

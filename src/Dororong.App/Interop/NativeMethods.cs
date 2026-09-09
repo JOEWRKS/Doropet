@@ -73,6 +73,7 @@ internal static class NativeMethods
     internal const int GwlExStyle = -20;
     internal const long WsExToolWindow = 0x00000080L;
     internal const long WsExNoActivate = 0x08000000L;
+    internal const long WsExTopmost = 0x00000008L;
     internal const int WmMouseActivate = 0x0021;
     internal const int MaNoActivate = 3;
     internal const int VkLButton = 0x01;
@@ -81,6 +82,7 @@ internal static class NativeMethods
     internal const uint SwpNoZOrder = 0x0004;
     internal const uint SwpNoActivate = 0x0010;
     internal const uint SwpFrameChanged = 0x0020;
+    internal const uint SwpNoOwnerZOrder = 0x0200;
 
     internal struct POINT
     {

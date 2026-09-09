@@ -49,6 +49,8 @@ internal sealed class PetLoopTimer
 
 internal sealed class PetLoopHost
 {
+    internal PetPlatformRuntime? Platforms { get; init; }
+    internal Action? MaintainPerchLayer { get; init; }
     private readonly Func<RectD> _getWorkArea;
     private readonly Func<SizeD> _getPetSize;
     private readonly Func<SizeD> _getDragThreshold;
