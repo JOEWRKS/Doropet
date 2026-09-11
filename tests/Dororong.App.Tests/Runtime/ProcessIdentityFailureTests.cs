@@ -73,15 +73,31 @@ public class ProcessIdentityFailureTests
         Assert.Equal($"ProcessIdentity:{error}", source.LastFailure);
     }
 
-    [Fact]
-    public void Confirmed_other_pet_executable_remains_excluded()
+    [Theory]
+    [InlineData("Dororong.App.exe")]
+    [InlineData("Dororong.exe")]
+    public void Confirmed_other_pet_executable_remains_excluded(string executableName)
     {
         using var window = new OffscreenWindow();
-        var reader = new DesktopMetadataReader(0, _ => @"C:\AnotherPet\dOROrong.App.EXE");
+        var reader = new DesktopMetadataReader(0, _ => $@"C:\AnotherPet\{executableName.ToUpperInvariant()}");
         var native = reader.ReadWindow(window.Handle);
         Assert.NotNull(native);
         Assert.True(native.Excluded);
         Assert.Equal((uint)Environment.ProcessId, native.ProcessId);
+    }
+
+    [Fact]
+    public void Ordinary_application_executable_remains_eligible_for_platform_scene()
+    {
+        using var window = new OffscreenWindow();
+        var reader = new DesktopMetadataReader(0, _ => @"C:\Apps\OrdinaryWpf.exe");
+
+        var native = reader.ReadWindow(window.Handle);
+
+        Assert.NotNull(native);
+        Assert.False(native.Excluded);
+        Assert.True(native.CanSupport);
+        Assert.True(native.CanOcclude);
     }
 
     [Fact]

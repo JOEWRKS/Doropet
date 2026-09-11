@@ -209,7 +209,8 @@ internal sealed class DesktopMetadataReader : IDesktopMetadataReader
         var excluded=handle==petHandle || className is "Progman" or "WorkerW" or "Shell_DesktopWnd";
         var visible=Api.IsWindowVisible(handle); var minimized=Api.IsIconic(handle);
         var processFileName=!excluded && visible && !minimized ? ReadProcessFileName(pid) : null;
-        excluded |= string.Equals(processFileName,"Dororong.App.exe",StringComparison.OrdinalIgnoreCase);
+        excluded |= string.Equals(processFileName,"Dororong.App.exe",StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(processFileName,"Dororong.exe",StringComparison.OrdinalIgnoreCase);
         var gamingOverlay=IsNvidiaGamingOverlay(handle,className,processFileName);
         var taskbar=className is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
         var bounds=new RectD(); var cloaked=false;

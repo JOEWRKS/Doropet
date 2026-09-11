@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Interop;
 using Dororong.App.Controls;
 using Dororong.App.Interop;
+using Dororong.App.Product;
 using Dororong.App.Runtime;
 
 namespace Dororong.App;
@@ -10,11 +11,17 @@ public partial class MainWindow : Window
 {
     private readonly OneShotOperation _loadedOperation = new();
     private readonly OneShotOperation _fatalOperation = new();
+    private readonly Action<DiagnosticEvent, Exception?> _reportDiagnostic;
     private WindowActivationGuard? _activationGuard;
     private PetLoop? _loop;
 
-    public MainWindow()
+    public MainWindow() : this((_, _) => { })
     {
+    }
+
+    internal MainWindow(Action<DiagnosticEvent, Exception?> reportDiagnostic)
+    {
+        _reportDiagnostic = reportDiagnostic ?? throw new ArgumentNullException(nameof(reportDiagnostic));
         InitializeComponent();
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
@@ -49,7 +56,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            HandleFatal(exception);
+            HandleFatal(exception, DiagnosticEvent.StartupFailure);
         }
     }
 
@@ -81,7 +88,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            HandleFatal(exception);
+            HandleFatal(exception, DiagnosticEvent.StartupFailure);
         }
     }
 
@@ -104,7 +111,7 @@ public partial class MainWindow : Window
 
     private void OnLoopFaulted(object? sender, Exception exception)
     {
-        HandleFatal(exception);
+        HandleFatal(exception, DiagnosticEvent.LoopFailure);
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -112,24 +119,35 @@ public partial class MainWindow : Window
         var cleanupException = CleanupWindowResources();
         if (cleanupException is not null)
         {
-            HandleFatal(cleanupException);
+            HandleFatal(cleanupException, DiagnosticEvent.CleanupFailure);
         }
     }
 
-    private void HandleFatal(Exception exception)
+    private void HandleFatal(Exception exception, DiagnosticEvent diagnosticEvent)
     {
         _fatalOperation.TryRun(() =>
+        {
+            try
+            {
+                _reportDiagnostic(diagnosticEvent, exception);
+            }
+            catch
+            {
+                // Diagnostics cannot suppress the existing fatal boundary.
+            }
+
             FatalBoundary.Run(
-                exception,
-                CleanupWindowResources,
-                fatalException =>
-                    MessageBox.Show(
-                        this,
-                        $"Dororong encountered an unexpected error and must close.\n\n{fatalException.Message}",
-                        "Dororong",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error),
-                () => Application.Current.Shutdown(1)));
+                    exception,
+                    CleanupWindowResources,
+                    fatalException =>
+                        MessageBox.Show(
+                            this,
+                            $"Dororong encountered an unexpected error and must close.\n\n{fatalException.Message}",
+                            "Dororong",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Error),
+                    () => Application.Current.Shutdown(1));
+        });
     }
 
     private Exception? CleanupWindowResources()

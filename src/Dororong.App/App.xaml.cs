@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Threading;
+using Dororong.App.Product;
 using Dororong.App.Runtime;
 
 namespace Dororong.App;
@@ -7,6 +8,7 @@ namespace Dororong.App;
 public partial class App : Application
 {
     private readonly AppStartupSequence _startupSequence = new();
+    private ProductShell? _productShell;
 
     public App()
     {
@@ -18,8 +20,31 @@ public partial class App : Application
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         base.OnStartup(e);
 
+        var productShell = new ProductShell();
+        _productShell = productShell;
+        object? createdWindow;
+        try
+        {
+            var result = productShell.TryStart(
+                reportDiagnostic => new MainWindow(reportDiagnostic),
+                window => ((Window)window).Close(),
+                out createdWindow);
+            if (!result.ShouldRun)
+            {
+                _productShell = null;
+                productShell.Dispose();
+                Shutdown(result.ExitCode);
+                return;
+            }
+        }
+        catch (Exception exception)
+        {
+            HandleFatal(exception, DiagnosticEvent.StartupFailure);
+            return;
+        }
+
         _startupSequence.TryRun(
-            () => new MainWindow(),
+            () => createdWindow!,
             window =>
             {
                 MainWindow = (Window)window;
@@ -27,13 +52,18 @@ public partial class App : Application
             },
             window => ((Window)window).Show(),
             CleanupStartupResources,
-            ShowStartupError,
+            fatalException =>
+            {
+                productShell.Report(DiagnosticEvent.StartupFailure, fatalException);
+                ShowStartupError(fatalException);
+            },
             Shutdown);
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         DispatcherUnhandledException -= OnDispatcherUnhandledException;
+        CleanupStartupResources();
         base.OnExit(e);
     }
 
@@ -42,15 +72,20 @@ public partial class App : Application
         DispatcherUnhandledExceptionEventArgs e)
     {
         e.Handled = true;
-        HandleFatal(e.Exception);
+        HandleFatal(e.Exception, DiagnosticEvent.DispatcherFailure);
     }
 
-    private void HandleFatal(Exception exception)
+    private void HandleFatal(Exception exception, DiagnosticEvent diagnosticEvent)
     {
+        var productShell = _productShell;
         _startupSequence.TryHandleFatal(
             exception,
             CleanupStartupResources,
-            ShowStartupError,
+            fatalException =>
+            {
+                productShell?.Report(diagnosticEvent, fatalException);
+                ShowStartupError(fatalException);
+            },
             Shutdown);
     }
 
@@ -59,7 +94,17 @@ public partial class App : Application
         DispatcherUnhandledException -= OnDispatcherUnhandledException;
         var mainWindow = MainWindow;
         MainWindow = null;
-        return CleanupSequence.Run(() => mainWindow?.Close());
+        var productShell = _productShell;
+        _productShell = null;
+        var cleanupException = CleanupSequence.Run(
+            () => mainWindow?.Close(),
+            () => productShell?.Dispose());
+        if (cleanupException is not null)
+        {
+            productShell?.Report(DiagnosticEvent.CleanupFailure, cleanupException);
+        }
+
+        return cleanupException;
     }
 
     private static void ShowStartupError(Exception exception)
