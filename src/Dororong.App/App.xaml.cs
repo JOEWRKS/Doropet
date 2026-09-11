@@ -20,11 +20,12 @@ public partial class App : Application
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         base.OnStartup(e);
 
-        var productShell = new ProductShell();
-        _productShell = productShell;
-        object? createdWindow;
+        ProductShell? productShell = null;
+        object? createdWindow = null;
         try
         {
+            productShell = new ProductShell();
+            _productShell = productShell;
             var result = productShell.TryStart(
                 reportDiagnostic => new MainWindow(reportDiagnostic),
                 window => ((Window)window).Close(),
@@ -54,7 +55,7 @@ public partial class App : Application
             CleanupStartupResources,
             fatalException =>
             {
-                productShell.Report(DiagnosticEvent.StartupFailure, fatalException);
+                productShell!.Report(DiagnosticEvent.StartupFailure, fatalException);
                 ShowStartupError(fatalException);
             },
             Shutdown);

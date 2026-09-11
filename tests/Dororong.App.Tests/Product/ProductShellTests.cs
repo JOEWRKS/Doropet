@@ -9,6 +9,35 @@ namespace Dororong.App.Tests.Product;
 public class ProductShellTests
 {
     [Fact]
+    public void Lease_acquisition_failure_creates_no_window_or_tray_and_preserves_the_failure()
+    {
+        var trace = new List<string>();
+        using var shell = CreateShell(
+            acquireLease: _ =>
+            {
+                trace.Add("lease");
+                throw new UnauthorizedAccessException("injected identity failure");
+            },
+            createTray: (_, _) =>
+            {
+                trace.Add("tray");
+                return new TraceResource(trace, "tray-dispose");
+            });
+
+        var error = Assert.Throws<UnauthorizedAccessException>(() => shell.TryStart(
+            _ =>
+            {
+                trace.Add("window");
+                return new object();
+            },
+            _ => trace.Add("window-close"),
+            out _));
+
+        Assert.Equal("injected identity failure", error.Message);
+        Assert.Equal(["lease"], trace);
+    }
+
+    [Fact]
     public void Duplicate_instance_creates_no_window_or_tray_and_returns_success_exit_result()
     {
         var trace = new List<string>();
