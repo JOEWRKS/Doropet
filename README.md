@@ -18,7 +18,7 @@ Run these commands from the repository root:
 dotnet restore DororongDesktopPet.sln
 dotnet test tests/Dororong.Core.Tests --configuration Release --no-restore
 dotnet restore tests/Dororong.App.Tests/Dororong.App.Tests.csproj --runtime win-x64 -p:RuntimeFrameworkVersion=8.0.31 -p:TargetLatestRuntimePatch=false
-dotnet test tests/Dororong.App.Tests/Dororong.App.Tests.csproj --configuration Release --runtime win-x64 --self-contained true --no-restore -p:RuntimeFrameworkVersion=8.0.31 -p:TargetLatestRuntimePatch=false
+dotnet test tests/Dororong.App.Tests/Dororong.App.Tests.csproj --configuration Release --runtime win-x64 --no-restore -p:SelfContained=true -p:RuntimeFrameworkVersion=8.0.31 -p:TargetLatestRuntimePatch=false
 dotnet build DororongDesktopPet.sln --configuration Release --no-restore
 dotnet run --project src/Dororong.App/Dororong.App.csproj --configuration Release
 & tools/Publish-Product.ps1 -OutputPath artifacts/product-shell/candidate-YYYYMMDD-HHMMSS
