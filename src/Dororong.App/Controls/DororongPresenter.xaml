@@ -18,6 +18,7 @@
                 RenderTransformOrigin="0.5,0.5">
             <Canvas.ContextMenu>
                 <ContextMenu>
+                    <MenuItem Header="앉아" Click="OnSitClicked" />
                     <MenuItem Header="Exit" Click="OnExitClicked" />
                 </ContextMenu>
             </Canvas.ContextMenu>

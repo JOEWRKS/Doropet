@@ -22,6 +22,7 @@ public partial class MainWindow : Window
         Presenter.DirectInteractionPressed += OnDirectInteractionPressed;
         Presenter.LostMouseCapture += OnDirectInteractionCanceled;
         Presenter.ExitRequested += OnExitRequested;
+        Presenter.SitRequested += OnSitRequested;
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -94,6 +95,8 @@ public partial class MainWindow : Window
         _loop?.NotifyDirectInteractionCanceled();
     }
 
+    private void OnSitRequested(object? sender, EventArgs e) => _loop?.NotifySitRequested();
+
     private void OnExitRequested(object? sender, EventArgs e)
     {
         Close();
@@ -143,6 +146,7 @@ public partial class MainWindow : Window
             () => Presenter.DirectInteractionPressed -= OnDirectInteractionPressed,
             () => Presenter.LostMouseCapture -= OnDirectInteractionCanceled,
             () => Presenter.ExitRequested -= OnExitRequested,
+            () => Presenter.SitRequested -= OnSitRequested,
             () =>
             {
                 if (loop is not null)

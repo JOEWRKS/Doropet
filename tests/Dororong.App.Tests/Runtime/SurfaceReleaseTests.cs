@@ -28,7 +28,7 @@ public partial class PetLoopPlatformTests
     {
         using var h=new Harness(walking:true); h.Start(); h.Tick(100);
         var start=h.Position; h.Tick(100);
-        Assert.Equal(4.2,Math.Abs(h.Position.X-start.X),6);
+        Assert.Equal(2.1,Math.Abs(h.Position.X-start.X),6);
         Assert.Equal(100,h.Position.Y,6);
         Assert.Equal(PlatformPhase.Supported,h.LastPose?.Phase);
     }

@@ -77,6 +77,21 @@ public partial class DororongPresenter : UserControl
     private static readonly PremultipliedFrameSequence SleepTuckToSettledSleepSequence = new([SleepTuckClosedPremultipliedFrame, SleepPremultipliedFrame]);
     private static readonly SuppliedBodyDragFrames BodyDragFrames = new(CanonicalPremultipliedFrame);
     private PetState? _lastRenderedState;
+    private readonly LocomotionPresentation _locomotion = new();
+    private bool _locomotionBlocked;
+    private bool _locomotionStarted;
+    private PointD? _locomotionPosition;
+    internal bool HoldLocomotionWalk(PetSnapshot snapshot) => snapshot.State == PetState.Walk &&
+        !snapshot.IsDirectInteractionPending && !_locomotionBlocked && _locomotion.HoldWalking;
+    internal void SetLocomotionBlocked(bool blocked) => _locomotionBlocked = blocked;
+    private bool _sittingRequested;
+    private double _sittingClockMilliseconds;
+    private double _ordinaryBlinkMilliseconds;
+    internal void SetSittingRequested(bool requested)
+    {
+        if (requested && !_sittingRequested) _sittingClockMilliseconds = 0;
+        _sittingRequested = requested;
+    }
     private bool _sleepEntryComplete;
     private PetState? _wakeBridgeState;
     private bool _wakeBridgeComplete;
@@ -120,7 +135,7 @@ public partial class DororongPresenter : UserControl
         InitializeComponent();
         _extremeLanding = new(BodyGroup, DororongImage);
         _edgePerch = new((Canvas)Content, DororongImage, OnBodyPrimaryPressed);
-        Unloaded += (_, _) => { _edgePerch.Restore(); _platformContact.Restore(); _extremeLanding.Reset(); };
+        Unloaded += (_, _) => { _edgePerch.Restore(); _platformContact.Restore(); _extremeLanding.Reset(); ResetHunting(); };
     }
 
     internal event EventHandler<DirectInteractionPressEventArgs>? DirectInteractionPressed;
@@ -205,13 +220,14 @@ public partial class DororongPresenter : UserControl
 
     private bool CanUseCheek => CanUseBodyMap &&
         (ReferenceEquals(DororongImage.Source, CanonicalFrame) || ReferenceEquals(DororongImage.Source, BlinkSquintFrame) ||
-         ReferenceEquals(DororongImage.Source, ClosedEyesFrame));
+         ReferenceEquals(DororongImage.Source, ClosedEyesFrame) || LocomotionFrames.Contains(DororongImage.Source) ||
+         (_huntingImage is not null && ReferenceEquals(DororongImage.Source, _huntingImage)));
 
     internal bool TryCreateCheekPullCapture(PointD sourcePosition, out CheekPullCapture? capture)
     {
         if(_edgePerch.IsAttached) return _edgePerch.TryCaptureCheek(sourcePosition,this,out capture);
         capture = null;
-        if (!CanUseCheek || !InteractionHitMap.IsSelectedCheek(sourcePosition) || DororongImage.Source is not BitmapSource source) return false;
+        if (!CanUseCheek || !InteractionHitMap.IsSelectedCheek(HuntHeadPoint(sourcePosition)) || DororongImage.Source is not BitmapSource source) return false;
         var scale = Math.Min(DororongImage.ActualWidth / 96, DororongImage.ActualHeight / 96);
         if (!double.IsFinite(scale) || scale <= 0) return false;
         var transform = DororongImage.TransformToAncestor(this);
@@ -222,11 +238,27 @@ public partial class DororongPresenter : UserControl
         if (!matrix.HasInverse) return false;
         var bitmap = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
         var pixels = new byte[96 * 96 * 4]; bitmap.CopyPixels(pixels, 384, 0);
-        capture = new(pixels, matrix, _activeFacing);
+        capture = IsHuntingImage ? CaptureHuntingCheek(pixels,matrix) : new(pixels, matrix, _activeFacing);
         return true;
     }
 
+    internal void RenderDesktop(PetSnapshot snapshot, DirectInteractionSnapshot direct) =>
+        RenderDesktop(snapshot, direct, TimeSpan.FromMilliseconds(PresentationTickMilliseconds));
+
+    internal void RenderDesktop(PetSnapshot snapshot, DirectInteractionSnapshot direct, TimeSpan elapsed)
+    {
+        // The simulation's facing is a screen direction; authored Render/capture
+        // facing is legacy mirror parity (the unmirrored source looks left).
+        // Convert only autonomous poses at this boundary. Captured direct poses
+        // already carry the actual displayed transform and must not be flipped again.
+        if (snapshot.State is PetState.Idle or PetState.Walk &&
+            !snapshot.IsDirectInteractionPending && direct.Target == DirectInteractionTarget.None)
+            snapshot = snapshot with { Facing = snapshot.Facing == FacingDirection.Right ? FacingDirection.Left : FacingDirection.Right };
+        Render(snapshot, direct, elapsed);
+    }
+
     public event EventHandler? ExitRequested;
+    public event EventHandler? SitRequested;
 
     internal void Render(PetSnapshot snapshot, DirectInteractionSnapshot directInteraction)
         => Render(snapshot, directInteraction, TimeSpan.FromMilliseconds(16));
@@ -253,6 +285,35 @@ public partial class DororongPresenter : UserControl
 
     private void RenderPose(PetSnapshot snapshot, DirectInteractionSnapshot directInteraction, TimeSpan elapsed)
     {
+        if (_sittingRequested && !_locomotionBlocked && !_edgePerch.IsAttached &&
+            !snapshot.IsDirectInteractionPending && snapshot.State != PetState.ClickReaction &&
+            directInteraction.Target == DirectInteractionTarget.None && directInteraction.HeadLanding is null)
+        {
+            // Core autonomous time is paused, but a seated pet still blinks.
+            _sittingClockMilliseconds = (_sittingClockMilliseconds + Math.Max(0, elapsed.TotalMilliseconds)) % 3200;
+            snapshot = snapshot with { State = PetState.Idle, Phase = _sittingClockMilliseconds / 3200 };
+        }
+        var locomotionAllowed = !_locomotionBlocked && snapshot.State is PetState.Idle or PetState.Walk &&
+            !snapshot.IsDirectInteractionPending && directInteraction.Target == DirectInteractionTarget.None &&
+            directInteraction.HeadLanding is null && !_edgePerch.IsAttached;
+        // Eye timing is shared across standing, sitting and walking, independent
+        // of motion phase. A frozen cheek capture pauses its eye clock so its
+        // closed-eye endpoint stays continuous when that overlay retires.
+        _ordinaryBlinkMilliseconds = locomotionAllowed
+            ? (_ordinaryBlinkMilliseconds + (double.IsFinite(elapsed.TotalMilliseconds) ? Math.Max(0, elapsed.TotalMilliseconds) : 0)) % 5000
+            : directInteraction.Target == DirectInteractionTarget.RightCheek ? _ordinaryBlinkMilliseconds : 0;
+        var ordinaryEyesClosed = _ordinaryBlinkMilliseconds is >= 2000 and < 2360;
+        var traveled = _locomotionPosition is { } last ? Math.Abs(snapshot.Position.X-last.X) : 0;
+        _locomotionPosition = snapshot.Position;
+        // While still pinned, suspend the hidden seated pose instead of erasing
+        // it: a captured local tug must retire back to the same seated source.
+        // Platform/direct rendering still has priority. Actual carry clears the
+        // request in the loop, restoring the existing reset/recovery behavior.
+        if (locomotionAllowed || !_sittingRequested)
+            _locomotion.Advance(Math.Max(0,elapsed.TotalMilliseconds),snapshot.State==PetState.Walk && !_huntSession.IsActive,traveled,!locomotionAllowed,_sittingRequested);
+        if (!locomotionAllowed && !_sittingRequested) _locomotionStarted = false;
+        else if (Math.Round(_locomotion.Sit * 64) > 0 || Math.Round(_locomotion.Walk * 8) > 0)
+            _locomotionStarted = true;
         // Retain head-release facing independently of the legacy timed landing:
         // platform-owned falls finish shape recovery while still airborne.
         if ((_headLandingPresentationActive && directInteraction.HeadLanding is null) ||
@@ -401,23 +462,14 @@ public partial class DororongPresenter : UserControl
         {
             case PetState.Idle:
                 ApplyBreathing(p);
-                if (p is >= 0.65 and < 0.69)
-                {
-                    DororongImage.Source = BlinkSquintFrame;
-                }
-                else if (p is >= 0.69 and < 0.73)
+                if (ordinaryEyesClosed)
                 {
                     DororongImage.Source = ClosedEyesFrame;
-                }
-                else if (p is >= 0.73 and < 0.77)
-                {
-                    DororongImage.Source = BlinkSquintFrame;
                 }
 
                 break;
 
             case PetState.Walk:
-                BodyTranslateTransform.Y = -4 * Math.Abs(cycle);
                 BodyScaleTransform.ScaleX = snapshot.Facing == FacingDirection.Left ? -1 : 1;
                 break;
 
@@ -454,6 +506,21 @@ public partial class DororongPresenter : UserControl
                 throw new ArgumentOutOfRangeException(nameof(snapshot), snapshot.State, "Unknown pet state.");
         }
 
+        if (locomotionAllowed)
+        {
+            var closed = ordinaryEyesClosed;
+            // Direct recovery owns its exact canonical endpoint until another
+            // motion begins. Once locomotion starts, keep its cleaned standing
+            // endpoint after rising; do not restore the old exterior fringe.
+            if (_locomotionStarted)
+                DororongImage.Source = _locomotion.Sit > 0
+                    ? LocomotionFrames.Sit(_locomotion.Sit,closed)
+                    : LocomotionFrames.Walk(_locomotion.Walk,_locomotion.Distance,closed);
+            BodyScaleTransform.ScaleX = snapshot.Facing == FacingDirection.Left ? -1 : 1;
+            BodyScaleTransform.ScaleY = 1;
+            BodyTranslateTransform.Y = 0;
+        }
+
         if (!bodyClickPresentationActive &&
             snapshot.State == PetState.Idle &&
             _postBodyClickIdleFacing is { } idleFacing)
@@ -471,6 +538,7 @@ public partial class DororongPresenter : UserControl
         ApplyBodyClickWakeBridge(snapshot, directInteraction);
         ApplyBodyDragPresentation(directInteraction, elapsed.TotalMilliseconds);
         if (_postCheekIdleFacing is { } cheekFacing) BodyScaleTransform.ScaleX = cheekFacing == FacingDirection.Left ? -1 : 1;
+        ApplyHunting(snapshot, directInteraction, ordinaryEyesClosed);
         _activeFacing = BodyScaleTransform.ScaleX < 0
             ? FacingDirection.Left
             : FacingDirection.Right;
@@ -751,6 +819,7 @@ public partial class DororongPresenter : UserControl
             var pixels = PremultipliedFrame.From(source).Pixels;
             if (pixels[((int)sourcePosition.Y * 96 + (int)sourcePosition.X) * 4 + 3] == 0)
                 return DirectInteractionTarget.None;
+            if (ClassifyHuntingHead(sourcePosition) is { } huntingHead) return huntingHead;
             if (CanUseCheek && InteractionHitMap.IsSelectedCheek(sourcePosition)) return DirectInteractionTarget.RightCheek;
             if (InteractionHitMap.PickBody(sourcePosition,pixels) != BodyRegion.None) return DirectInteractionTarget.FiveRegionBody;
             // Keep the existing opposite-side cheek behavior. The remaining face,
@@ -988,6 +1057,8 @@ public partial class DororongPresenter : UserControl
                     IsAttachedCheek=perchHit && _edgePerch.IsAttached && cheekCapture is not null,
                     StartsHanging=perchHit && _edgePerch.IsAttached && target == DirectInteractionTarget.Body };
     }
+
+    private void OnSitClicked(object sender, RoutedEventArgs e) => SitRequested?.Invoke(this, EventArgs.Empty);
 
     private void OnExitClicked(object sender, RoutedEventArgs e)
     {

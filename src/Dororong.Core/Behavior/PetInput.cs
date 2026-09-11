@@ -14,4 +14,6 @@ public readonly record struct PetInput(
     PointD? LocalInteractionPosition = null,
     bool DistanceDrivenBodyDrag = false,
     bool SuspendAutonomousMotion = false,
-    bool SurfaceBoundMotion = false);
+    bool SurfaceBoundMotion = false,
+    bool SuppressPointerReactions = false,
+    bool TrackPointerFacing = false);

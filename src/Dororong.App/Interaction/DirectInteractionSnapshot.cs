@@ -19,6 +19,7 @@ internal readonly record struct DirectInteractionSnapshot(
     internal CheekPullSnapshot? CheekPull { get; init; }
     internal FacingDirection? PressFacing { get; init; }
     internal bool IsAttachedCheek { get; init; }
+    internal bool IsSeatedCheek { get; init; }
     internal bool StartsHanging { get; init; }
     internal bool IsPerchReady { get; init; }
 

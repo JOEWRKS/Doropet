@@ -82,11 +82,34 @@ public sealed class PetBrain
             petCenter,
             simulationDelta: delta,
             observationDelta: input.Delta,
-            isDirectInteractionPending: handledDirectInteraction || _pressPosition.HasValue || _state == PetState.Dragged || input.SuspendAutonomousMotion);
+            isDirectInteractionPending: handledDirectInteraction || _pressPosition.HasValue || _state == PetState.Dragged || input.SuspendAutonomousMotion || input.SuppressPointerReactions);
         // Keep pointer history current, but airborne/landing ownership freezes
         // autonomous reactions, facing and timers as well as walking position.
         // Direct presses, carry and release above remain operational.
-        if (input.SuspendAutonomousMotion) return Current;
+        if (input.SuspendAutonomousMotion)
+        {
+            if (input.TrackPointerFacing && !handledDirectInteraction && !_pressPosition.HasValue &&
+                !input.LocalInteractionActive && _state is PetState.Idle or PetState.Walk or PetState.Sleep &&
+                input.Pointer.IsAvailable && double.IsFinite(input.Pointer.Position.X) && double.IsFinite(input.Pointer.Position.Y))
+            {
+                // The host has accepted a nearby hunting interaction. Wake
+                // without restoring the legacy startled retreat/curious path.
+                if (_state == PetState.Sleep)
+                {
+                    ResetInactivity();
+                    StartIdle();
+                }
+                var dx = input.Pointer.Position.X - petCenter.X;
+                // Hold the last side around the center so tiny cursor movements
+                // do not make the entire sprite alternate mirror parity.
+                if (Math.Abs(dx) > 8)
+                {
+                    _facing = dx < 0 ? FacingDirection.Left : FacingDirection.Right;
+                    _heading = new(dx < 0 ? -1 : 1, 0);
+                }
+            }
+            return Current;
+        }
         if (reaction.EnteredNearZone || reaction.Reaction == PointerReaction.Startled)
         {
             ResetInactivity();

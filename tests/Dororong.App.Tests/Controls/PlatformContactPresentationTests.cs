@@ -114,7 +114,9 @@ public sealed class PlatformContactPresentationTests
             // The host's 96 DIP gutter is not part of the presenter's contact.
             Assert.InRange(Math.Abs(IndependentSole(image, host) - 208), 0, .5);
             p.ApplyPlatformPose(null); Assert.Equal(before, Pixels(host));
-            p.Render(new(state, default, facing, phase, false, null), DirectInteractionSnapshot.None);
+            // Re-render the same temporal sample: locomotion now also advances
+            // from elapsed time, independently of the core expression phase.
+            p.Render(new(state, default, facing, phase, false, null), DirectInteractionSnapshot.None, TimeSpan.Zero);
             Assert.Equal(before, Pixels(host));
         }
     });

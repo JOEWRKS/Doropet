@@ -9,7 +9,7 @@ public sealed record BehaviorTuning
     public TimeSpan IdleMax { get; init; } = TimeSpan.FromSeconds(5);
     public TimeSpan WalkMin { get; init; } = TimeSpan.FromSeconds(3);
     public TimeSpan WalkMax { get; init; } = TimeSpan.FromSeconds(7);
-    public double WalkSpeed { get; init; } = 42;
+    public double WalkSpeed { get; init; } = 21;
     public double IdleToWalkProbability { get; init; } = 0.65;
     public TimeSpan CuriousDuration { get; init; } = TimeSpan.FromSeconds(1.6);
     public TimeSpan StartledDuration { get; init; } = TimeSpan.FromSeconds(0.75);

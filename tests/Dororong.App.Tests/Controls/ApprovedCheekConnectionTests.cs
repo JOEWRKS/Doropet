@@ -80,7 +80,7 @@ public sealed class ApprovedCheekConnectionTests
     {
         var presenter = new DororongPresenter();
         var pet = new PetSnapshot(PetState.Idle, new(100, 100), FacingDirection.Right, phase, false, null);
-        presenter.Render(pet, DirectInteractionSnapshot.None); CheekProductTests.Layout(presenter);
+        presenter.Render(pet, DirectInteractionSnapshot.None, TimeSpan.FromMilliseconds(2000)); CheekProductTests.Layout(presenter);
         var original = CheekLiveConnectionTests.Pixels((Image)presenter.FindName("DororongImage"));
         Assert.NotEqual(Read("rest-native.png"), original);
         var capture = (CheekPullCapture)CheekLiveConnectionTests.Capture(presenter);

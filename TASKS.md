@@ -1,5 +1,1114 @@
 # Plan
 
+## Save checkpoint / next short pounce — 2026-09-11
+
+User requested saving the accepted product through hunting wake-up, then a
+short pounce. Checkpoint current product, assets, preview sources and regression
+tests in local Git; no push. Last full verification: App794/Core239 GREEN.
+Keep hunt-wake-20260911/runtime running unchanged while the next motion is
+designed. Next boundary: approve a preview-only crouch -> short forward hop ->
+soft landing sequence before implementation and later product integration.
+
+## Hunting wake-up regression — 2026-09-11
+
+User reports a sleeping pet does not react to nearby mouse. Legacy proximity
+reactions are suppressed, but hunting entry excluded Sleep. Permit sleep in
+host eligibility and wake to Idle on the accepted hunting hold in Core;
+reset inactivity and face pointer without restoring retreat. Keep all direct,
+sit and platform blockers and the accepted animation unchanged.
+- [x] Real loop/presenter tests RED for both approach sides (Sleep instead of
+      Idle), then focused71 GREEN; far/invalid pointer stays asleep, near wakes
+      without translation, sustained response and eventual sleep verified.
+      Core239 tests pass.
+- [x] Full App794/Core239 pass (1033 total). Published hunt-wake-20260911/runtime
+      without rebuild; App/Core DLL hashes match tested outputs. Replaced
+      identity-checked21764 with responsive16804; module paths verified.
+      Previous immediate-crouch runtime preserved. App SHA256
+      88CE996275EC0F4C657B7CA39BF5052F339C93FE0123DC345637A3B431FC2F2E.
+
+## Reaction latency correction — 2026-09-11
+
+User reports reaction still too slow after faster lowering. The retained250ms
+notice pause delayed visible response. Skip that pause in display-frame time;
+lower on the next presentation tick, complete250ms after detection. Keep art,
+gaze, proximity, sway and recovery behavior unchanged.
+- [x] Timing and native rendered-frame regressions:3 expected RED failures
+      (including16ms entry and250ms endpoint), then69 focused hunting/sit/
+      facing/locomotion tests GREEN. No full-suite rerun for this narrow remap.
+- [x] Published immediate-crouch-20260911/runtime without rebuild; App/Core
+      DLL hashes match tested outputs. Replaced identity-checked PID22076;
+      prior fast-crouch runtime preserved for rollback.
+      App SHA256 A8627511B8A8B6579E305F8D1EF134BC1821C2465FCABE6DA1DAEEBA053D3413.
+
+## Approved faster crouch — 2026-09-11
+
+User approved initial lowering450ms ->250ms; retain notice pause, art, wiggle
+and standing-up timing. Compress only the displayed entry-frame interval,
+hold its endpoint until the original wiggle starts; session/recovery clock
+unchanged. Verify timing contract and native hunting/interaction regressions;
+publish separate tested runtime and replace only identified current pet.
+- [x] Timing and actual WPF full-crouch frame tests RED/GREEN. Focused68
+      hunting/manual-sit/facing/locomotion tests pass. No full-suite rerun for
+      this isolated frame-time remap; preceding full1028 baseline remains.
+- [x] Published fast-crouch-20260911/runtime without rebuild, App/Core DLLs
+      match test outputs. Identity-checked14696 replaced with responsive22076;
+      loaded module paths verified. Previous mouse-response runtime preserved.
+      App SHA25677DD909DC607A5206F9FCA6A0FB78A933F9E560FCD77396FFD6B28EC0896EAA2.
+
+## Approved mouse-response correction — 2026-09-11
+
+User approved body-facing tracking, replacing old proximity retreat/curious
+with hunting, stable boundaries and immediate smooth re-entry. Keep sit/direct
+and platform priority. No art changes or perpetual pursuit.
+- [x] Reproduce old reaction interception, missing body turn, boundary chatter
+      and delayed re-entry in real presenter/loop/session tests.
+- [x] Suppress legacy pointer reactions only for hunting-enabled hosts; track
+      screen facing with central deadband; hysteretic proximity and continuous
+      re-entry. Preserve direct input and post-hunt walk-facing consistency.
+      Initial5 behavioral REDs and stale-click-facing RED verified. Review
+      found early-tail sway discontinuity in first re-entry fix;4 RED cases
+      at1.75/1.9/2.0/2.3s now GREEN via authored-tail reversal. Focused56 tests
+      pass, including alternating direction while supported on taskbar.
+      Independent rereview has no remaining findings.
+- [x] Full Release regressions/review; publish separate runtime, verified
+      DLL parity, exact-process replacement with previous build preserved.
+      Core239/App789 pass (1028 total). Published mouse-response-20260911/runtime
+      without rebuild; both DLLs match test outputs. Replaced identity-checked
+      PID26352 with14696; process response and loaded module paths verified.
+
+## Approved hunting product integration — 2026-09-11
+
+User approved2799 with "이대로 적용". Port this visible behavior into the
+existing WPF pet, retaining walking, manual sit, blink, drag, platform/z-order
+and identity behavior. No pursuit, jump, installer, commit or push.
+Existing isolated feature worktree verified; dirty changes are preserved.
+Planning/execution ledger remains this file per AGENTS.md (no second ledger).
+
+Architecture: embed exact preview body layers, port the small dynamic
+head/eye/neck/outline compositor to WPF, and gate a numeric hunting session
+at the existing pre-core suspend seam. Direct/platform/manual-sit ownership
+preempts hunting. Pointer coordinates remain DIPs and are converted to native
+96px presentation coordinates; facing mirrors gaze once at the boundary.
+
+### Task 1: Numeric motion and session port
+
+Create Controls/HuntMotion.cs and Controls/HuntingSession.cs plus focused
+tests in tests/Dororong.App.Tests/Controls/HuntMotionTests.cs. Full spec is
+tools/PreviewLocomotion/{hunt-motion,gaze-motion}.js; copy constants verbatim.
+Interfaces: HuntPose(double Amount,double HeadBob,double HeadRoll,double Sway)
+with static At(double seconds), instance Head(double x,double y) and
+Map(double x,double y) returning PointD. HuntingSession.Advance(double seconds,
+bool near,bool blocked=false), AgeSeconds, IsActive, Reset(). First nearby
+advance starts age0; sustained near loops1.25..1.65; departure settles2.6.
+HuntGaze.Advance(double seconds,PointD? target,bool flip,bool active) returns
+HuntGazePose(double EyeX,double EyeY,double Roll); Reset(). Reject nonfinite
+or negative delta and map invalid pointer targets to neutral like JS.
+- [x] RED runnable inactive baseline against crouch, frame-rate-independent
+      gaze lag,120s sustained loop, smooth departure, block/reset/re-entry.
+- [x] GREEN literal JS parity cases, fixed toes, mirrored gaze and invalids.
+- [x] Independent scoped spec/quality review before integration completion.
+
+### Task 2: Embedded layers and native compositor
+
+Create preview export-product-hunt.cjs and Controls/HuntFrames.cs,
+HuntRenderer.cs. Extend JS compositor with an explicitly requested layer-only
+export path; normal preview output remains exact. Embed157 body frames and
+two native masked head eye states. WPF independently rotates head, shifts
+whole eyes, draws existing joining curves and repairs final forebody ink.
+Preserve native96 registration and transparent hit testing; no browser/runtime
+dependency. Tests exercise real renderer, clear/closed eyes, native geometry,
+left/right presentation and output comparisons to frozen2799 proof images.
+- [x] RED missing embedded resource assertion. Real renderer/parity tests were
+      added with implementation; no claim of a full visual-test RED baseline.
+- [x] GREEN render/alpha/parity tests and WPF white/black proof inspection.
+
+### Task 3: Runtime integration and verified local delivery
+
+Modify PetLoopHost/PetLoop pre-core hook and a presenter partial, with minimal
+existing presenter touchpoints. Pre-core samples nearby pointer and holds
+autonomy while hunting; render uses current facing, shared blink clock and
+exclusive eligible ownership. Reset for unavailable/blocked input, sit,
+direct presses/carry/settling and platform motion; proximity exit settles.
+Add runtime/presenter tests proving hold/no walking drift, direct preemption,
+manual sit, pointer unavailable recovery and no tracking while blocked.
+- [x] RED actual presenter inactive baseline (2 assertions), then GREEN
+      integration; real-loop hold/resume/drag/sit and taskbar support tests.
+      Review caught lowered cheek being classified as a front paw: runnable
+      RED (19.11,71.01), then inverse-head classification and head-only captured
+      cheek deformation. Zero-pull capture and rear-body pixels remain exact.
+- [x] Independent integration rereview: no Critical/Important findings.
+      Sustained120 WPF render + loop/platform ticks mean9.55ms, fixed worldsole.
+- [x] Core239/App778 Release tests pass (1017 total); broad integration
+      rereview clear and white/black native WPF proof inspected.
+- [x] Publish to a new local runtime directory, verify tested DLL parity,
+      identify only the existing pet process, restart to new tested runtime.
+      Preserve previous directory for rollback. No live-interaction PASS
+      claim without direct observation.
+      Delivered hunt-product-20260911/runtime, PID26352. No previous pet process
+      was running, so no process was stopped. Previous runtimes preserved.
+      Computer Use window inventory does not expose the transparent tool window;
+      live pointer interaction is not claimed. Process/module checks plus actual
+      WPF rendering and loop/platform tests define this delivery's evidence.
+
+## Hunting-preparation preview — 2026-09-10
+
+User approved preview only: notice nearby cursor, lower forebody with planted
+paws, briefly wiggle the pelvis, return to rest. No pursuit/jump, no desktop
+integration, no changes to approved walking/seated art or interaction logic.
+
+- [x] Isolated hunt-motion.js + exporter/page using the existing original-art
+      renderer through a proof-only body-field override. 157 frames at 60fps.
+- [x] TDD RED idle baseline lacks crouch; GREEN forebody lowering, raised rump,
+      planted paws, positive mesh Jacobian, temporal continuity, alternating
+      sway and proximity latch/cooldown. Initial overly deep compression folded
+      short foreleg cells; reduce head lowering to 4.2 native pixels, test GREEN.
+- [x] White/black contact sheets inspected; browser pause/scrub72, black,
+      actual nearby pointer activation checked. Narrow-panel screenshot exposed
+      whole-canvas downscaling; responsive backing width now retains sprite size.
+- [x] Preview http://127.0.0.1:2788/ (server PID43504), automatic demo + mouse
+      proximity mode, native/2x sizes, mirror, half speed and frame scrubbing.
+- [ ] Await user visual feedback. Do not promote to product without approval.
+
+### Independent eye/head gaze addition (preview only)
+
+2026-09-11 visible connection-ink correction: user reported broken/thin ink
+under the chin and between fore/hind feet in2798. Measured actual composite
+edge contrast: native x22=0.094, x26=0.052, x48=0.015 (normalized ink), despite
+opaque-alpha tests passing. Neck/head white coverage extends past hidden
+strokes; the replacement feather also averages misaligned ink into white.
+Resolve outline ownership at the final composite: derive subpixel alpha
+boundary distances inside two narrow forebody windows, restore only missing
+body-neutral ink, preserve all alpha and skip pink/colored hair/ribbon.
+Feather repair into unaffected ink and fade with crouch entry; exact rest,
+source assets and movement remain untouched. RED visible-edge contrast,
+GREEN six measured edge columns plus all nine focused suites. Browser2799
+(PID12060), HTTP200, white paused60 and black mirrored playback verified.
+Extreme-gaze contact proof is still study-only (430 covered channels), not
+a no-overlap pass. Preview only; awaiting user visual feedback.
+
+2026-09-11 independent foreleg-curve trial: user rejected2797's thin-root/
+bulbous-tip appearance and approved separate curves for both forelegs.
+The preview compositor now replaces only the lower forebody domain with
+two rounded cubic limb contours and a shared belly connection; control
+points interpolate from the old pose into the authored hunting curves.
+An early-entry blend preserves exact rest; the right-hand body attachment
+uses complementary premultiplied coverage (lighter after destination-out),
+not double source-over alpha. RED actual composed far-wrist gap; a second
+RED isolated-body alpha seam was hidden by the hair in whole-image checks.
+Both GREEN plus the eight existing focused suites (nine total), preserved
+130 seated/standing poses, loop endpoints and separate forefeet.
+HTTP200/browser2798 (PID45696), paused60 white, paused30 black/mirrored
+and resumed playback inspected. Existing extreme head/foreleg occlusion
+remains412 covered channels, disclosed study-only. No source PNG edit or
+product integration; user visual approval pending.
+
+2026-09-11 forepaw wrist correction, user approved immediate fix after the
+2796 crop showed hooked ankles. Root cause: the 11px reach was concentrated
+over a 5px wrist (local horizontal shear 2.7–3.4), so toe-mass checks alone
+missed the hooked connection. Distribute reach over an 11px foreleg span,
+offset independently for the near/far roots. Keep the toe volume, original
+11px reach/floor anchors, continuous wiggle and gaze behavior. Added a
+local-shear regression (RED against old field); the initial 13px span tucked
+the root too far forward and failed the existing diagonal-extension check,
+so the final 11px/root-offset geometry preserves both requirements. Eight
+focused checks pass, including 130 unchanged seated/standing frames.
+Preview2797 (PID26316) verified HTTP200 and browser white/black, mirrored,
+paused frame60 and continued playback. Extreme-gaze overlap remains214
+covered channels (study only, not a clean-overlap PASS). No product update
+or source-image edit; user visual acceptance pending.
+
+2026-09-11 approved plump-forepaw refinement: user requests blunt thick cute
+forepaws, retaining the extended reach. Reach deformation now finishes over
+the upper5px wrist rather than shearing through the entire8px pad; compress
+the pointed leading ankle corner while preserving the two toe-center anchors.
+Add rounded pad volume with a destination-space monotone vertical warp,
+not source-space inflation before the wrist shear (that draft folded cells).
+Limit the volume field before the far hindpaw so all hind anchors remain fixed.
+No raster source replacement; existing authored ink is reshaped continuously.
+RED old pointed far-toe cross-section; GREEN plump toe mass, original11px
+reach/floor anchors, exact loop endpoints, positive Jacobian, head/eye behavior
+and130 preserved seated/idle poses. Eight focused checks pass. White/black
+extreme proof inspected: wider rounded pads rather than the previous fins.
+Near-toe measurement follows its bottom connected interval so the raised top
+is not accidentally clipped by a fixed y80 measurement window. Existing
+extreme-gaze hair/forepaw overlap is188 covered channels (study only).
+Latest preview2796; no desktop product, original PNG, commit or push changes.
+
+2026-09-11 approved extended-foreleg stalking pose: user approved forepaws
+reaching forward on the floor with a lower chest/head, raised rump and all
+existing gaze/sustained wiggle behavior retained. Forepaws reach11 native px
+during eased entry and retract during recovery; held-loop soles stay fixed.
+Head lowering6.3px (previous4.2), pitch-.07rad (previous-.055). Head pose values
+now come from hunt.sample for body field, exported whole frames and live
+head/neck composition, avoiding mismatched renderer constants.
+Compression begins at torso y60 rather than only y70 to avoid collapsing the
+short foreleg. Root-specific reach starts at each foreleg root; normalize
+over its own8px length, not the interpolated hindfoot floor (that draft
+inverted cells near45,81). RED absent extension; GREEN two forward diagonals,
+deeper head/chest, floor contact, held forepaw stability, positive mesh and
+continuous loop/departure. Fresh seven focused tests pass including130
+preserved seated/idle poses. White/black standing/crouch extremes inspected.
+Deeper head increases the pre-existing extreme-gaze overlap study count to214
+covered channels; this is disclosed preview debt, not a strict composite PASS.
+Latest preview2795/server44972; no desktop product or source-art edits.
+
+2026-09-11 approved sustained hunt refinement: user confirmed bounded design
+for a softer rounded rump,1.5x wiggle, continued nearby hunting and smooth
+departure. Broaden the apex vertically; upward-looking ribbon now occludes
+the rounded shoulder instead of dragging it down into a pointed nub.
+Sway amplitude .95 ->1.425 native px. Session loops only the settled source
+span1.25..1.65s; entry is not replayed. Departure joins the eased tail at the
+next matching zero-velocity peak, then releases the crouch. Returning before
+that peak cancels the pending departure; returning during recovery finishes
+settling before a fresh approach. Auto mode demonstrates continuous holding.
+RED old nearby session returned idle; old high apex failed broadness test.
+GREEN long holds (120s), bidirectional amplitude,20s loop continuity,
+six departure phases, mesh orientation/planted paws and actual loop raster
+endpoints. All seven focused checks pass, including130 preserved seated/idle
+frames. Native-density curves retain original softened ink. White/black
+extreme proof inspected; unchanged62-channel hair/forepaw overlap disclosed.
+Latest preview2794/server41248; browser nearby hold stays in wiggle beyond
+the old one-shot duration; moving to the heading outside the canvas returns
+to rest/frame156, directly observed. No product integration or source-art edits.
+
+2026-09-11 whole-haunch correction: user rejects2792 as still angular.
+Earlier edits rounded only the cap but retained the flat original side,
+so that partial-boundary approach did not satisfy the requested silhouette.
+Replace the preview-only rear contour from ribbon to hindleg (native y74)
+with two tangent-continuous arcs around one outward apex. Preserve the
+authored hindleg below, all head/eye/neck behavior and production rendering.
+RED/GREEN real-composite haunch bulge regression catches the former flat side.
+Fresh seven focused tests pass, including130 preserved seated/idle frames.
+White/black neutral and both rotation extremes inspected: full rear reads as
+a rounded volume, not a rounded cap attached to a straight side. Latest2793,
+server22540. Await user visual feedback; preview only. Previously disclosed
+62-channel extreme-angle hair/forepaw overlap remains outside this change.
+
+Latest front-neck/curve follow-up: user reports a left-side cut on upward gaze
+and a straight-looking rear join. The left cut is exposed missing torso under
+the rotating head, not a canvas crop. BodyOnly replaces only the old front cap
+above native y73 with a moving, filled/inked neck connection behind the head;
+the original forepaw below stays intact. Rear controls now bow outward into a
+rounded shoulder rather than the earlier diagonal chord. Both joins are sampled
+at native art density then enlarged, matching the original softened ink.
+RED/GREEN: rounded-back coverage point fails before curve tuning; left-neck
+interior coverage fails before front join. Fresh seven focused checks pass;
+added real-composite coverage through7 hunt stages and3 upward angles passes.
+White/black extreme contact sheet and mirrored browser frame72 inspected.
+Latest2792/PID35876,20deg/eyes/timing unchanged; preview only, no product changes.
+The previously disclosed front-neck gap is addressed. The separate62-channel
+hair/forepaw overlap at extreme angles remains an explicitly reported study
+limitation. Await user visual acceptance; do not promote this to product yet.
+
+Latest upper-rump cleanup: user approved20deg and requested removal of the
+tail-like spur plus the moving back's broken outline. Layer inspection showed
+stationary-body donor pixels surviving at the old ribbon attachment, while
+the isolated body had no contour to the rotated attachment. Preview-only
+bodyOnly now omits that cap; compositor joins the current ribbon to the pelvis
+with a short filled/inked underlay, behind the original head/ribbon and body.
+No source PNG or product bank changes. RED: exterior alpha214 instead of0;
+after removing cap, RED missing back fill; GREEN no spur + filled/inked back.
+Fresh hunt/gaze/whole-eye/neck/layer/rump and four-leg render tests pass,
+including130 preserved seated/idle poses. Neck marker test now isolates green
+excess instead of accidentally measuring the new white underlay's green channel.
+White/black standing/crouch extremes and browser playback/mirroring inspected.
+Latest preview2791/serverPID172; old previews remain separate.20deg, eye travel,
+timing and accepted walking unchanged. Front-neck separation/62 lower-body
+overlap channels at extreme20deg remain the disclosed study limitation, not
+a claim of production readiness. Await feedback; desktop product untouched.
+
+20-degree amplitude study (latest): user explicitly requests trying max20deg.
+Controller limit now PI/9, original horizontal/vertical ratio and eye travel
+unchanged. RED/GREEN requested range; neck-pivot and whole-eye tests pass.
+Full-crouch downward cap stays-.08rad; standing allows the full requested range.
+Known study limitations: extreme head angles expose the neck seam and overlap
+the lower-body area (62 differing covered channels in composed contact sheet).
+Strict export-gaze-proof still asserts on overlap; explicit --study-overlap
+exports/reports it for this comparison, not a product verification pass.
+Visible page labels this20deg comparison and limitation. Same2790/server35236,
+reloads scripts on refresh. No product integration; neck support needs work
+before this amplitude could be shipped.
+
+Latest amplitude follow-up: user finds head turn too subtle. Double standing
+rotation coefficients to .07/- .09 (up to .16rad, about9.2deg); whole-eye travel
+and timing unchanged. Lowered hunt pose retains downward clearance by halving
+only negative gaze angles at full crouch; upward and standing range stay doubled.
+RED/GREEN larger visible turn; fixed neck, unchanged eye behavior and actual
+visible lower-body pixels pass. Corrected composite test to distinguish empty
+space beside a paw (hair may rotate there) from actual existing body coverage.
+White/black extremes inspected; preview2790, PID35236, tab6 reused/look-only.
+Allowlisted preview scripts now reload from disk on request for future tuning;
+no desktop product changes or restarts.
+
+Latest user correction supersedes the iris-only/translated-head design below:
+move each WHOLE EYE (including outline), and ROTATE the head about its neck.
+Implemented original-texture eye translation plateaus with local skin falloff;
+removed fabricated sclera and independent iris displacement. Head translations
+are zero; gaze rotation pivots at native(43,66), bounded to .08rad. Upward targets
+raise the left-facing front; mirroring preserves vertical response.
+RED/GREEN for missing whole upper-eye outline motion and unwanted head position
+shift; actual compositor neck-marker fixture stays pinned. Eye alpha, mouth,
+outside regions, rest restoration, lower-body pixels and prior gait tests pass.
+Browser verified look-only and upward pointer response on NEW preview2789,
+server PID39144, existing tab6 reused. Old server32236 was left running after
+the requested restart command was rejected; no product process was stopped.
+Product integration still awaits user approval.
+
+User approved adding subtle cursor-following iris and head separately, layered
+over the hunt motion. No new feature authorization for the desktop product.
+
+- [x] Separate head/hair/ribbon and body layers. Optional bodyOnly proof output
+      added to preview renderer; default walking/seated rendering remains exact
+      in the existing 32 walking / 130 idle+seated regression comparison.
+- [x] Fixed iris-interior masks with subpixel texture displacement and pale
+      revealed sclera. No artwork files overwritten. Exact neutral restoration,
+      unchanged alpha and outside-eye pixels verified against actual rendering.
+- [x] Independent time-based lag: eyes75ms, head230ms; iris bounded to .85/.65
+      native pixels, head .8/.65px and .035rad. Near-zone only, smoothly returns
+      when cursor exits; horizontal target transforms correctly under mirroring.
+- [x] RED then GREEN: missing gaze reaction, body layer containing old face,
+      inert iris rendering. Existing hunt and four-leg render tests pass.
+- [x] Real composed standing/crouched extremes preserve all tested lower-body
+      pixels; white/black contact sheets inspected. Browser eye-only, combined,
+      mirrored and black-background controls checked. New tab6 on same2788 URL
+      replaces tab5's connection-refused page during server restart. PID32236.
+- [ ] User visual review before any product integration. New controls include
+      eye tracking/head tracking toggles and look-only mode for isolated testing.
+
+## Four-leg walking follow-up — 2026-09-10
+
+User rejects the seated vector proof because line style differs; retain the
+existing PNG seated product. No rollback needed: vector was preview-only.
+Do not integrate or further polish that rejected candidate without a new request.
+
+User requests independent walking leg timing plus the fourth, occluded leg
+slightly visible while walking. Read-only inspection finds rig.pose currently
+uses offsets[0,.5,.5] for three legs, synchronizing one foreleg with the hindleg.
+User approved with a correction: DIAGONAL PAIRS, not four staggered phases.
+Front-left+rear-right together, front-right+rear-left together, opposite pair
+half a cycle apart. Reference `C:/Users/tjdwo/Downloads/doro/1-2.jpg` shows the
+subtle fourth paw. Use its placement/proportion as reference and the existing
+transparent paw texture as donor, avoiding JPEG matte or a new stroke style.
+Preserve idle/seated PNG, direction, speed, blinking and drag/landing behavior.
+Implement rig/render changes with pair/visibility/continuity regression tests;
+verify preview visually before promoting any regenerated product bank.
+
+- [x] TDD: missing fourth joint RED, diagonal pairing GREEN; actual fourth-paw
+      visibility RED(0/32) then GREEN(32/32). Pair offsets[0,.5,0,.5].
+- [x] Rear-paw donor under body, not in body deformation field. Max newly visible
+      alpha area32.33 native pixels; max44 pixels with alpha gain>40. All changes
+      remain in the checked lower-body region; no JPEG or new vector stroke.
+- [x] Preserve all130 idle/seated open/closed frames byte-exact versus frozen
+      pre-change rig/renderer. Existing raster, joint ink, outline, rump fringe,
+      seated PNG-bank and continuity regressions pass. All-four attachment and
+      planted-foot checks added following independent review and pass.
+- [x] Browser comparison on2787 (nodePID45468), baseline/new both32-phase2x
+      renders; pause, half-speed, mirror, black/white checked. Fixed floating
+      rounding selecting22 instead of23; actual slider now selects23 correctly.
+- [x] User visual approval: "좋다 이대로 가자 너무 좋네."
+- [x] Package frozen regression fixtures, verify approved-preview bank parity,
+      rebake without touching sit/idle, run desktop tests, publish and relaunch.
+      Baseline runtimePID37252, product bank E1D7249C...394, seated PNG C0C19BC...A5B7.
+
+Released approved gait on2026-09-10. New bank SHA03983B66D55CF2EC3B7A6B7CD0B78C5AC609FF41F442B0197909B74CDA723ECE;
+130idle/sit frames unchanged,32approved full-amplitude phases exact, all512walk
+eye/amplitude frames exact to approved renderer. Bank gate RED oldproduct,
+GREEN newproduct; goldens now packaged under fixtures/four-leg-baseline.
+Core239 + App747 Release tests passed (986total,0failed/0skipped). Manifest,
+premultiplication, seatedPNG endpoints pass. Fresh WPF left/right walk and sit
+proofs inspected after full test completed. Independent release review no blockers.
+Published --no-build from tested generic Release output to
+`C:/Users/tjdwo/Downloads/doro/four-leg-walk-20260910/runtime`.
+App C636C7BD8A8C2737E957C3DCF1D960758080DA952A8B437B2333810814111B51;
+Core remains70B0C79196D22B093E93D3F3BDF6E0176D0C957B0AA8341FC4CC18F9874CB1CA.
+Guarded oldPID37252 stop; newPID45496 launched. Old directory retained.
+No C# behavior changes, commit or push. Evidence: docs/verification/2026-09-10-four-leg-walk.md.
+
+At the earlier preview checkpoint: no Critical/Important reviewer findings. No WPF build, bank
+rebake, product restart, commit or push. Frozen baseline evidence and test-only
+harness remain local to this proof; preserve/package fixtures before shipping
+these comparison tests to a fresh checkout. See four-leg proof REPORT.md.
+
+## Topology-preserving seated vector comparison — 2026-09-10
+
+User approved the revised curve/display-resolution approach. Execute inline
+in the existing worktree; no release until visual approval of the new shape.
+Goal: keep the front-paw cleft and head/ribbon while eliminating native96
+rebaking from the proof's body outline. Spec: latest user feedback above and
+the rejected comparison below. Tech: Node Canvas, scalable SVG, HTML preview.
+
+- [x] Add `tools/PreviewLocomotion/verify-seated-vector.cjs`: actual rendered
+      alpha regression in front-paw cleft, body alpha area, protected head,
+      and sharp display-resolution boundary at 1x/2x/4x. Run against rejected
+      proof and observe failures before adding replacement.
+- [x] Add `tools/PreviewLocomotion/seated-vector.cjs`: explicit body Bezier
+      curves with anatomical cleft control points instead of averaging; expose
+      `createSvg(before)` using original head/ribbon and vector body/seam.
+      Test the exported SVG itself, not only internal geometry.
+- [x] Add `tools/PreviewLocomotion/export-seated-vector.cjs`: self-contained
+      side-by-side HTML/SVG proof and black/white comparison. Render at target
+      resolution; no 96px down-bake. Inspect proof before user handoff.
+- [x] Re-run tests and record limits. Do not change product bank, motion,
+      executable, installer, or source PNG; do not commit/push.
+
+Static candidate REJECTED by user for mismatched line style. Never promote.
+Alpha-contour fitting was abandoned: source partly-transparent body ink made
+that trace jagged and detached the cleft stem. Final proof explicitly traces
+the visible body/stem with cubic curves. This redraws the rear internal seam
+as well; do not claim its original pixels are preserved. Body area -0.46%,
+sampled cleft passes, protected head unchanged within2-channel-unit tolerance,
+4x rump 10-90% edge widths1.27..1.58devicepx versus4.54..6.37 in rejectedproof.
+These gates do not establish every local curve/stroke or topology is identical.
+Independent read-only review: no blocker for static comparison; visual signoff
+still needed. Browser verified both loaded at192x192 (fixed initial narrow-panel
+aspect-ratio error), black/white switch,384x384 with accessible horizontal scroll.
+Proof served locally on2786 by nodePID44844; no product restart or bank rebake.
+Evidence: `artifacts/repro/seated-vector-20260910/REPORT.md`.
+
+## Seated static edge stair-stepping — 2026-09-10
+
+Latest visual feedback: candidate NOT approved. User identifies the front-leg
+gap becoming joined/muddied and questions returning curves to low-res pixels.
+Read-only ROI probe confirms alpha fills in the cleft, e.g. native(33,81)
+88->202 and (31,80)126->255. Gaussian contour averaging has no protected
+concave-gap landmarks; global ink matching does not preserve local anatomy.
+The proof draws at8x but averages back to96x96, retaining coarse sampling.
+Do not promote this candidate. Proposed next approach (not implemented):
+preserve explicit paw-gap landmarks and render body curves at actual display
+resolution, retaining head/ribbon art; assess loader/layout consumers before
+changing bank resolution. No product changes for this diagnosis.
+
+User clarifies this is the stationary seated contour, not sit/rise timing.
+Current runtime is still seated-png-fix PID37252. No product change this turn.
+Both walking and sitting use HighQuality WPF scaling and native96 bank frames;
+raising pose count cannot change the held endpoint. Source seated PNG100x100
+is registered without redesign and its endpoint is Canvas-scaled directly;
+walking body uses deformed bilinear mesh sampling. Static source contour and
+endpoint rasterization need visual comparison, not another timing adjustment.
+
+- [x] Clarify spatial vs temporal symptom and trace both rendering paths.
+- [x] Compare a seated-body-only contour antialiasing candidate against current
+      source, preserving face/ribbon, pose, stroke weight and walking frames.
+      Avoid whole-image blur or claiming simple upscaling creates new detail.
+- [ ] Obtain visual approval before promoting a modified authored contour.
+
+User approved comparison. Isolated proof tools only; no product pipeline hook.
+Final candidate protects6152 head/ribbon pixels exactly;361 body-band pixels
+change, area+0.391%, total ink-.003%. Editable lower rump(y69..78) curvature
+jitter .22807->.11502. Initial y59..78 metric included the protected attachment
+and remains slightly worse(.22373->.23285); explicitly retained in diagnostics.
+Corrected ROI baseline RED/candidate GREEN. Do not equate ink-mass matching with
+identical local stroke width or claim every contour is smoother. Independent
+review verifies rendered parity and no blocker for static visual comparison.
+`artifacts/repro/seated-contour-proof-20260910/comparison-compact.png` delivered
+for visual approval; details REPORT.md there. Product remains PID37252 and bank
+E1D7249C2427C0B021175C9B83B99D01F858CCCE7383BBD86FEFF239321DB394 unchanged.
+
+## Transparent seated PNG integration — 2026-09-10
+
+User supplied `C:/Users/tjdwo/Downloads/doro/10-2.png` in response to replacing
+the seated JPG. Use this exact transparent source; no redraw or substitution
+of head/body. Product-shell design remains paused; no motion/physics changes.
+
+- [x] Validate source100x100: alpha0=6546, partial=491, opaque=2963; integer
+      registration(+3,-12) retained. Source copied byte-exact with SHA256
+      C0C19BC79337A9628E5B301153788928D9346357DD4284EA6167AE9DFF76A5B7.
+- [x] TDD: 3 RED (border white paint deleted, actual PNG changed by old import,
+      stale active JPG endpoint), then 3 GREEN. Authored-alpha sources bypass
+      legacy opaque/JPEG matting, preserving exact registered endpoint.
+- [x] Rebake65 poses/642-frame product; verify rise, alpha, source provenance,
+      exact standing/walking preservation and black/white visual comparison.
+- [x] Independent review, final product tests, guarded publish/relaunch.
+
+Baseline banks/importer/manifest retained in
+`artifacts/repro/seated-png-20260910/`. Legacy JPG remains for regression only.
+All65 reversible poses match their bank (maximum step0.254/255); both seated
+eye endpoints match independent PNG exports; all514 standing/walking frames
+byte-exact to baseline. New bank test RED old-JPG endpoint then GREEN. Legacy
+matte, active endpoint, rise-feature/color, manifest and preview delivery checks
+pass. Independent review has no findings; reviewer additionally verified all128
+seated native frames against atlas/eye patch. First App run746pass/1 live-native
+ZOrderChanged failure; exact binaries passed focused probe and full rerun747/747.
+Core239 passed. Preview server refreshed PID13924. Guarded oldPID27044 stop and
+new sole respondingPID37252 under
+`C:/Users/tjdwo/Downloads/doro/seated-png-fix-20260910/runtime`.
+Tested/published/loaded AppD1F8712C8666E902A2C04404F424626BF33F0AB27F7E66B1BE08511E2A3EBF75;
+Core70B0C79196D22B093E93D3F3BDF6E0176D0C957B0AA8341FC4CC18F9874CB1CA.
+Rollback retained; no commit/push. See `artifacts/repro/seated-png-20260910/REPORT.md`.
+
+## Seated outline follow-up diagnosis — 2026-09-10
+
+User reports dirty seated outline on black. Pause product-shell design while
+investigating this feedback. No production art/code/runtime changes this turn.
+
+- [x] Reproduce from current embedded-bank source on black and white; compare
+      canonical PNG, standing product and sitting product at native pixels.
+- [x] Trace to authored JPEG import: previous matte fix explicitly excludes
+      protected head/ribbon pixels, leaving JPEG white-composited edges there.
+      Example native(35,24): canonicalRGBA0,0,0,67; standing58,49,52,84;
+      JPEG187,189,188,255; sitting181,177,178,223. This visibly bright head fringe
+      exists before WPF rendering. 51 head-edge pixels meet measured increased
+      coverage/brightness criterion; diagnostic threshold is not a fix rule.
+- [ ] Proposed correction: retain approved seated body geometry, reuse clean
+      canonical transparent head/ribbon rather than JPEG head; verify join,
+      eye states and all sit/stand transition frames before delivery.
+
+Existing matte regression passes because it checks body edge(67,85) and
+intentionally preserves the JPEG head. This does not establish whole-outline
+quality. Enlargement/downsampling also softens standing and sitting, but does
+not explain the much brighter seated-only samples above. Evidence:
+`artifacts/repro/seated-edge-followup-20260910/source-standing-sitting.png`,
+`fringe-samples.json`, `inspect.cjs`. Runtime remains PID27044, unchanged.
+
+## Windows product shell and distribution — 2026-09-10
+
+User authorizes progressing product identity, lifecycle and distribution work;
+explicit constraint: do not change character functionality. Architectural
+brainstorming applies because tray, single-instance ownership and installation
+are new subsystems, not existing settings flows.
+
+- [x] Inspect executable metadata and app lifecycle: current native process is
+      Dororong.App.exe; description/product/company use development defaults.
+      WPF tool window is intentionally absent from taskbar. Existing startup,
+      fatal cleanup and window-close paths must remain intact.
+- [ ] Agree distribution approach and product-shell design in chat.
+- [ ] Write/review focused design; obtain written-design approval.
+- [ ] Implementation plan, regression tests, isolated shell integration.
+- [ ] Verify unchanged motion assets/behavior, install/upgrade/uninstall,
+      single-instance/tray/exit and deliver with rollback preserved.
+
+Proposed first release: user-local installed desktop app, display name
+Dororong / 도로롱, executable Dororong.exe, existing art for product icon,
+explicit version metadata, single instance, management-only tray, local error
+logs, Start menu entry and registered uninstaller. Upgrade by running a newer
+installer; no unattended network updater, service or automatic startup change.
+Portable-only is smaller but leaves installation management incomplete;
+server-backed auto-update is separate work requiring hosting/signing decisions.
+No source/runtime mutation or restart during this design step. No character
+art, gait, physics, interaction thresholds, sitting behavior or size changes.
+
+## Walking upper-rump pixel spur diagnosis — 2026-09-10
+
+User supplied walking vs idle closeups showing a tiny upper-rump protrusion.
+Read-only bank contact sheet and in-memory renderer ablation identify the
+body donor extension into protected foreground (`render.js`, chosen>=0 parts3
+copy): it extends opaque/dark body texels beyond the actual source silhouette
+near the ribbon/rump seam. Walking uses layered rendering; standing endpoint
+uses direct input. Disabling only that donor copy in a diagnostic VM removes
+the visible spur over sampled phases. This is NOT the local joint-ink repair.
+- [x] Bank reproduction and one-variable donor-copy ablation.
+- [x] User authorized implementation: constrain donor support to legitimate
+      foreground coverage; verify seam continuity and head/ribbon preservation
+      over gait amplitudes, both eyes and directions before rebaking product.
+Diagnostics: `artifacts/repro/walk-rump-20260910/inspect.cjs`, `isolate.cjs`,
+`bank-rump.png`, `donor-isolation.png`. No source-art, rig, renderer or product
+changes in this diagnostic turn. Current product remains PID25400 direct-fix.
+
+Implementation underway: confirmed exterior source(71,47)alpha0 receiving
+bodyalpha255. Narrow donor gate rightof(69,48)corner now requires solid original
+foreground, keeps premultipliedcoveragebounded and preserves otherdonors.
+New verify-walk-rump RED255!=0 then GREEN. Full rebake comparison caught a
+shifted 2px mesh lattice after donor trimming; retain its original origin.
+It then caught closed-standing frame321 changing; retain the old donor texture
+for all non-walking rendering. Final bank audit passes: all130 sit frames exact,
+all512 walking frames change only within x69..74/y45..49 (9878 pixels total),
+no new alpha coverage and solid joins retained. Raster, ink, walk outline,
+product matte checks pass; visual bank sheet inspected and independent review
+has no findings. Final Release App747/Core239 = 986 tests pass. Published and
+restarted sole responding PID27044 under
+`C:/Users/tjdwo/Downloads/doro/walk-rump-fix-20260910/runtime`.
+Tested/published/loaded App8F9B6D3E1FD403FEA9E586A548FFBD219B114A1CB38B2128B6311EE5C62979FA;
+Core unchanged70B0C79196D22B093E93D3F3BDF6E0176D0C957B0AA8341FC4CC18F9874CB1CA.
+Old PID25400 exact path/hash guarded stop; rollback retained. No commit/push.
+Evidence: `artifacts/repro/walk-rump-20260910/REPORT.md`.
+
+## Independent live taskbar recovery — 2026-09-10
+
+User authorizes fixing both-list false absence and product delivery. Native
+relation trace during Ctrl+Escape found omitted primarybar still root/self,
+parent0, with directly queried previous/next HWNDs present in enumeration.
+Use remembered handle/PID only as discovery hints; refresh all metadata and
+recover current sibling slot from validated live anchors. Never cache bounds
+or invent z-order. True hidden/destroyed/occluded behavior must remain intact.
+- [x] TDD regression: both-list omission, fresh geometry, native ordering,
+      hidden/destroyed handling and unavailable ordering. RED5fail9pass ->14pass.
+- [x] Native candidate capture and expanded regression checks.
+- [x] Independent review, full tests, versioned publish and guarded relaunch.
+- [x] Record delivery evidence and remaining live-acceptance limits.
+
+Also added class-specific bounded discovery for cold start: knownhandle-only
+candidate missedbar whenstartedmidomission, so primary/secondary firstcapture
+tests RED2fail ->GREEN. Reviewer found inactivebar append couldpolluteactive
+anchors: addedRED1fail16pass then deferredinactiveappend, rereviewapproved.
+Final focused59pass, full App747/Core239=986pass, clean scoped diffcheck.
+Final native candidate probe209/209successful; separate206/206nativevalidation
+withoutomission. Published/restarted sole respondingPID25400 under
+`C:/Users/tjdwo/Downloads/doro/taskbar-direct-fix-20260910/runtime`.
+Tested/published/loaded App91C891000FC54360544F5A6A4882FF1F5D3A7A154BA309FAF1BFEC7CAF82C640;
+Core70B0C79196D22B093E93D3F3BDF6E0176D0C957B0AA8341FC4CC18F9874CB1CA.
+OldPID22132 exactpath/hashguardedstop; rollbackretained. Postlaunch156/156
+nativecapturespassed, petY833throughout, no missingbar. Thosefinalsamplesdidnot
+exercisebothlistomission; actualSearch/gamepostfixacceptanceremainspending.
+All diagnosticprocessesfinished. No commit/push. Details:
+`artifacts/repro/taskbar-direct-20260910/REPORT.md`.
+
+## Intermittent window-switch dip — 2026-09-10
+
+User now reports occasional dip during window switching on final overlay build.
+Systematic-debugging: inspect actual runtime health/support, not merely an
+independent native observer. No further physics/expiry workaround without cause.
+- [x] Run unchanged delivered App/Core via bounded internal observer after each
+      existing loop tick: scene health/age/failure, support, native pet/bar bounds.
+- [x] Correlate user reproduction; distinguish source expiry, raw omission,
+      occlusion and external HWND relocation before choosing a fix.
+- [x] If cause confirmed, regression/test/review/deliver; otherwise record exact
+      remaining evidence gap. Restore normal product after diagnostic run.
+
+Internal trace confirms false published taskbar absence while direct shell
+bounds/visibility remain unchanged, with actual pet Y833->873. No scene expiry
+or NVIDIA occlusion. User narrows trigger to early SMAPI->game startup.
+Bounded acquisition fix admits a currently traversed shell taskbar omitted by
+the earlier EnumWindows snapshot, preserving z-order and fresh native checks.
+The trace does NOT distinguish which acquisition list omitted it: this is a
+reviewed candidate for that gap, not verified end-to-end resolution.
+RED3fail4pass -> focused49pass; full App737/Core239=976pass; native21/21.
+Independent review: no code blocker, controlled live trial ready.
+Delivered sole responding normal PID22132 from
+`C:/Users/tjdwo/Downloads/doro/taskbar-acquisition-fix-20260910/runtime`.
+Tested/published/loaded AppCBB3FC223F8E027B0E39C0E8F7FEF4200AFF4AD6E66C9BD3397003A26ADABF47;
+Core70B0C79196D22B093E93D3F3BDF6E0176D0C957B0AA8341FC4CC18F9874CB1CA.
+Diagnostic39724 stopped after exact path/hash guard; rollback retained.
+See `artifacts/repro/window-switch-internal-20260910/REPORT.md`.
+- [ ] Live game-start acceptance of acquisition candidate; if it recurs,
+      instrument both acquisition memberships to discriminate remaining cause.
+No commit/push. No diagnostic recorder left active.
+
+Post-delivery user reports two brief dips when activating Stardew Valley from
+active SMAPI, then no further recurrence. Acceptance FAILED for complete fix;
+current PID22132 still runs the candidate. No recorder was active for those
+two events, so their cause cannot be assigned from the earlier trace.
+Systematic-debugging pause: do not stack another behavior patch. Reassess the
+snapshot-to-support contract and capture EnumWindows membership, z-order
+membership, native classification, published support and pet position in the
+same acquisition/tick before deciding another change. No restart this turn.
+
+Windows Search activation report: separate45s read-only probe against delivered
+candidate captured452successful reads and actual pet Y833->873 repeatedly.
+50samples omit primarybar from native metadata;47 subsequent membership checks
+omit it from BOTH EnumWindows and z traversal, while direct HWND read remains
+visible/uncloaked at Y1040. Current one-list reconciliation cannot cover this.
+Evidence: `artifacts/repro/search-activation-20260910/REPORT.md`.
+Reassess treating top-level-list absence as physical taskbar disappearance;
+direct verified shell state needs an independent acquisition contract, with
+explicit ordering/occlusion handling rather than an invented z-order.
+No additional product fix/restart; recorder finished. Search action timing was
+not explicitly confirmed by user; this is a parallel native observer, not an
+in-process source-boundary trace. Game/search exact common trigger unproven.
+
+## Walking outline / SMAPI launch dip — 2026-09-10
+
+User reports reinforced moving-body strokes thicker than rest and temporary
+taskbar dip when SMAPI opens while another app's input is active. Keep separate
+causal checks: no unverified blanket z-order/taskbar workaround.
+Current product ordinary-blink runtime PID34812, unchanged during diagnosis.
+
+- [x] Native-frame walking outline comparison and bounded seam-safe correction.
+- [x] Read-only native launch trace: pet position, class/bounds/z-order, scene
+      read health and derived taskbar segments; no titles, input or app content.
+- [x] Review/verification and explicitly distinguish confirmed fixes from any
+      unreproduced launch trigger before versioned runtime handoff.
+
+Evidence: `artifacts/repro/window-launch-dip-20260910/REPORT.md`. User narrows
+trigger to actual game appearing after SMAPI loading. Capture2 reproduced123
+ProcessIdentity:5 failures: optional executable-path denial discarded whole
+scene and expired taskbar support. Narrow access-denied fallback implemented;
+other metadata failures unchanged. Capture1 separately recorded successful-read
+primary-taskbar absence and real40px dip; that path is NOT claimed resolved.
+Walking deficiency-only joint repair preserves130 sit frames and all512 walking
+alpha/head/ribbon pixels. Independent review found no blocking defect. Full
+Release tests App719/Core239=958 passed; actual native reads21/21 passed. New
+native stroke/seam tests and baked642-frame/source-manifest checks passed.
+Full8x32 joint sweep found767/768 profiles>=95%; one94.750517% is byte-equivalent
+to the prior reinforcement at that sample, not a newly introduced loss.
+Delivered new `C:/Users/tjdwo/Downloads/doro/walk-outline-launch-fix-20260910/runtime`
+as sole responding PID19880 after guarded retirement of34812. Tested/published/
+loaded App SHA1986C9BB5C49E742C8B5246E4A057DD0BDFFE5B4CCBD6B964C0BDFCF21B90541;
+Core70B0C79196D22B093E93D3F3BDF6E0176D0C957B0AA8341FC4CC18F9874CB1CA.
+GzipB039668E58645BBFBA102C7011540C417DB321B2522ED01AA9D90752D3659B27.
+Previous runtime retained for rollback. No commit/push. Live post-fix game-launch
+acceptance pending; metadata recorder `launch-20260910-081600.jsonl` started.
+That45s recording finished:461/462successful reads, oneZOrderChanged; no identity
+failure or missing primary taskbar and pet Y833 throughout. User confirmation
+of actual game-start transition during that interval still pending.
+
+User reports first delivery still drops. Longer081758 trace confirms NVIDIA
+Overlay.exe HWND198370/CEF-OSC-WIDGET at0,0,1919,1080 front of the unchanged
+taskbar: occlusion removes support, pet833->873; overlaydisappears13.2s later,
+petreturns833. Exactclass/exe/layered+transparent-style nonphysical classification
+fix in progress. Separate~0.4s filteredbarabsence remains under enhanced raw/
+DWMcloak recording; do not claim all drops fixed from overlay case alone.
+
+Final bounded handoff: exactNVIDIAclass+exe+layered/transparentflags classified
+nonphysical; true appwindows stayordinary. RED3fail6pass -> focused40pass;
+independent rereview no blockers; full App728/Core239=967pass. Final sole
+respondingPID34372 from `C:/Users/tjdwo/Downloads/doro/window-overlay-fix-20260910/runtime`.
+Tested/published/loaded App43D2A20E679F92E8D5CE4CF9BDC44BDA2FF8F0AE5581A535F31A54E6D1901170;
+Coreunchanged70B0C79196D22B093E93D3F3BDF6E0176D0C957B0AA8341FC4CC18F9874CB1CA.
+PreviousPID19880 guardedstop androllback retained. All diagnosticrecordersdone.
+UserclarifiesAltTabalone doesnottrigger; actualgame-start finalbuild acceptance
+pending. Extra shortabsence/mismatch not claimed solved. No commit/push.
+
+## Ordinary two-frame blink — 2026-09-10
+
+User prefers walking's open/closed-only blink and requests identical ordinary
+idle behavior: remove squint from ordinary blinking, use5s period/360ms closed
+for idle, seated and walking. Keep sleep/wake and perch/direct art unchanged.
+Use one continuous eligible idle/walk eye clock independent of motion phase.
+
+- [x] Render-test RED/GREEN open/closed-only art and common timing, regression suite.
+- [x] Review and versioned publish/relaunch, retain rollback, no commit/push.
+
+Delivered: App711/711 + Core239/239 =950passed; scoped review approved.
+Canonical idle, walking and seated open/closed-only timing verified; closed-eye
+cheek capture/release pixel continuity retained by pausing the eye clock there.
+No art changes. New ordinary-blink-20260910/runtime PID34812 replaces exactly
+verifiedPID44440; old folder intact. Tested/published/loaded identities match.
+Details: docs/verification/2026-09-10-ordinary-blink.md. No commit/push.
+
+## Calmer walking blinking — 2026-09-10
+
+User confirms both frequency and blink duration feel too fast, specifically
+WHILE WALKING. Decouple walking bank eye timer from core phase; target5s
+interval/360ms closed. Keep seated blinking, art, pose, breathing, interaction
+and sleep/perch rendering unchanged.
+Test actual rendered bank selection against cycling core phases, then publish
+and relaunch a separate runtime without commit/push.
+
+- [x] RED/GREEN timed walking eye tests and regression verification.
+- [x] Versioned product publish, runtime identity check, preserve rollback.
+
+Delivered: actual cause WALK600ms phase reused for24ms eye flashes. Walking-only
+elapsed clock now360ms closed every5s, first blink2s after walking starts; idle/
+seated blinking unchanged. Focused18/18; App709/709 + Core239/239 =948passed.
+Scoped review approved, assets unchanged. New hidden runtime walk-blink-20260910
+PID44440 replaces verifiedPID42020; old folder preserved. Module identities match
+tested binaries. No commit/push; docs/verification/2026-09-10-walking-blink.md.
+
+## Seated edge / cheek turning / walking polish — 2026-09-10
+
+Approved: clean seated body exterior matte without changing authored head/pose;
+seated cheek pull never carries/unpins, turns toward pull while stretching;
+head/body carry still releases sitting. Correct desktop walk art direction and
+halve speed42→21DIP/s (distance-driven gait therefore also halves). No commit/push.
+Independent work: source-import matte agent owns JS/banks; speed agent owns Core
+tuning/tests; root owns seated cheek and desktop-facing boundary/App tests.
+
+- [x] RED/GREEN matte/protected head, pinned cheek long pull and reversal,
+      physical facing vs travel, half-speed displacement.
+- [x] Independent review, full tests, black/white raster checks, fresh versioned
+      product publish and verified relaunch; retain current runtime as rollback.
+
+Delivered: App Release708/708 + Core239/239 =947 passed; build0warnings/0errors.
+Supported-surface seated long-pull/reversal/release and retained facing verified.
+Independent scoped review approved, including added real-platform coverage.
+73 body-edge matte samples recovered; protected head/ribbon and512walking frames
+byte-exact. Original10-2 JPEG unchanged; native black/white proof inspected.
+New runtime `C:/Users/tjdwo/Downloads/doro/seated-polish-20260910/runtime`
+PID42020 replaces exactly verified oldPID20868; old directory retained unchanged.
+No commit/push; see docs/verification/2026-09-10-seated-polish.md for module hashes,
+full evidence and native-mouse verification limits.
+
+## Manual sit command — 2026-09-10
+
+Approved: context menu label `앉아`; stop autonomous travel and sit immediately
+on this command, not on idle timeout. No separate unlock command: actual dragging
+releases the hold, a mere click does not. Keep blinking, local cheek play,
+existing carry/fall/landing/perch priority. No art, commit or push changes.
+Bounded implementation in existing menu/presenter/loop and locomotion controller.
+
+- [x] RED/GREEN command, no automatic sitting, stable position/blinking,
+      click keeps hold, actual head/body/cheek carry releases hold.
+- [x] Preserve direct recovery/source continuity and existing platform behavior;
+      full tests, independent review, new versioned runtime and relaunch.
+
+Delivered: final App Release705/705 + Core237/237 =942 passed; Release build
+0 warnings/0 errors. Independent review approved after first-resumed local-cheek
+frame regression (RED then GREEN). Hidden sit progress pauses through local
+play/platform ownership; renderer/physics priority unchanged, actual carry resets.
+New runtime `C:/Users/tjdwo/Downloads/doro/manual-sit-20260910/runtime/Dororong.App.exe`
+PID20868 responding, sole pet process. Verified oldPID22444/path/hash before stop;
+CloseMainWindow unavailable, stopped that exact process. Previous runtime intact.
+App test/build/publish/loaded SHA256:
+`2A3D97304B73E86B88CE4D3E3668C9B9947E7D1E3A60A1F9AAEA6005FF7BD5FC`.
+Core: `96A04EFF4075EF73743A394B7B3C7C1D45C25AC17DF1DF00FE21968BEE35C980`.
+No commit/push. Native mouse verification not claimed; actual menu/loop/WPF tests
+and process/module identity verified. See docs/verification/2026-09-10-manual-sit.md.
+
+## Approved locomotion product integration — 2026-09-10
+
+Goal: apply the approved walking and final10-2 sitting/rising preview to the
+desktop executable and relaunch the updated product. Spec: latest user
+"ㅇㅋ 이걸로 적용해" approves the current preview, including feature transport,
+continuous knee ink and two-pixel rump fringe cleanup.
+Architecture: bake approved Canvas output into an embedded native96 Pbgra32
+bank; a small presentation controller advances walking amplitude/distance and
+reversible sitting amount. Existing direct interaction, sleep, falling/landing
+and perch keep ownership; no new artwork or changes to their physics.
+Tech: current .NET8 WPF, Node Canvas exporter, xUnit. Existing linked worktree
+verified on feature/dororong-m1-expression-animation, HEAD212eb1a.
+Execution: one tightly coupled implementation subtask with independent review;
+controller validates runtime/package and performs the user-authorized deployment.
+Global constraints: keep final10-2 JPEG unchanged, preserve all existing drag,
+cheek, landing, window/taskbar and perch behavior; no commit/push or new tray
+feature in this request. Runtime image96x96 is required by capture/hit pipelines.
+Standing and walking retain facing; idle sit delay1s, transition650ms, smooth
+rise before walking, gait start/stop blend180ms. Idle means resting on a support,
+not airborne/perched. If interrupted by direct interaction reset locomotion.
+
+### Task 1: Embedded approved motion and runtime presentation
+
+Files: new tools/PreviewLocomotion/export-product.cjs,
+src/Dororong.App/Assets/locomotion.pbgra.gz,
+src/Dororong.App/Controls/LocomotionFrames.cs and LocomotionPresentation.cs;
+modify Dororong.App.csproj, DororongPresenter.xaml.cs, PetLoop.cs and
+Runtime/PetLoopRuntime.cs. Add focused xUnit tests under Controls/Runtime.
+Consumed: current renderer/harness, approved65 PNG bank; fixed original logical
+96x96 coordinate system. Produces frozen BitmapSource at96x96. Sit has65 frames
+and optional open/squint/closed eyes, walk has32 periodic phase samples and8
+amplitude levels plus standing. Crop renderer256 at32,32,192,192 and downsample
+to96 with smoothing before premultiplication, avoiding padded-frame scaling.
+Do not rerun morphing at runtime or allocate bitmaps each UI tick. Verify exact
+decoded product bytes against exported native frame fixtures/hash manifest.
+
+- [x] Add regression tests (bank/controller/presenter RED/GREEN; loop tests after seam):
+      assets load and have correct geometry/frozen state;
+      sit endpoints/reverse/finite validation, moving limb raster differs;
+      rest1s then650ms sit, reverse smoothly when walk requested, no walking
+      phase drift while stationary, interruption/airborne blocks motion;
+      existing cheek/body capture accepts new native96 motion frames.
+- [x] Implement exporter/loader using the real approved renderer and fixed
+      baked bank, not independently redesigned art. Record format/count and
+      write deterministic metadata for verification. Stand endpoint includes
+      approved two-pixel fringe cleanup. Full65 original PNGs stay untouched.
+- [x] Integrate after normal pose reset and before direct-presentation overrides;
+      only Idle/Walk when not blocked/direct. New walk replaces old whole-body
+      sine bounce. Keep active facing and native96 captures/cheek hit eligibility.
+      Preserve blinking while seated. Keep motion state outside the giant presenter.
+- [x] Add PetLoopHost optional callbacks to block locomotion when platform owns
+      motion and hold autonomous walking while seated/rising. Core direct presses
+      still run; do not suspend direct reaction or platform falling/landing.
+- [x] Run focused tests then full App/Core suites and Release build. Self-review
+      and separate spec+quality review required. No commit/push.
+
+### Task 2: Validate and deploy approved build
+
+- [x] Verify built DLL bank and render/capture paths match approved frames;
+      inspect representative actual WPF frames, walking/sit/rise and interruption.
+- [x] Publish to a new versioned directory under Downloads/doro; preserve current
+      runtime-v2 unchanged for rollback. Resolve current PID/executable before
+      graceful stop, start new executable hidden, check process/window alive,
+      no startup exception. Do not stop unrelated processes or preview servers.
+- [x] Record hashes, old/new executable paths and PID in this ledger and give
+      concise user handoff. No commit/push unless separately requested.
+
+Delivery 2026-09-10: final App Release697/697, Core Release237/237 (934 total),
+Release build0 warnings/0 errors. Independent review approved the final sample
+activation guard. Initial canonical/direct recovery stays exact; only nonzero
+baked samples activate motion, while post-rise cleaned standing persists.
+Actual WPF standing/walk/sit/rise/blink proof inspected. Native no-activate
+window is not exposed by Computer Use, so no live mouse/visual claim is made.
+Test/build/publish/loaded App SHA256:
+`24932CF1F3B7A6FCD662E1289D6DAE436DAA30440A18DE7A49549C6E36A5DD4D`.
+Core SHA256: `96A04EFF4075EF73743A394B7B3C7C1D45C25AC17DF1DF00FE21968BEE35C980`.
+New executable: `C:/Users/tjdwo/Downloads/doro/locomotion-20260910/runtime/Dororong.App.exe`,
+PID22444 responding and loading these DLLs. Verified old PID35788 had no graceful
+main-window close; stopped only that process. Old `input-rump-fixed-20260909/runtime-v2`
+folder unchanged as rollback (App SHA9B244901...E74E). No commit/push.
+
+Preflight: Task1 produces native96 frozen frames/controller and consumes current
+preview; Task2 consumes its published exe. No conflicting file ownership.
+Task1 test geometry matches capture assumptions. Current preview remains available.
+
+## Walk / sit comparison preview — approved 2026-09-09
+
+## Authored 10-2 sitting transition — 2026-09-10
+
+Follow-up: user reports unnatural rise and tail-like rump exterior after rising.
+Reproduced missing interior feature motion: initial SDF only transported contour
+depth while deep interior colors dissolved at fixed positions. New landmark
+correspondence moves toes, clefts, fold and rump interior before contour sampling;
+head stays pinned and final drawing unchanged. Feature-transport regression RED
+(marker missing at intermediate location), then GREEN. Source canonical contains
+faint outboard rump pixels at74,70 and74,71; cleanup excludes weak specks without
+an adjacent visible boundary, retains connected antialias and original files.
+Fringe regression RED(alpha26), corrected path GREEN. Changed exactly two
+outboard pixels(74,70) alpha26 and(74,71) alpha30; all other source pixels retained.
+User capture requested to confirm whether these are the exact reported tail.
+Final batch: authored endpoint/head/white-body, moving-feature, fringe, walking
+ink,65-frame bank parity and delivery tests GREEN. Frozen-map mutation fails
+the moving-feature probe. Max adjacent bank change0.269/255. Reviewer checked
+all44 triangles: minimum doubled area5 across analytic extrema, total area9216,
+no gaps/folds; cleanup changes only the two pixels above. Browser midrise and
+standing endpoint inspected on black/white, page reports normal playback.
+Console contained old extension message-channel errors, no new renderer error.
+Server40112 delivers regenerated bank. New ZIP authored-10-2-frames-v2.zip
+retains the previous ZIP separately. Preview only; no product update or source
+JPEG changes. Exact user-reported tail appearance remains unconfirmed by capture.
+Final review also reproduced a129-level RGB pop at mapped interior texel-cell
+boundary(t=.7097415384), independent of tail. Added failing real-renderer
+regression, replaced rounded-cell boolean with bilinear depth and smooth
+interior/contour blend(depth1..4); regression GREEN, final bank regenerated.
+Narrow reviewer recheck confirms color-pop resolved. Final bank parity max step
+0.267/255 and delivered-five-image verification GREEN; server43176 restarted,
+browser reloaded and rise playing. v2 ZIP refreshed with final65 frames+metadata.
+
+Goal: use the user's final10-2.jpg without pose redesign; generate reversible
+standing/sitting frames and show in the existing preview. Product remains untouched.
+Architecture: preserve a byte-identical JPEG copy; extract only border-connected
+white background; register with integer translation(+3,-12), measured head RGB
+error0.815/255. Build a separate authored transition module using the existing
+contour-depth sampler, exact endpoint branches, and body feature correspondence.
+Tech: existing Canvas2D/Node runtime, no new dependency or image generation.
+Spec: latest user explicitly approved10-2.jpg as final and requested transitions.
+Execution: one tightly coupled renderer task performed in this session; no
+parallel implementation. No commit/push/product integration in this preview scope.
+
+- [x] Add endpoint/white-body/registration tests in verify-authored-sit.cjs;
+      demonstrate current renderer cannot reach the supplied endpoint.
+- [x] Add authored-sit.js prepare/create APIs; source JPEG in assets is unchanged.
+      Preserve opaque interior RGB, remove exterior only, register without scale.
+- [x] Interpolate correspondence and contour depth, not raw image opacity;
+      start/end return source rasters exactly; stand traverses the same bank back.
+- [x] Wire optional authored endpoint into preview/raster harness and embedded
+      delivery; leave walking path unchanged. Export65PNG frames and metadata.
+- [x] Check endpoints, bounded frame differences, no missing body/ribbon, render
+      atlas and direct browser playback. Show preview and saved frame directory.
+
+Authored10-2 result:65 PNGs plus reverse-order animation.json exported under
+artifacts/repro/locomotion/authored-10-2; immutable snapshots copied into a
+2048x2304 bank (avoids mutable-canvas atlas aliasing). Fixed-coordinate head
+color prevents contour transport smearing hair/face. Independent review found
+scale2 exact-endpoint coverage discontinuity(max alpha62); regression RED then
+GREEN after first/last6%-amount premultiplied coverage handoff. Reviewer recheck:
+zero near-endpoint alpha/RGB difference, no further actionable finding.
+Authored endpoint/interior tests,65-frame bank/export parity and reverse order,
+walking joint ink(96.0%), and five-image embedded delivery all pass.
+Maximum adjacent full-canvas premultiplied change0.268/255 at frame3.
+Preview server40656 restarted; browser sit/stand, mid/final pose and black
+background inspected; console errors empty. Supplied JPEG has noisy pale edge
+pixels on black, retained rather than redesigning final drawing. No product
+restart/integration, no commits/push. Historical procedural notes below are
+superseded for sitting by the user's final authored pose.
+
+2026-09-10 refinement: user approves belly connection but asks for deeper rear
+fold and level front/rear feet. Raster measured soles81.75/87.25/83.75: source
+front feet had never been aligned to the sleeping rear. Added seated-only
+continuous lower-body vertical alignment to shared83.75, preserving the head
+texture and all walk rendering. Crease compressed35% vertically around the
+rear floor and tucked1.5px inward; accepted rump outline stays unchanged.
+Preview settles the whole pose7outputpx to keep the aligned floor grounded.
+New sole-level regression RED at old heights then GREEN at83.75/83.75/83.75.
+Replaced superseded exact-forepaw-pixel preservation with shared-floor test;
+head preservation and belly-join tests remain. Browser partial/fullsit inspected;
+101-frame lower-body continuity GREEN(max pixel step0.767/255),1001-sample
+topology and delivery GREEN. Preview only, no product updates/restart.
+
+Latest narrow correction: rear convex volume is explicitly accepted; ONLY the
+angular belly join should change. Root cause: sleeping rear still pinned to
+standing belly endpoint(49.5,77.73), creating a deep notch beside foreleg.
+Extended the source contour to the back of the planted forepaw(48.5,83.85),
+and joined it to the unchanged sleeping rear with a tangent-aware shallow
+curve. Cleared obsolete standing-root ink inside the new fill; paw sole stays
+unchanged. Belly-notch/old-root-ink raster regression RED then GREEN. Raster,
+sleeping-shape, walking-ink and1001-sample topology checks GREEN;101-frame
+continuity GREEN(max rear pixel step0.733/255). Browser partial/fullsit inspected,
+no residual vertical root stroke. Preview updated; awaiting visual approval.
+No rear-volume reduction, no head/front-foot relocation, preview only.
+
+Latest user correction: discard the invented seated haunch; directly take the
+existing lying/sleeping rear and match stroke/join only. Implemented source
+`dororong-sleep.png` alpha-boundary extraction and copied diagonal knee ink,
+translated3px down to the forefoot floor. Removed hand-authored seated Beziers.
+Only short hidden top/forebody joins are adjusted. Head/front paws/walking
+unchanged, source assets unchanged, preview only. Sleeping-source silhouette
+regression RED9.8% mismatch then GREEN (<4% tolerance at sampled rear pixels).
+Topology1001 samples GREEN; knee copied ink reinforced and alpha-clipped to
+prevent crop-box residue. All3 textures embedded in delivered HTML; delivery
+RED missing sourceSleep then server40300 restart/GREEN. Browser endpoint and
+source-pair raster compared. Continuity101 frames GREEN (<=2px contour steps,
+worst premultiplied pixel step0.708/255); geometry/raster/ink GREEN. Comparison
+artifact: artifacts/repro/locomotion/sleep-source-comparison.png. Delivered
+preview only, awaiting user shape acceptance. Earlier invented-shape acceptance
+wording is superseded.
+
+Current revision after user rejected both seated endpoint and transition:
+walking alpha-boundary-only ink reinforcement keeps tested moving joints at
+96.0% of resting integrated ink; independent100-pose A/B review found no alpha,
+upper-head or RGB-brightening changes. The earlier SDF seated shape and later
+pure-mesh flat/pointy rear were rejected after direct playback, not accepted.
+Rear redraw now uses corresponding silhouette landmarks for a round tucked paw,
+fills underneath the preserved forebody/head (fixing a diagonal torso hole),
+and keeps the ink width stable. A first12%-amount premultiplied ink handoff fixes
+the entry raster-style pop (new alpha-entry regression RED0.407 then GREEN).
+Reviewer caught a near-endpoint self-crossing paw join; controls corrected and
+1001-sample topology regression GREEN (old-controls mutation fails at0.856).
+Raster/geometry/ink/delivery checks GREEN; final101-frame continuity GREEN
+(<=2px contour steps, worst rear premultiplied step0.527/255). Browser partial/
+full sit, stand, mirror and black/white inspected; sequence restored for handoff.
+Visual shape remains a preview for user approval. Original head/ribbon/
+front feet retained. Generated sitting reference used for anatomy only because
+its face changed and checkerboard was baked in; generated bitmap is not shipped.
+Preview-only server42336/tab2, product PID35788 unchanged. No commit/push.
+
+Previous iteration notes below are historical, superseded by the revision above.
+
+Approved refinement: repair walking body/paw tears; sitting should borrow the
+sleeping haunch/tucked hindleg shape but redraw its thin stroke to standing-art
+weight. Preview only. Attachment-width regression RED proved independent cut
+rotation separates roots; replaced with one continuous body texture/field.
+Raster RED caught half-source-pixel start offset, fixed texel-center sampling.
+Seated shape now a round redrawn rear with tucked crease, signed-silhouette
+interpolation (no bitmap crossfade), existing head/front feet preserved.
+Geometry/raster/delivery GREEN; 20 full-amplitude gait attachment checks,
+sit-quarter head/forepaw preservation, fullsit shape/stroke and halftexel entry
+regressions pass. Independent review performance finding fixed (zero-sit
+distance shortcut, shared vertex map, bounded mesh/empty-SDF skips), rechecked
+with no actionable issues. Host Canvas uncached samples improved from27–33ms
+to9–19ms; browser both directions, black/white, partial/fullsit and sequence
+rechecked with no console errors. Server42336, tab2 re-delivered; source assets
+and desktop product unchanged. Await visual approval of redrawn seated shape.
+
+Delivery repair: user screenshot showed Image.decode failure/blank canvases.
+Live root PNG responses were200/exact source bytes; local browser reload worked,
+so the specific failed delivery origin remains unconfirmed. Removed dynamic
+root-relative image fetch dependency: server embeds both exact PNGs in HTML,
+preview decodes those DOM images. verify-delivery RED for missing embedded
+textures then GREEN, geometry/syntax/diff checks pass. Reloaded browser confirms
+both96x96 decoded, both canvases visible and no console errors. Preview server
+replaced34300 with17344; product untouched. Re-delivered tab2 for user check.
+
+User approved a separate walk → stop → sit → stand comparison preview. Scope:
+existing canonical artwork articulated into alternating forelegs/hindleg,
+distance-driven foot cadence and modest rigid head/body follow; sitting bends
+hindleg and lowers rump while forepaws stay planted. Preview only, no product
+integration, restart, new source art, tray/startup/settings mutation or push.
+Stable product remains normal PID35788 at checkpoint212eb1a. Geometry contact,
+transition continuity and valid raster tests first; inspect actual browser
+motion and both directions, then hand over for visual approval. Tray work waits
+for the selected sitting pose. Anatomical hidden closures are explicit preview
+assumptions, not newly authored source images.
+
+Preview handoff: `tools/PreviewLocomotion/`, loopback http://127.0.0.1:2785/
+(server34300), browser tab2. Existing open/closed-eye textures, separate limbs,
+planted front paws during sit, lowered/folded rear, speed/mirror/black-background
+controls and an 8-second walk-stop-sit-stand loop. Startup discontinuity reproduced
+RED at actual timeline t=8, then fixed with a 0.4s ramp and integrated travel;
+contact/sit/gait/timeline regressions GREEN. JS syntax and diff checks pass.
+Independent review findings fixed and rechecked; browser scrub/mode highlight,
+both facings and loop restart checked, console has no errors. Rear fold/root
+closures remain provisional art for visual selection. Product source/executable
+unchanged; no commit/push or tray integration. Await user's motion feedback.
+
 ## Stable executable checkpoint / tray planning — approved 2026-09-09
 
 Checkpoint gate passed: fresh App687/Core237 tests, generator contour and

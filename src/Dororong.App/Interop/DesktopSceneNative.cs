@@ -10,7 +10,10 @@ namespace Dororong.App.Interop;
 
 internal sealed record NativeWindow(long Handle, uint ProcessId, RectD Bounds, bool Visible = true,
     bool Minimized = false, bool Cloaked = false, bool Excluded = false, bool CanSupport = true,
-    bool Taskbar = false, bool HorizontalTaskbar = false, string ClassName = "");
+    bool Taskbar = false, bool HorizontalTaskbar = false, string ClassName = "")
+{
+    internal bool CanOcclude { get; init; } = true;
+}
 internal sealed record NativeTaskbarMetadata(long MonitorId, uint Edge, long AutoHideHandle);
 internal sealed record NativeDesktop(IReadOnlyList<DesktopMonitor> Monitors, IReadOnlyList<NativeWindow> Windows)
 {
@@ -22,8 +25,19 @@ internal sealed class DesktopMetadataException(string operation, int code) : Exc
 {
     internal string Diagnostic => $"{operation}:{code}";
 }
-internal sealed class DesktopMetadataReader(nint petHandle) : IDesktopMetadataReader
+internal sealed class DesktopMetadataReader : IDesktopMetadataReader
 {
+    private readonly nint petHandle;
+    private readonly Func<uint, string> readProcessImagePath;
+    // Discovery hints only: never retain bounds, visibility or a previous z-order.
+    private Dictionary<long,uint> knownTaskbars = new();
+    // Keep the original constructor first for the existing reflection-based metadata probe.
+    public DesktopMetadataReader(nint petHandle) : this(petHandle, ReadProcessImagePath) { }
+    internal DesktopMetadataReader(nint petHandle, Func<uint, string> readProcessImagePath)
+    {
+        this.petHandle = petHandle;
+        this.readProcessImagePath = readProcessImagePath;
+    }
     internal static IReadOnlyList<DesktopMonitor> ReadMonitorBounds()
     {
         var previous=Api.SetThreadDpiAwarenessContext(new nint(-4));
@@ -59,15 +73,7 @@ internal sealed class DesktopMetadataReader(nint petHandle) : IDesktopMetadataRe
             if (!Api.EnumWindows((handle,_) => { handles.Add(handle); return handles.Count < 4096; },0))
                 throw Failure("WindowEnumeration");
             // Explicit bounded z-order traversal; EnumWindows alone is not used as an ordering contract.
-            var windows = new List<NativeWindow>(); var visited = new HashSet<nint>();
-            for (var handle=Api.GetTopWindow(0); handle != 0; handle=Api.GetWindow(handle,2))
-            {
-                if (!visited.Add(handle) || visited.Count > 4096) throw Failure("ZOrderTraversal");
-                if (!handles.Remove(handle)) continue;
-                var window=ReadWindow(handle);
-                if (window is not null) windows.Add(window);
-            }
-            if (handles.Any(Api.IsWindow)) throw Failure("ZOrderChanged");
+            var windows = ReadOrderedWindows(handles, EnumerateZOrder(), DiscoverTaskbars());
             var taskbars = new List<NativeTaskbarMetadata>();
             foreach (var monitor in monitors)
             for (uint edge=0; edge<4; edge++)
@@ -87,6 +93,111 @@ internal sealed class DesktopMetadataReader(nint petHandle) : IDesktopMetadataRe
         }
     }
 
+    private static IEnumerable<nint> EnumerateZOrder()
+    {
+        for (var handle=Api.GetTopWindow(0); handle != 0; handle=Api.GetWindow(handle,2))
+            yield return handle;
+    }
+
+    private static IReadOnlyCollection<nint> DiscoverTaskbars()
+    {
+        // Class-specific lookup is independent of the two full-desktop walks,
+        // including when this reader starts while the shell HWND is omitted.
+        var found=new HashSet<nint>();
+        foreach(var className in new[]{"Shell_TrayWnd","Shell_SecondaryTrayWnd"})
+        {
+            nint previous=0;
+            while(true)
+            {
+                var handle=Api.FindWindowEx(0,previous,className,null);
+                if(handle==0) break;
+                if(!found.Add(handle)||found.Count>128) throw Failure("TaskbarDiscovery");
+                previous=handle;
+            }
+        }
+        return found;
+    }
+
+    internal List<NativeWindow> ReadOrderedWindows(HashSet<nint> handles, IEnumerable<nint> orderedHandles,
+        IReadOnlyCollection<nint>? discoveredTaskbars = null)
+    {
+        var windows = new List<NativeWindow>(); var visited = new HashSet<nint>();
+        foreach (var handle in orderedHandles)
+        {
+            if (!visited.Add(handle) || visited.Count > 4096) throw Failure("ZOrderTraversal");
+            var enumerated=handles.Remove(handle);
+            // A shell taskbar can be absent from EnumWindows during application
+            // transitions while still present in the current desktop z-order.
+            // Validate that live HWND instead of publishing a false disappearance.
+            // Other newly appearing windows keep the existing snapshot policy.
+            if (!enumerated && !IsTaskbarHandle(handle)) continue;
+            var window=ReadWindow(handle);
+            if (window is not null && (enumerated || window.Taskbar)) windows.Add(window);
+        }
+        var candidates=new Dictionary<long,uint>(knownTaskbars);
+        foreach(var handle in discoveredTaskbars??Array.Empty<nint>())
+            if(!candidates.ContainsKey(handle.ToInt64()) && IsTaskbarHandle(handle) &&
+                Api.GetWindowThreadProcessId(handle,out var pid)!=0 && pid!=0)
+                candidates.Add(handle.ToInt64(),pid);
+        var inactiveTaskbars=new List<NativeWindow>();
+        foreach (var (value,pid) in candidates)
+        {
+            if (windows.Any(w=>w.Handle==value)) continue;
+            var handle=(nint)value;
+            var taskbar=ReadWindow(handle);
+            if (taskbar is null || !taskbar.Taskbar || taskbar.ProcessId!=pid) continue;
+            // Search/game activation can omit a still-live shell HWND from BOTH
+            // top-level walks. Query it directly, and reconstruct only its current
+            // native sibling slot. Never equate enumeration absence with hiding.
+            if (!taskbar.Visible || taskbar.Minimized || taskbar.Cloaked)
+                inactiveTaskbars.Add(taskbar); // Not native-order anchors.
+            else
+                windows.Insert(FindTaskbarSlot(handle,windows),taskbar);
+            handles.Remove(handle);
+        }
+        windows.AddRange(inactiveTaskbars); // Cannot support or occlude.
+        if (handles.Any(Api.IsWindow)) throw Failure("ZOrderChanged");
+        var nextTaskbars=windows.Where(w=>w.Taskbar).ToDictionary(w=>w.Handle,w=>w.ProcessId);
+        if (nextTaskbars.Count>128) throw Failure("TaskbarLimit");
+        knownTaskbars=nextTaskbars;
+        return windows;
+    }
+
+    private static int FindTaskbarSlot(nint handle,List<NativeWindow> windows)
+    {
+        // Child-window sibling order is not comparable with the desktop list.
+        if (Api.GetAncestor(handle,2)!=handle) throw Failure("TaskbarOrderUnavailable");
+        var above=FindAnchor(3);
+        var below=FindAnchor(2);
+        // Both anchors must describe the same unambiguous gap. A raced/unknown
+        // order is an unavailable capture, not a successful taskbar disappearance.
+        if ((above is null && below is null) ||
+            (above??-1)+1!=(below??windows.Count)) throw Failure("TaskbarOrderUnavailable");
+        return below??windows.Count;
+
+        int? FindAnchor(uint direction)
+        {
+            var visited=new HashSet<nint>{handle};
+            for (var h=Api.GetWindow(handle,direction);h!=0;h=Api.GetWindow(h,direction))
+            {
+                if (!visited.Add(h) || visited.Count>4096) throw Failure("TaskbarOrderUnavailable");
+                var index=windows.FindIndex(w=>w.Handle==h.ToInt64());
+                if (index<0) continue;
+                if (!Api.IsWindow(h) || Api.GetWindowThreadProcessId(h,out var pid)==0 ||
+                    pid!=windows[index].ProcessId) throw Failure("TaskbarOrderUnavailable");
+                return index;
+            }
+            return null;
+        }
+    }
+
+    private static bool IsTaskbarHandle(nint handle)
+    {
+        var name=new StringBuilder(256);
+        return Api.GetClassName(handle,name,name.Capacity)>0 &&
+            name.ToString() is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
+    }
+
     internal NativeWindow? ReadWindow(nint handle)
     {
         if (!Api.IsWindow(handle)) return null;
@@ -97,7 +208,9 @@ internal sealed class DesktopMetadataReader(nint petHandle) : IDesktopMetadataRe
         var className=name.ToString();
         var excluded=handle==petHandle || className is "Progman" or "WorkerW" or "Shell_DesktopWnd";
         var visible=Api.IsWindowVisible(handle); var minimized=Api.IsIconic(handle);
-        if (!excluded && visible && !minimized) excluded=IsPetProcess(pid);
+        var processFileName=!excluded && visible && !minimized ? ReadProcessFileName(pid) : null;
+        excluded |= string.Equals(processFileName,"Dororong.App.exe",StringComparison.OrdinalIgnoreCase);
+        var gamingOverlay=IsNvidiaGamingOverlay(handle,className,processFileName);
         var taskbar=className is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
         var bounds=new RectD(); var cloaked=false;
         if (!excluded && visible && !minimized)
@@ -122,17 +235,54 @@ internal sealed class DesktopMetadataReader(nint petHandle) : IDesktopMetadataRe
         if (Api.GetWindowThreadProcessId(handle,out var finalPid)==0 || finalPid!=pid)
             throw Failure("OwnerChanged");
         return new(handle.ToInt64(),pid,bounds,visible,minimized,cloaked,excluded,
-            className is not "#32768" and not "tooltips_class32",taskbar,taskbar && bounds.Width>bounds.Height,className);
+            !gamingOverlay && className is not "#32768" and not "tooltips_class32",taskbar,taskbar && bounds.Width>bounds.Height,className)
+            { CanOcclude=!gamingOverlay };
     }
-    private static bool IsPetProcess(uint pid)
+    private static bool IsNvidiaGamingOverlay(nint handle,string className,string? processFileName)
+    {
+        if (className != "CEF-OSC-WIDGET" ||
+            !string.Equals(processFileName,"NVIDIA Overlay.exe",StringComparison.OrdinalIgnoreCase)) return false;
+        try
+        {
+            // The observed gaming HUD is layered and click-through. Same-process
+            // opaque/interactive panels and other CEF apps remain physical windows.
+            const long layeredAndTransparent=0x00080000L | 0x00000020L;
+            return (NativeMethods.GetWindowLongPtr(handle,NativeMethods.GwlExStyle).ToInt64() & layeredAndTransparent)
+                == layeredAndTransparent;
+        }
+        catch (Win32Exception)
+        {
+            // Optional overlay classification cannot be confirmed; retain ordinary
+            // window behavior and still require the PID/DWM checks in ReadWindow.
+            return false;
+        }
+    }
+    private string? ReadProcessFileName(uint pid)
+    {
+        try
+        {
+            return Path.GetFileName(readProcessImagePath(pid));
+        }
+        catch (Win32Exception error) when (error.NativeErrorCode == 5) // ERROR_ACCESS_DENIED
+        {
+            // Executable identity is optional exclusion metadata. A protected process
+            // remains an ordinary HWND; its PID and DWM geometry are still required.
+            return null;
+        }
+        catch (Win32Exception error)
+        {
+            throw new DesktopMetadataException("ProcessIdentity",error.NativeErrorCode);
+        }
+    }
+    private static string ReadProcessImagePath(uint pid)
     {
         var process=Api.OpenProcess(0x1000,false,pid);
-        if (process==0) throw Failure("ProcessIdentity");
+        if (process==0) throw new Win32Exception(Marshal.GetLastWin32Error());
         try
         {
             var path=new StringBuilder(32768); uint size=(uint)path.Capacity;
-            if (!Api.QueryFullProcessImageName(process,0,path,ref size)) throw Failure("ProcessIdentity");
-            return string.Equals(Path.GetFileName(path.ToString()),"Dororong.App.exe",StringComparison.OrdinalIgnoreCase);
+            if (!Api.QueryFullProcessImageName(process,0,path,ref size)) throw new Win32Exception(Marshal.GetLastWin32Error());
+            return path.ToString();
         }
         finally { Api.CloseHandle(process); }
     }
@@ -166,6 +316,8 @@ internal sealed class DesktopMetadataReader(nint petHandle) : IDesktopMetadataRe
         [DllImport("user32.dll",SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)] internal static extern bool EnumWindows(WindowCallback callback,nint data);
         [DllImport("user32.dll")] internal static extern nint GetTopWindow(nint handle);
         [DllImport("user32.dll")] internal static extern nint GetWindow(nint handle,uint command);
+        [DllImport("user32.dll")] internal static extern nint GetAncestor(nint handle,uint flags);
+        [DllImport("user32.dll",EntryPoint="FindWindowExW",CharSet=CharSet.Unicode)] internal static extern nint FindWindowEx(nint parent,nint after,string className,string? title);
         [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)] internal static extern bool IsWindow(nint handle);
         [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)] internal static extern bool IsWindowVisible(nint handle);
         [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)] internal static extern bool IsIconic(nint handle);
@@ -218,7 +370,7 @@ internal sealed class DesktopSceneNative(IDesktopMetadataReader reader) : IDeskt
             }
             next[window.Handle] = identity;
             windows.Add(new(new(window.Handle,window.ProcessId,identity.Generation),bounds,windows.Count,
-                window.Visible,window.Minimized,window.Cloaked,window.Excluded,support,!hoverOverlay,window.Taskbar,window.HorizontalTaskbar));
+                window.Visible,window.Minimized,window.Cloaked,window.Excluded,support,window.CanOcclude && !hoverOverlay,window.Taskbar,window.HorizontalTaskbar));
         }
         identities = next; // Only successful absence retires an observed identity.
         return new(++revision,now,Array.AsReadOnly(metadata.Monitors.ToArray()),windows.AsReadOnly());

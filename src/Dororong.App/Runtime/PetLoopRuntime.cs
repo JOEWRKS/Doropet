@@ -51,6 +51,10 @@ internal sealed class PetLoopHost
 {
     internal PetPlatformRuntime? Platforms { get; init; }
     internal Action? MaintainPerchLayer { get; init; }
+    internal Func<PetSnapshot,bool>? HoldLocomotionWalk { get; init; }
+    internal Action<bool>? SetLocomotionBlocked { get; init; }
+    internal Action<bool>? SetSittingRequested { get; init; }
+    internal Func<PetSnapshot, DirectInteractionSnapshot, PointerSample, TimeSpan, bool, bool>? UpdateHunting { get; init; }
     private readonly Func<RectD> _getWorkArea;
     private readonly Func<SizeD> _getPetSize;
     private readonly Func<SizeD> _getDragThreshold;

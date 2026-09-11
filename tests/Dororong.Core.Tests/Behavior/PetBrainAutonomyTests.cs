@@ -6,6 +6,30 @@ namespace Dororong.Core.Tests.Behavior;
 
 public sealed class PetBrainAutonomyTests
 {
+    [Theory]
+    [InlineData(0.0, 21.0, FacingDirection.Right)]
+    [InlineData(0.5, -21.0, FacingDirection.Left)]
+    public void Default_walking_moves_twenty_one_dips_per_second_in_either_direction(
+        double heading, double expectedDisplacement, FacingDirection expectedFacing)
+    {
+        var brain = new PetBrain(
+            BehaviorTuning.Default,
+            new SequenceRandomSource(0.0, 0.0, heading, 0.0),
+            new PointD(300, 100));
+        for (var frame = 0; frame < 20; frame++)
+            brain.Update(PetTestInput.At(0.1));
+        Assert.Equal(PetState.Walk, brain.Current.State);
+        var start = brain.Current.Position;
+
+        for (var frame = 0; frame < 10; frame++)
+            brain.Update(PetTestInput.At(0.1));
+
+        Assert.Equal(PetState.Walk, brain.Current.State);
+        Assert.Equal(expectedDisplacement, brain.Current.Position.X - start.X, precision: 6);
+        Assert.Equal(start.Y, brain.Current.Position.Y, precision: 6);
+        Assert.Equal(expectedFacing, brain.Current.Facing);
+    }
+
     [Fact]
     public void Update_enters_walk_only_after_the_idle_duration_finishes()
     {

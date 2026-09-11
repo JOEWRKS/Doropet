@@ -40,6 +40,13 @@ internal sealed class DirectInteractionController
         Current = Current with { CheekPull = new(capture, 0) };
     }
 
+    internal void BeginSeatedCheekPull(CheekPullCapture capture, PointD pointerPosition)
+    {
+        if (Current.Target != DirectInteractionTarget.None || !HeadPullDistance.IsFinite(pointerPosition)) return;
+        BeginCheekPull(capture, pointerPosition);
+        Current = Current with { IsSeatedCheek = true };
+    }
+
     internal void BeginCheekCarry(CheekPullCapture capture, PointD windowPosition, PointD pointerPosition)
     {
         if (Current.Target != DirectInteractionTarget.None || !HeadPullDistance.IsFinite(windowPosition) ||
@@ -257,6 +264,11 @@ internal sealed class DirectInteractionController
             return Current;
         }
         if (!HeadPullDistance.IsFinite(pointer)) return Current;
+        if (Current.IsSeatedCheek)
+        {
+            cheek = cheek with { Capture = cheek.Capture.TurnToward(pointer.X - Current.PressOrigin.X) };
+            Current = Current with { PressFacing = cheek.Capture.Facing };
+        }
         var projected = cheek.Capture.Measure(pointer - Current.PressOrigin);
         if (!double.IsFinite(projected)) return Current;
         var amount = Math.Clamp(projected, -10, MaximumCheekPull);

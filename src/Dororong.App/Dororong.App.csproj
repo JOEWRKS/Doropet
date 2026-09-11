@@ -7,6 +7,8 @@
   <ItemGroup>
     <Resource Include="Assets\dororong-canonical.png" />
     <EmbeddedResource Include="Assets\layered-pull.pbgra.gz" />
+    <EmbeddedResource Include="Assets\locomotion.pbgra.gz" />
+    <EmbeddedResource Include="Assets\hunting.pbgra.gz" />
     <Resource Include="Assets\dororong-edge-perch-09.png" />
     <Resource Include="Assets\user-body-drag\01.png" />
     <Resource Include="Assets\user-body-drag\02.png" />

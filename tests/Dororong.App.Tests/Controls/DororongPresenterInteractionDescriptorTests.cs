@@ -177,7 +177,7 @@ public sealed class DororongPresenterInteractionDescriptorTests
     }
 
     [Fact]
-    public void Nonwalking_left_logical_facing_stays_visibly_unmirrored_through_body_click_rest()
+    public void Standing_left_facing_is_preserved_through_body_click_rest()
     {
         RunOnSta(() =>
         {
@@ -185,13 +185,13 @@ public sealed class DororongPresenterInteractionDescriptorTests
             var scale = Assert.IsType<System.Windows.Media.ScaleTransform>(presenter.FindName("BodyScaleTransform"));
 
             presenter.Render(Snapshot(PetState.Idle, FacingDirection.Left, phase: 0), DirectInteractionSnapshot.None);
-            Assert.Equal(1, scale.ScaleX);
+            Assert.Equal(-1, scale.ScaleX);
             presenter.Render(Snapshot(PetState.Idle, FacingDirection.Left, phase: 0), BodyPending);
-            Assert.Equal(1, scale.ScaleX);
+            Assert.Equal(-1, scale.ScaleX);
             presenter.Render(Snapshot(PetState.ClickReaction, FacingDirection.Left, phase: 0.31), DirectInteractionSnapshot.None);
-            Assert.Equal(1, scale.ScaleX);
+            Assert.Equal(-1, scale.ScaleX);
             presenter.Render(Snapshot(PetState.ClickReaction, FacingDirection.Left, phase: 1), DirectInteractionSnapshot.None);
-            Assert.Equal(1, scale.ScaleX);
+            Assert.Equal(-1, scale.ScaleX);
         });
     }
 

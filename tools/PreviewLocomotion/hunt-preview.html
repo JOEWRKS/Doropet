@@ -1,0 +1,45 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>도로롱 · 사냥 준비 모션</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f1ed;color:#302b2d;font:14px/1.6 system-ui}main{max-width:800px;padding:24px 20px;margin:auto}small{color:#935c75;letter-spacing:.15em}h1{font-size:25px;margin:6px 0}p{color:#796b73;margin:8px 0 18px}.panel{background:#fffdfb;border:1px solid #d8cdd2;border-radius:14px;overflow:hidden}.bar{display:flex;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #e5dade}canvas{display:block;width:100%;height:auto}button,select{font:inherit;padding:8px 13px;border:1px solid #cbbac3;border-radius:8px;background:white;color:inherit}button.active{background:#805169;color:white;border-color:#805169}.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:16px 0}input{accent-color:#805169}#scrub{width:100%}.sub{display:flex;align-items:center;gap:20px}.sub canvas{width:192px;height:128px;border-radius:10px}.sub p{font-size:12px}.note{font-size:12px}#status{font-variant-numeric:tabular-nums}
+#stage{height:300px}.bar{gap:12px;font-size:12px}.sub{flex-wrap:wrap}.sub canvas{flex-shrink:0}.sub p{flex:1;min-width:170px}
+</style><main>
+<small>DORORONG / MOTION STUDY</small><h1>살금… 씰룩씰룩.</h1>
+<p>통통하고 둥근 앞발 · 가슴은 낮게 · 계속 씰룩씰룩.</p>
+<div class="panel"><div class="bar"><span id="label">이미지 준비 중</span><span id="status">미리보기 전용</span></div><canvas id="stage" width="720" height="300" aria-label="사냥 준비 동작. 마우스 반응 모드에서 도로롱 가까이 마우스를 옮겨보세요."></canvas></div>
+<div class="controls"><button id="auto" class="active">자동 시연</button><button id="mouse">마우스 반응</button><button id="pause">일시정지</button><label>속도 <select id="speed"><option value="1">1×</option><option value=".5">0.5×</option></select></label><label><input id="flip" type="checkbox">좌우 반전</label><label><input id="black" type="checkbox">검은 배경</label></div>
+<input id="scrub" type="range" min="0" max="156" value="0" step="1" aria-label="사냥 준비 프레임">
+<div class="controls"><label><input id="eyesOn" type="checkbox" checked>눈 전체 이동</label><label><input id="headOn" type="checkbox" checked>머리 각도</label><button id="look">시선만 보기</button></div>
+<div class="sub"><canvas id="native" width="192" height="128" aria-label="원래 크기 비교"></canvas><p>왼쪽은 원래 크기, 위는 2배 확대.<br>마우스 반응: 가까이 있는 동안 계속 씰룩씰룩.<br>멀어지면 흔들림을 줄이며 자세를 풀어요.</p></div>
+<p class="note">미리보기 전용: 큰 회전에서는 머리카락이 앞발에 겹치는 구간이 남아 있습니다. 사냥 자세에서 아래로 숙이는 각도는 앞발 보호를 위해 제한합니다. 제품에는 적용하지 않았습니다.</p>
+<script src="/hunt-motion.js"></script><script src="/gaze-motion.js"></script><script src="/gaze-eyes.js"></script><script src="/gaze-compose.js"></script><script>
+const $=id=>document.getElementById(id),atlas=new Image,bodyAtlas=new Image,headImage=new Image;
+atlas.src='/atlas.png';bodyAtlas.src='/body-atlas.png';headImage.src='/head.png';
+let mode='auto',paused=false,time=0,last=0,age=0,mouse=null,session=huntMotion.createSession(),tracker=gazeMotion.create(),composer,painted,prey=null;
+function choose(value){mode=value;time=0;paused=false;session=huntMotion.createSession();$('pause').textContent='일시정지';$('auto').classList.toggle('active',mode==='auto');$('mouse').classList.toggle('active',mode==='mouse');$('look').classList.toggle('active',mode==='look')}
+$('auto').onclick=()=>choose('auto');$('mouse').onclick=()=>choose('mouse');
+$('look').onclick=()=>choose('look');
+$('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'계속 재생':'일시정지'};
+$('scrub').oninput=e=>{paused=true;age=Number(e.target.value)/60;$('pause').textContent='계속 재생'};
+$('stage').onpointermove=e=>{const r=$('stage').getBoundingClientRect();mouse=[(e.clientX-r.left)*$('stage').width/r.width,(e.clientY-r.top)*300/r.height]};
+$('stage').onpointerleave=()=>{mouse=null};
+function draw(target,frame,small){
+ const c=target.getContext('2d'),dark=$('black').checked,w=target.width,h=target.height;c.fillStyle=dark?'#101014':'#fcfaf8';c.fillRect(0,0,w,h);
+ c.strokeStyle=dark?'#51414c':'#ddd0d7';c.beginPath();c.moveTo(12,small?104.5:232.5);c.lineTo(w-12,small?104.5:232.5);c.stroke();
+ c.save();c.translate(w/2,small?0:24);c.scale($('flip').checked?-1:1,1);const size=small?128:256;c.drawImage(painted,-size/2,0,size,size);c.restore();
+ if(!small){if(prey){c.strokeStyle='#bd7094';c.beginPath();c.arc(prey[0],prey[1],5,0,Math.PI*2);c.stroke();}if(mode!=='auto'){c.setLineDash([3,6]);c.strokeStyle=dark?'#493640':'#e9dde3';c.beginPath();c.ellipse(w/2,170,155,100,0,0,Math.PI*2);c.stroke();c.setLineDash([])}}
+}
+function tick(now){const dt=last?Math.min(.05,(now-last)/1000):0;last=now;
+ const width=Math.round($('stage').clientWidth);if(width&&$('stage').width!==width)$('stage').width=width;
+ if(!paused)time+=dt*Number($('speed').value);
+ const center=$('stage').width/2,flip=$('flip').checked,dir=flip?-1:1;
+ prey=mode==='auto'?[center+dir*105*Math.sin(time*1.6-1),155+60*Math.sin(time*1.1)]:mouse;
+ const near=!!prey&&((prey[0]-center)/155)**2+((prey[1]-170)/100)**2<1;
+ if(!paused)age=mode==='look'?2.6:session.update(time,mode==='auto'||near);
+ const g=tracker.step(paused?0:dt*Number($('speed').value),prey?[prey[0]-(center-dir*32),prey[1]-162]:null,flip,near);
+ if(!$('eyesOn').checked){g.eyeX=0;g.eyeY=0}if(!$('headOn').checked){g.headX=0;g.headY=0;g.roll=0}
+ const frame=Math.min(156,Math.round(age*60));painted=composer.render(frame,huntMotion.sample(frame/60).amount,g);
+ $('scrub').value=frame;$('label').textContent=mode==='look'?'눈 / 머리만 따라보기':huntMotion.sample(age).label;$('status').textContent=frame+' / 156 · 제품 미적용';draw($('stage'),frame,false);draw($('native'),frame,true);requestAnimationFrame(tick);
+}
+Promise.all([atlas,bodyAtlas,headImage].map(im=>im.decode())).then(()=>{composer=gazeCompose.create(bodyAtlas,headImage,gazeEyes.create(headImage));requestAnimationFrame(tick)}).catch(e=>{$('label').textContent='이미지 오류: '+e.message});
+</script></main></html>
