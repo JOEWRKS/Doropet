@@ -1,5 +1,313 @@
 # Plan
 
+## Product shell implementation plan — 2026-09-11
+
+> Execute with subagent-driven-development; one implementer at a time, scoped
+> spec/quality reviews and final integration review. TASKS.md is the only ledger.
+
+**Goal:** Implement the approved identity/instance/tray/log shell and deliver a
+self-contained local candidate without changing character behavior.
+**Architecture:** Product primitives feed an App-owned ProductShell; existing
+startup/cleanup boundaries remain authoritative. Package only the native apphost
+under its product name, retaining internal assembly/resource identities.
+**Tech Stack:** .NET8 WPF/Windows Forms NotifyIcon, Windows named mutex, xUnit,
+PowerShell packaging and test-only subprocess probes.
+**Spec:** docs/superpowers/specs/2026-09-11-product-shell-design.md, explicitly
+approved by the user's latest ㄱㄱ. BASE=3bea598. Earlier dirty readiness files
+belong to the existing task and must not be staged by implementers.
+
+### Global constraints
+
+- 도로롱 (Dororong), Dororong.exe,0.1.0,JOEWRKS; keep Dororong.App.dll/pack URIs.
+- Same-user/same-login-session single instance; second launch is silent exit0.
+- Tray only: disabled version label, 로그 폴더 열기, 종료. No motion controls.
+- Log under LocalApplicationData/JOEWRKS/Dororong/logs, UTF-8,1MiB/file,3files.
+- No exception Message/ToString, input, paths, window titles, coordinates or uploads.
+- Preserve art, timing, input, Sit, perch, physics and running PID14064.
+- No service/network updater/autostart, user installation, signing, push or release.
+- Existing startup/fatal/cleanup semantics remain one-shot and failure-safe.
+- Build/test sequentially; never compile App while another App test host runs.
+
+### Task 901: Product identity, ownership and bounded diagnostics
+
+Create src/Dororong.App/Product/{ProductIdentity,SingleInstanceLease,DiagnosticLog}.cs;
+tests/Dororong.App.Tests/Product/{SingleInstanceLeaseTests,DiagnosticLogTests}.cs;
+test-only subprocess support under tests/support if needed. No App wiring yet.
+
+Interfaces produced (internal unless a test helper needs otherwise):
+```csharp
+// ProductIdentity: DisplayName, Version, Publisher, ExecutableName,
+// LogDirectory and version-independent InstanceName (Local + current SID).
+SingleInstanceLease? SingleInstanceLease.TryAcquire(string name);
+// null = another process owns it; IDisposable, no window dependency.
+enum DiagnosticEvent { Started, Stopped, StartupFailure, LoopFailure,
+    DispatcherFailure, CleanupFailure, TrayCommandFailure }
+new DiagnosticLog(string directory);
+void DiagnosticLog.Write(DiagnosticEvent code, Exception? error = null);
+```
+- [x] RED using compiled minimal stubs, not only missing-type errors: separate
+      helper processes assert one owner/one denied, graceful reentry after exit,
+      abandoned-owner recovery and safe non-owner handling. Test unique mutex
+      names, not the real running user's production lease.
+- [x] RED real temp-directory logs: sensitive sentinel in Message/Data never
+      appears; only allowed metadata fields; repeated writes rotate within3
+      files each<=1048576bytes; concurrent writes remain well-formed; a path
+      occupied by a file cannot throw from Write. Example expectations:
+```csharp
+log.Write(DiagnosticEvent.LoopFailure, new Exception("PRIVATE_SENTINEL"));
+Assert.DoesNotContain("PRIVATE_SENTINEL", File.ReadAllText(logFile));
+Assert.All(Directory.GetFiles(dir), p => Assert.InRange(new FileInfo(p).Length,0,1048576));
+```
+- [x] GREEN use WaitOne(0), abandoned ownership handling and same-thread lease
+      release; enum-based log fields, sanitized method names without file/args,
+      serialized capped writes and graceful I/O failure. No raw exception text.
+- [x] Focused Product tests, then full App suite once; self-review and commit
+      only owned files. Report RED/GREEN commands/output and interface deviations.
+
+### Task 902: App-owned shell, tray and metadata integration
+
+Create Product/{ProductShell,TrayService}.cs, tests/Product/{ProductShellTests,
+TrayServiceTests}.cs; modify App.xaml.cs/MainWindow.xaml.cs/project properties
+and DesktopSceneNative executable exclusion with corresponding existing tests.
+Create separate icon from existing canonical PNG with reproducible conversion
+script if required. Do not mutate source PNG or animation banks.
+
+Consumes Task901 APIs. ProductShell owns one lease and tray, writes lifecycle
+events and disposes all acquired resources. Use narrow injected factories for
+failure tests; real OS mutex and filesystem already covered by Task901.
+- [x] RED lifecycle scenarios: duplicate creates0 window/0 tray; initialization
+      failure cleans owned resources; tray exit closes the same window; repeated
+      cleanup releases once; logging failure does not suppress fatal shutdown.
+      Use a factory trace and observable exit result, not source-text tests.
+- [x] RED tray construction/menu callbacks/disposal and both executable names
+      excluded from platform scenes while ordinary WPF windows stay eligible.
+- [x] GREEN integrate existing AppStartupSequence/FatalBoundary. Hook log events
+      at existing once-only fatal boundaries. Keep legacy parameterless seams
+      used by RuntimeComposition tests working. Metadata0.1.0/JOEWRKS/displayname;
+      WinForms global using isolation; product icon compile resource.
+- [x] Focused tests plus RuntimeComposition harness; full Core/App Release,
+      unchanged asset hashes. Self-review, commit owned files, report evidence.
+
+### Task 903: Reproducible product-name candidate and delivery checks
+
+Create tools/Publish-Product.ps1 and tests/Dororong.ProductPackage.Tests.ps1;
+update README current shell behavior without losing earlier readiness edits.
+Output under a fresh artifacts/product-shell/candidate-* directory only.
+- [x] RED execute package validator against baseline publishing: expected
+      Dororong.exe and product metadata absent. Test script inputs/outputs and
+      existing-output refusal; no grep-based script tests.
+- [x] GREEN publish win-x64 self-contained, rename native apphost only, omit
+      development apphost from candidate, keep full dependency layout. Validate
+      exact resolved output inside chosen fresh directory before rename/remove.
+      Do not overwrite or clean a preexisting candidate. No install/autostart.
+      Pin bundled RuntimeFrameworkVersion8.0.31 (not cached8.0.19); validate
+      Core/Desktop/host patch in output and run candidate-runtime verification.
+- [x] Actual renamed apphost startup/duplicate/exit smoke must use a controlled
+      test process/desktop boundary without replacing PID14064 or altering user
+      windows; if unavailable report live check unverified, not a fabricated pass.
+      No production hidden diagnostic CLI added only to make testing easier.
+- [x] Full release/targeted RID tests, artifact hash parity, PE metadata/icon,
+      archive round-trip verification. Record genuine
+      remaining live tray/Explorer and installer gates. Commit owned scripts/docs
+      only after checks; no push or installation.
+- [ ] Global final integration review and any bounded final fix-wave validation.
+
+Preflight review:
+| Pair/task | Interface or constraint check | Result |
+|---|---|---|
+|901→902|Lease null means duplicate; enum log contract feeds shell|Compatible; no UI in primitives|
+|902→903|Internal App assembly stable; new apphost name allowed in exclusion|Package renames only executable|
+|901→903|Tests need fresh unique lease; real existing pet stays running|No kill-by-name or production lease test|
+|901|Filesystem/mutex tests exercise real boundaries; code creates no windows|Self-consistent|
+|902|Shell cleanup wraps existing one-shot boundaries, no PetLoop modifications|Self-consistent|
+|903|Self-contained candidate is not installer/public release|Self-consistent; live proof separate|
+
+Ruling: use this TASKS section as sole progress ledger and isolated
+artifacts/product-shell/ briefs/reports, not the skill's second progress.md —
+AGENTS.md requires one ledger and older TASKS-named scratch belongs to prior
+work. Cost if wrong: manual artifact bookkeeping; no product behavior impact.
+Ruling: this approved slice stops at product shell/candidate; installer mutation
+remains the next design slice — follows approved spec. Cost: installation is
+not available at this handoff, explicitly disclosed.
+Ruling: pin the candidate's bundled .NET8 runtime to8.0.31 — Microsoft's
+2026-09-08 security release and all three NuGet runtime/desktop/host packs were
+verified available; local cached8.0.19 is outdated. Cost if wrong: patch
+compatibility rework/download, covered by candidate tests; no system install.
+Source: https://dotnet.microsoft.com/en-us/download/dotnet/8.0
+
+Execution: existing linked worktree verified (not a submodule), baseline
+Core241/App820 Release passed (artifacts/product-shell/baseline-*.trx).
+Task901: complete (commits3bea598..edab47d, spec/quality review approved).
+Evidence: compiled-stub RED6/7 failures plus identity1/1 failure; focused8/8;
+full App828/828 Release. Reviewer /root/product_primitives_review.
+Task901 minor (deferred): ProductIdentity.cs:21 dispose WindowsIdentity wrapper.
+Task901 minor (deferred): DiagnosticLogTests.cs:48 add punctuation/length sanitizer case.
+Reviewer cross-task checks: App silent exit0 and one-shot integration feed902;
+asset hashes unchanged and PID14064 responding confirmed by controller. Existing
+behavior and assembly resources were untouched; App828 regression evidence stands.
+Task902 in progress: fresh implementer, BASEedab47d; no concurrent App builds.
+Task902 initial commit bfa7d7d: focused23/Core241/App843 and RuntimeComposition
+passed. Review /root/product_shell_review requires partial tray-allocation
+cleanup and ProductShell construction inside startup try. Fix round1/5 starts
+at bfa7d7d, original /root/product_shell_integration resumed; covering shell/tray
+tests and RuntimeComposition must rerun.
+Task902 minor (deferred): TrayService.Dispose hide/menu detach must not prevent
+remaining disposal; related cleanup test seams may cover this with allocation fix.
+Ruling: Dororong.exe output remains Task903's packaging responsibility, not a
+Task902 project-assembly rename — spec section2 explicitly preserves development
+Dororong.App.exe and renames only published apphost. Reviewer naming finding is
+carried into903, not dismissed. Cost if wrong: candidate naming gate will fail
+before delivery; no change to internal assembly or pack URIs.
+Task902: fix round1/5 (4 addressed,0 open; commitsbfa7d7d..65f7aed).
+Re-review /root/product_shell_review approved all findings; related minor hide/
+detach cleanup and acquisition tests resolved. Focused18/18, RuntimeComposition
+PASS after fix; matching candidate full regression remains903.
+Task902: complete (commitsedab47d..65f7aed, review clean; naming delegated903).
+Task903 in progress: fresh implementer, BASE65f7aed. Published naming,8.0.31
+runtime, fresh candidate, matching RID/helper paths and no visible pet replacement.
+Task903 initial commit24831ff, candidate-20260911-155342: Core241, App848,
+self-contained8.0.31 App849 all passed; controller independently passed full
+package/native smoke (owned PID27656), exact RID App/Core parity and ZIP hash
+2A6D5ED1617DB790AD438F09A24F1430797ED0CF944B794D474BDB9A2E899011.
+Task903 review /root/product_candidate_review: fix round1/5 starts24831ff.
+Open gates: reject runtime-pin override; distinguish skipped/unavailable native
+smoke from final success; validate actual apphost8.0.31 provenance instead of
+ambient restore metadata alone; enforce both parity references as matching RID
+test outputs (publisher printed non-RID Core path). Original implementer resumed.
+Runtime/asset/live evidence was independently confirmed; visible tray/Explorer
+acceptance remains explicitly unverified, not a package-structure pass.
+Final-review observation: controller inspected candidate161048 PE metadata;
+ProductName is 도로롱(Dororong), but FileDescription is still Dororong.App.
+Evaluate this against the user-facing program identity requirement while keeping
+InternalName/OriginalFilename assembly identity unchanged. No fix applied yet.
+Task903: fix round1/5 (4 addressed,0 open; commits24831ff..9e525ea).
+Scoped re-review approved fixed pin, mandatory native smoke, deterministic actual
+host provenance and both matching RID references. Fresh self-contained App849/849
+uses exact candidate161048 AppAEACE912.../CoreF4104BA0... bytes; ZIP827E6BAA...
+Task903: complete (commits65f7aed..9e525ea, review clean).
+Final integration gate pending: entire product-shell change series and preserved
+readiness tests/docs; deferred901 identity-disposal/sanitizer coverage and observed
+FileDescription branding are supplied to final reviewer. No push/install/launch
+replacement is authorized by this checkpoint.
+
+## Product-shell design boundary — 2026-09-11
+
+User's latest ㄱㄱ accepts the recommendation: user-local installed application,
+bundled runtime, automatic startup off, upgrades by newer installer. First
+implementation slice is product identity/single instance/tray/local logs,
+without character behavior changes. Installer file replacement is a subsequent
+design slice, not bundled into this first lifecycle implementation.
+- [x] Reinspect App startup/MainWindow fatal cleanup, runtime composition,
+      project metadata and executable-name exclusion. Existing source identifies
+      only Dororong.App.exe; new product name must also be excluded explicitly.
+- [x] Record architectural design and self-review constraints/responsibility,
+      privacy, failure cleanup, mutex scope and verification boundaries in
+      docs/superpowers/specs/2026-09-11-product-shell-design.md.
+- [x] User review of written design (brainstorming skill architecture gate).
+- [x] Implementation plan/TDD after written-design approval (execution above).
+This step changes documentation only, does not restart or install the app, and
+preserves all readiness-pass dirty files. Commit only the design document;
+no push, release or hidden product implementation at the review boundary.
+Design-only local commit:3bea598; staged scope was exactly one spec file and
+diff whitespace validation passed. Runtime tests were not rerun for prose-only
+changes; this step makes no fresh runtime-verification claim.
+
+## Release readiness implementation plan — 2026-09-11
+
+**Goal:** Stabilize the accepted desktop behavior, verify window integration,
+then prepare a reproducible local release candidate without claiming public release.
+**Architecture:** Exercise the real presenter/loop/platform integration first;
+run non-activating native coordinate probes second; audit and package the same
+verified code third. Retain existing assets and production interaction settings.
+**Tech Stack:** .NET 8 WPF, xUnit, PowerShell, native Windows metadata probes.
+**Spec:** User-approved sequence in this conversation: interaction regression,
+window-environment stability, deployment readiness. Baseline 18b6e4a was pushed
+and verified equal to origin/feature/dororong-m1-expression-animation.
+**Execution:** Sequential in the existing isolated worktree. This is a bounded
+validation pass; new installer/update architecture is a separate implementation
+decision if the audit finds it missing. No public release, signing, installation,
+auto-start change, or shared-branch push is authorized by this pass.
+
+### Global constraints
+
+- Preserve approved art, motion curves, head/cheek drag and Sit semantics.
+- Report automated/synthetic evidence separately from live Windows acceptance.
+- Do not repeatedly ask the user to reproduce a known issue before using local tests.
+- Do not restart the running pet, launch the game, or change display settings.
+- Keep generated reports and candidate artifacts under ignored artifacts/.
+- TASKS.md is the sole plan ledger; do not create a second plan/progress ledger.
+
+### Task 1: Interaction regression gate
+
+Files: tests/Dororong.App.Tests/Runtime/PounceLoopTests.cs and a focused
+PounceReadinessTests.cs using its real-WPF Harness. Production fixes only after
+a failing regression and root-cause inspection.
+- [x] Extend the harness with optional BehaviorTuning and observable capture/write counters; test nearby-pointer
+      sleep wake through UpdateHuntingWithPounce, capture cancellation during
+      flight followed by normal falling, and repeated complete pounce cycles.
+      Assert observable state, sole continuity, finite positions, no stale carry,
+      and at most one host position write per tick. Preserve the existing1.5s
+      dwell,340ms flight,280ms landing,3s tracking and12DIP peak.
+- [x] Run focused tests, then both full Release suites sequentially and the8
+      browser controller tests. If a regression fails, record RED, correct only
+      its root cause and rerun the covering tests before the full gate.
+
+### Task 2: Window environment gate
+
+Files inspected: tools/Verify-WindowPlatforms.ps1; Interop/WindowActivationGuard.cs,
+DesktopMetadataReader and Runtime desktop/platform tests. No display mutation.
+- [x] Run existing taskbar/disappearance/activation/coordinate tests via the full
+      App suite. Run the existing script with -ProbeOnly and -WpfProbeOnly in
+      separate processes; these branches do not invoke the obsolete full-run
+      artifact/PID assumptions. Store raw outputs under artifacts/release-readiness/.
+- [x] Record actual monitor/DPI coverage and native-capture success without
+      equating it to game-launch/Search-panel live reproduction.
+
+### Task 3: Candidate and release-gap audit
+
+Files: README.md; docs/verification/2026-09-11-release-readiness.md; existing
+App.xaml.cs/MainWindow.xaml.cs/project properties. Output: ignored local candidate.
+- [x] Inspect current lifecycle, process identity, duplicate-instance handling,
+      logging, installation/update support and existing delivery scripts. Report
+      missing behavior as release gaps; do not silently add a new product system.
+- [x] Update README to current verified interactions and explicit limitations.
+- [x] Publish the verified source to a fresh local framework-dependent win-x64
+      candidate directory, archive it with license/docs as available, record
+      hashes and compare packaged assemblies/assets with tested outputs.
+      No installation, launch, remote publishing or signing in this gate.
+- [x] Write an evidence-backed readiness report with passed gates, unverified
+      live scenarios and concrete blockers for the next implementation batch.
+
+Validation-pass outcome (not public-release approval): Core241/App820 Release,
+browser8, RuntimeComposition startup/cleanup passed. Four new regression cases
+passed after correcting test-authoring assumptions (namespace import;100ns
+TimeSpan subdivision; pending head presses intentionally have no capture).
+Read-only review requested stronger immediate and held-tick cancellation,
+every-substep write counting and support identity checks; all addressed and
+scoped re-review approved. Final covering4 passed. No production code/art edit.
+
+Native probes:21/21 metadata captures; two1920x1080 monitors, both96DPI; origin,
+axes and cursor map errors zero. Games/Search/mixed-DPI/live soak remain unverified.
+Raw reports: artifacts/release-readiness/. Report:
+docs/verification/2026-09-11-release-readiness.md. Existing PID14064 remained
+responsive at its original pounce-arc runtime path; not restarted.
+
+Candidate: artifacts/release-candidates/Dororong-validation-20260911-01-win-x64.zip.
+The first non-RID test DLL comparison rejected the RID publish App DLL.
+Reran the complete App suite with -r win-x64 -p:SelfContained=false:820 passed;
+candidate App/Core then matched those test-loaded DLLs exactly. Archive10/10
+file contents matched source hashes. No launch, install, signing or upload.
+ZIP SHA256:514DE0B2A21A355E369864ADDA595C3A01F78279E0192968FEF569C96C8D0E1F
+App SHA256:37CECE76E793298B7D4022C479FD9346588FC2166D3F6358CD218F7B94382972
+Core SHA256:55683D0679C22ECBC20777AFC1384BEA0249ED29AE8FD78B93A83AF201FD3EC8
+
+Next boundary: new product-shell/installer architecture. Existing shell proposal
+was not implemented. User asked for my deployment recommendation after being
+offered installed vs portable. Recommend user-local installed/self-contained,
+Start menu/uninstall, no auto-start by default, installer-driven upgrades,
+no service/network updater. Await delivery-design selection; no assumption of
+installer permission or public rights. This pass remains uncommitted/unpushed.
+
 ## Accepted pounce save boundary — 2026-09-11
 
 User accepted the higher inverted-U version ("좋네 이대로 커밋 푸시") and

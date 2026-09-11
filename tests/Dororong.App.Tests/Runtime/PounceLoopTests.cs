@@ -176,11 +176,13 @@ public sealed class PounceLoopTests
         internal PointerSample Pointer = PointerSample.Unavailable;
         internal bool Down;
         internal int WritesThisTick;
+        internal int MaxWritesPerTick;
+        internal int Captures, Releases;
         internal readonly Scene Native = new();
         private TimeSpan _elapsed;
         private EventHandler? _tick;
         internal double WorldSole => Position.Y + Presenter.MeasurePlatformContact()!.Value.SoleY;
-        internal Harness()
+        internal Harness(BehaviorTuning? tuning = null)
         {
             void Render(PetSnapshot s, DirectInteractionSnapshot d, TimeSpan dt)
             {
@@ -188,7 +190,7 @@ public sealed class PounceLoopTests
                 Presenter.Measure(new Size(144,144)); Presenter.Arrange(new Rect(0,0,144,144)); Presenter.UpdateLayout();
             }
             var host = new PetLoopHost(()=>new(0,0,800,600),()=>new(144,144),()=>new(4,4),()=>Pointer,()=>Down,
-                ()=>Position,p=>{ Position=p; WritesThisTick++; },(s,d)=>Render(s,d,TimeSpan.Zero),()=>true,()=>{},Render)
+                ()=>Position,p=>{ Position=p; WritesThisTick++; },(s,d)=>Render(s,d,TimeSpan.Zero),()=>{Captures++;return true;},()=>Releases++,Render)
             {
                 UpdateHunting=Presenter.UpdateHuntingWithPounce, GetPouncePose=()=>Presenter.Pounce,
                 HoldLocomotionWalk=Presenter.HoldLocomotionWalk, SetLocomotionBlocked=Presenter.SetLocomotionBlocked,
@@ -197,7 +199,7 @@ public sealed class PounceLoopTests
                     (pose,sole)=>{ PlatformPose=pose??default; Presenter.ApplyPlatformPose(pose,sole); })
             };
             Loop=new(new(()=>_elapsed,()=>{},()=>{}),new(h=>_tick+=h,h=>_tick-=h,()=>{},()=>{}),host,
-                _=>new(BehaviorTuning.Default with { IdleMin=TimeSpan.FromMinutes(10),IdleMax=TimeSpan.FromMinutes(10) },new SeededRandomSource(1),Position));
+                _=>new(tuning ?? BehaviorTuning.Default with { IdleMin=TimeSpan.FromMinutes(10),IdleMax=TimeSpan.FromMinutes(10) },new SeededRandomSource(1),Position));
             Loop.Faulted+=(_,e)=>throw new Exception("Pounce loop fault",e);
         }
         internal void Start() { Loop.Start(); Ticks(40); Assert.Equal(PlatformPhase.Supported,PlatformPose.Phase); }
@@ -207,6 +209,7 @@ public sealed class PounceLoopTests
             {
                 var step = Math.Min(.1,seconds); seconds -= step;
                 WritesThisTick=0; _elapsed+=TimeSpan.FromSeconds(step); _tick?.Invoke(this,EventArgs.Empty);
+                MaxWritesPerTick=Math.Max(MaxWritesPerTick,WritesThisTick);
             }
         }
         internal void Ticks(int count) { for(var i=0;i<count;i++)Tick(); }
