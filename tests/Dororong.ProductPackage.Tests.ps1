@@ -5,27 +5,16 @@ param(
     [Parameter(ParameterSetName = 'Package', Mandatory = $true)]
     [string]$ArchivePath,
 
-    [Parameter(ParameterSetName = 'Package', Mandatory = $true)]
-    [string]$ReferenceAppDll,
-
-    [Parameter(ParameterSetName = 'Package', Mandatory = $true)]
-    [string]$ReferenceCoreDll,
-
     [Parameter(ParameterSetName = 'PublisherRefusal', Mandatory = $true)]
     [string]$PublisherPath,
 
     [Parameter(ParameterSetName = 'PublisherRefusal', Mandatory = $true)]
-    [switch]$VerifyExistingOutputRefusal,
-
-    [Parameter(ParameterSetName = 'Package')]
-    [string]$RuntimeVersion = '8.0.31',
-
-    [Parameter(ParameterSetName = 'Package')]
-    [switch]$SkipNativeSmoke
+    [switch]$VerifyExistingOutputRefusal
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$RuntimeVersion = '8.0.31'
 
 function Assert-True([bool]$Condition, [string]$Message)
 {
@@ -68,6 +57,20 @@ function Get-NuGetRoot
     }
 
     return [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), '.nuget', 'packages')
+}
+
+function Get-HostModelAssemblyPath
+{
+    $dotnetExecutable = (Get-Command dotnet -CommandType Application).Source
+    $sdkVersion = (& $dotnetExecutable --version).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sdkVersion))
+    {
+        throw 'Unable to resolve the active .NET SDK version.'
+    }
+
+    $path = Join-Path (Split-Path -Parent $dotnetExecutable) "sdk/$sdkVersion/Microsoft.NET.HostModel.dll"
+    Assert-True (Test-Path -LiteralPath $path -PathType Leaf) "Active SDK HostModel assembly is missing: $path"
+    return (Resolve-Path -LiteralPath $path).Path
 }
 
 function Invoke-ExistingOutputRefusal
@@ -379,8 +382,6 @@ if ($PSCmdlet.ParameterSetName -eq 'PublisherRefusal')
 
 $packageRoot = (Resolve-Path -LiteralPath $PackagePath).Path
 $archive = (Resolve-Path -LiteralPath $ArchivePath).Path
-$referenceApp = (Resolve-Path -LiteralPath $ReferenceAppDll).Path
-$referenceCore = (Resolve-Path -LiteralPath $ReferenceCoreDll).Path
 
 $apphost = Get-RequiredFile $packageRoot 'Dororong.exe'
 $appDll = Get-RequiredFile $packageRoot 'Dororong.App.dll'
@@ -454,16 +455,13 @@ $hostPack = Join-Path $nugetRoot "microsoft.netcore.app.host.win-x64/$RuntimeVer
 Assert-FileHashEqual (Get-RequiredFile $runtimePack 'coreclr.dll') $coreClr 'Packaged coreclr.dll does not match the pinned Core runtime pack.'
 Assert-FileHashEqual (Get-RequiredFile $runtimePack 'hostfxr.dll') $hostFxr 'Packaged hostfxr.dll does not match the pinned Core runtime pack.'
 Assert-FileHashEqual (Get-RequiredFile $desktopPack 'PresentationFramework.dll') $presentationFramework 'Packaged PresentationFramework.dll does not match the pinned Desktop runtime pack.'
-$null = Get-RequiredFile $hostPack 'apphost.exe'
+$hostPackApphost = Get-RequiredFile $hostPack 'apphost.exe'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$projectAssetsPath = Get-RequiredFile (Join-Path $repositoryRoot 'src/Dororong.App/obj') 'project.assets.json'
-$projectAssets = Get-Content -LiteralPath $projectAssetsPath -Raw | ConvertFrom-Json
-$hostResolution = @($projectAssets.project.frameworks.PSObject.Properties.Value.downloadDependencies | Where-Object name -eq 'Microsoft.NETCore.App.Host.win-x64')
-Assert-Equal 1 $hostResolution.Count 'Matching RID restore did not resolve one win-x64 apphost pack.'
-Assert-Equal "[$RuntimeVersion, $RuntimeVersion]" $hostResolution[0].version 'Matching RID restore did not pin the expected apphost pack.'
-
-Assert-FileHashEqual $referenceApp $appDll 'Published Dororong.App.dll differs from the matching RID build output.'
-Assert-FileHashEqual $referenceCore $coreDll 'Published Dororong.Core.dll differs from the matching RID build output.'
+$matchingRidOutput = Join-Path $repositoryRoot 'tests/Dororong.App.Tests/bin/Release/net8.0-windows/win-x64'
+$referenceApp = Get-RequiredFile $matchingRidOutput 'Dororong.App.dll'
+$referenceCore = Get-RequiredFile $matchingRidOutput 'Dororong.Core.dll'
+Assert-FileHashEqual $referenceApp $appDll 'Published Dororong.App.dll differs from the matching win-x64 test output.'
+Assert-FileHashEqual $referenceCore $coreDll 'Published Dororong.Core.dll differs from the matching win-x64 test output.'
 
 $artifactRoot = (Resolve-Path -LiteralPath (Join-Path $repositoryRoot 'artifacts/product-shell')).Path
 $candidateRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $packageRoot)).Path
@@ -472,6 +470,36 @@ $candidateSegments = $relativeCandidate -split '[\\/]'
 Assert-True ($candidateSegments.Count -eq 1 -and $candidateSegments[0].StartsWith('candidate-', [StringComparison]::Ordinal)) `
     'Validated package must be the runtime directory of a direct artifacts/product-shell/candidate-* child.'
 Assert-Equal (Join-Path $candidateRoot 'runtime') $packageRoot 'Validated package directory must be named runtime.'
+
+Add-Type -Path (Get-HostModelAssemblyPath)
+$hostProof = Join-Path $candidateRoot ".hostproof-$([Guid]::NewGuid().ToString('N'))"
+try
+{
+    New-Item -ItemType Directory -Path $hostProof | Out-Null
+    $expectedApphost = Join-Path $hostProof 'Dororong.exe'
+    [Microsoft.NET.HostModel.AppHost.HostWriter]::CreateAppHost(
+        $hostPackApphost,
+        $expectedApphost,
+        'Dororong.App.dll',
+        $true,
+        $appDll,
+        $false,
+        $false,
+        $null)
+    Assert-FileHashEqual $expectedApphost $apphost 'Product apphost does not exactly match the pinned 8.0.31 host pack with candidate resources.'
+}
+finally
+{
+    if (Test-Path -LiteralPath $hostProof)
+    {
+        $resolvedHostProof = (Resolve-Path -LiteralPath $hostProof).Path
+        $hostProofRelative = [IO.Path]::GetRelativePath($candidateRoot, $resolvedHostProof)
+        $hostProofSegments = $hostProofRelative -split '[\\/]'
+        Assert-True ($hostProofSegments.Count -eq 1 -and $hostProofSegments[0].StartsWith('.hostproof-', [StringComparison]::Ordinal)) `
+            "Refusing recursive cleanup of unexpected host-proof path: $resolvedHostProof"
+        Remove-Item -LiteralPath $resolvedHostProof -Recurse -Force
+    }
+}
 
 $roundTrip = Join-Path $candidateRoot ".roundtrip-$([Guid]::NewGuid().ToString('N'))"
 try
@@ -505,16 +533,13 @@ finally
     }
 }
 
-$nativeStatus = 'SKIPPED'
-if (-not $SkipNativeSmoke)
+$nativeEvidence = @(Invoke-NativeSmoke $apphost)
+Assert-True ($nativeEvidence.Count -gt 0) 'Native smoke produced no status.'
+if ($nativeEvidence.Count -gt 1)
 {
-    $nativeEvidence = @(Invoke-NativeSmoke $apphost)
-    Assert-True ($nativeEvidence.Count -gt 0) 'Native smoke produced no status.'
-    if ($nativeEvidence.Count -gt 1)
-    {
-        $nativeEvidence[0..($nativeEvidence.Count - 2)] | Write-Output
-    }
-    $nativeStatus = $nativeEvidence[-1]
+    $nativeEvidence[0..($nativeEvidence.Count - 2)] | Write-Output
 }
+$nativeStatus = $nativeEvidence[-1]
+Assert-Equal 'PASS' $nativeStatus 'Required isolated native smoke did not pass; final product validation is unverified.'
 $archiveHash = Get-Hash $archive
 Write-Output "PRODUCT PACKAGE PASS: win-x64 self-contained Core/Desktop/host $RuntimeVersion; exact App/Core RID hash parity; metadata/icon/apphost binding; archive SHA256 $archiveHash round-trip; native smoke $nativeStatus."

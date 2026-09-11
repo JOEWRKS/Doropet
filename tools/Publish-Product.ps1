@@ -1,12 +1,11 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$OutputPath,
-
-    [string]$RuntimeVersion = '8.0.31'
+    [string]$OutputPath
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$RuntimeVersion = '8.0.31'
 
 function Assert-True([bool]$Condition, [string]$Message)
 {
@@ -14,6 +13,30 @@ function Assert-True([bool]$Condition, [string]$Message)
     {
         throw $Message
     }
+}
+
+function Get-NuGetRoot
+{
+    if (-not [string]::IsNullOrWhiteSpace($env:NUGET_PACKAGES))
+    {
+        return [IO.Path]::GetFullPath($env:NUGET_PACKAGES)
+    }
+
+    return [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), '.nuget', 'packages')
+}
+
+function Get-HostModelAssemblyPath
+{
+    $dotnetExecutable = (Get-Command dotnet -CommandType Application).Source
+    $sdkVersion = (& $dotnetExecutable --version).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($sdkVersion))
+    {
+        throw 'Unable to resolve the active .NET SDK version.'
+    }
+
+    $path = Join-Path (Split-Path -Parent $dotnetExecutable) "sdk/$sdkVersion/Microsoft.NET.HostModel.dll"
+    Assert-True (Test-Path -LiteralPath $path -PathType Leaf) "Active SDK HostModel assembly is missing: $path"
+    return (Resolve-Path -LiteralPath $path).Path
 }
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
@@ -84,14 +107,42 @@ $hostResolution = @($projectAssets.project.frameworks.PSObject.Properties.Value.
 Assert-True ($hostResolution.Count -eq 1 -and $hostResolution[0].version -eq "[$RuntimeVersion, $RuntimeVersion]") `
     "Resolved publish output does not use the apphost $RuntimeVersion pack."
 
+$hostPackRoot = Join-Path (Get-NuGetRoot) "microsoft.netcore.app.host.win-x64/$RuntimeVersion/runtimes/win-x64/native"
+$hostPackApphost = Join-Path $hostPackRoot 'apphost.exe'
+Assert-True (Test-Path -LiteralPath $hostPackApphost -PathType Leaf) "Pinned apphost pack file is missing: $hostPackApphost"
+Add-Type -Path (Get-HostModelAssemblyPath)
+$pinnedApphost = Join-Path $candidateRoot ".pinned-apphost-$([Guid]::NewGuid().ToString('N')).exe"
+try
+{
+    [Microsoft.NET.HostModel.AppHost.HostWriter]::CreateAppHost(
+        $hostPackApphost,
+        $pinnedApphost,
+        'Dororong.App.dll',
+        $true,
+        $appDll,
+        $false,
+        $false,
+        $null)
+    Assert-True (Test-Path -LiteralPath $pinnedApphost -PathType Leaf) 'Pinned HostWriter did not create the product apphost.'
+    Move-Item -LiteralPath $pinnedApphost -Destination $developmentApphost -Force
+}
+finally
+{
+    if (Test-Path -LiteralPath $pinnedApphost)
+    {
+        Remove-Item -LiteralPath $pinnedApphost -Force
+    }
+}
+
 Move-Item -LiteralPath $developmentApphost -Destination $productApphost
 Assert-True (Test-Path -LiteralPath $productApphost -PathType Leaf) 'Product apphost rename did not create Dororong.exe.'
 Assert-True (-not (Test-Path -LiteralPath $developmentApphost)) 'Development apphost remains after product rename.'
 
 Compress-Archive -Path (Join-Path $resolvedRuntime '*') -DestinationPath $archivePath -CompressionLevel Optimal
 $archiveHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash
-$referenceAppDll = (Resolve-Path -LiteralPath (Join-Path $repositoryRoot 'src/Dororong.App/bin/Release/net8.0-windows/win-x64/Dororong.App.dll')).Path
-$referenceCoreDll = (Resolve-Path -LiteralPath (Join-Path $repositoryRoot 'src/Dororong.Core/bin/Release/net8.0/Dororong.Core.dll')).Path
+$matchingRidOutput = Join-Path $repositoryRoot 'tests/Dororong.App.Tests/bin/Release/net8.0-windows/win-x64'
+$referenceAppDll = (Resolve-Path -LiteralPath (Join-Path $matchingRidOutput 'Dororong.App.dll')).Path
+$referenceCoreDll = (Resolve-Path -LiteralPath (Join-Path $matchingRidOutput 'Dororong.Core.dll')).Path
 
 Write-Output "CANDIDATE_PATH=$candidateRoot"
 Write-Output "PACKAGE_PATH=$resolvedRuntime"
