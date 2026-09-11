@@ -114,13 +114,40 @@ public sealed class SingleInstanceLeaseTests
     private static string ProbePath()
     {
         var testOutput = new DirectoryInfo(AppContext.BaseDirectory);
-        var configuration = testOutput.Parent?.Name
-            ?? throw new InvalidOperationException("Test configuration directory was not found.");
-        var repository = testOutput.Parent?.Parent?.Parent?.Parent?.Parent
+        var binDirectory = FindAncestor(testOutput, "bin")
+            ?? throw new InvalidOperationException("Test bin directory was not found.");
+        var repository = FindRepository(testOutput)
             ?? throw new InvalidOperationException("Repository directory was not found.");
+        var outputSuffix = Path.GetRelativePath(binDirectory.FullName, testOutput.FullName);
         var path = Path.Combine(repository.FullName, "tests", "support", "Dororong.SingleInstanceProbe",
-            "bin", configuration, "net8.0-windows", "Dororong.SingleInstanceProbe.exe");
+            "bin", outputSuffix, "Dororong.SingleInstanceProbe.exe");
         Assert.True(File.Exists(path), $"Probe executable was not built: {path}");
         return path;
+    }
+
+    private static DirectoryInfo? FindAncestor(DirectoryInfo start, string name)
+    {
+        for (DirectoryInfo? current = start; current is not null; current = current.Parent)
+        {
+            if (string.Equals(current.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return current;
+            }
+        }
+
+        return null;
+    }
+
+    private static DirectoryInfo? FindRepository(DirectoryInfo start)
+    {
+        for (DirectoryInfo? current = start; current is not null; current = current.Parent)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "DororongDesktopPet.sln")))
+            {
+                return current;
+            }
+        }
+
+        return null;
     }
 }
