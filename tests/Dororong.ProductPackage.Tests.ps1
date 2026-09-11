@@ -9,7 +9,13 @@ param(
     [string]$PublisherPath,
 
     [Parameter(ParameterSetName = 'PublisherRefusal', Mandatory = $true)]
-    [switch]$VerifyExistingOutputRefusal
+    [switch]$VerifyExistingOutputRefusal,
+
+    [Parameter(ParameterSetName = 'MissingReferences', Mandatory = $true)]
+    [string]$MissingReferencesPublisherPath,
+
+    [Parameter(ParameterSetName = 'MissingReferences', Mandatory = $true)]
+    [switch]$VerifyMissingReferencesRefusal
 )
 
 $ErrorActionPreference = 'Stop'
@@ -100,6 +106,40 @@ function Invoke-ExistingOutputRefusal
         if ($null -ne $resolvedExisting -and $resolvedExisting.StartsWith($resolvedArtifactRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase))
         {
             Remove-Item -LiteralPath $resolvedExisting -Recurse -Force
+        }
+    }
+}
+
+function Invoke-MissingReferencesRefusal
+{
+    $testRoot = Join-Path ([IO.Path]::GetTempPath()) "DororongMissingReferences-$([Guid]::NewGuid().ToString('N'))"
+    $isolatedRepository = Join-Path $testRoot 'repository'
+    $isolatedTools = Join-Path $isolatedRepository 'tools'
+    $isolatedArtifactRoot = Join-Path $isolatedRepository 'artifacts/product-shell'
+    $isolatedPublisher = Join-Path $isolatedTools 'Publish-Product.ps1'
+    $candidate = Join-Path $isolatedArtifactRoot 'candidate-missing-references-test'
+    try
+    {
+        New-Item -ItemType Directory -Path $isolatedTools, $isolatedArtifactRoot | Out-Null
+        Copy-Item -LiteralPath $MissingReferencesPublisherPath -Destination $isolatedPublisher
+        $powershell = (Get-Process -Id $PID).Path
+        $result = & $powershell -NoLogo -NoProfile -NonInteractive -File $isolatedPublisher -OutputPath $candidate 2>&1
+        $exitCode = $LASTEXITCODE
+        Assert-True ($exitCode -ne 0) 'Publisher accepted an isolated repository without tested RID reference DLLs.'
+        Assert-True (-not (Test-Path -LiteralPath $candidate)) 'Publisher created candidate output before rejecting missing tested RID reference DLLs.'
+        Assert-True (($result | Out-String) -match 'Dororong.App.dll') 'Publisher failure did not identify the missing tested App DLL prerequisite.'
+        Write-Output "PRODUCT PUBLISH PREREQUISITE PASS: missing tested RID references were rejected before candidate creation (exit $exitCode)."
+        $global:LASTEXITCODE = 0
+    }
+    finally
+    {
+        if (Test-Path -LiteralPath $testRoot)
+        {
+            $resolvedTestRoot = (Resolve-Path -LiteralPath $testRoot).Path
+            $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+            Assert-True ($resolvedTestRoot.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase)) `
+                "Refusing recursive cleanup outside the temporary directory: $resolvedTestRoot"
+            Remove-Item -LiteralPath $resolvedTestRoot -Recurse -Force
         }
     }
 }
@@ -380,6 +420,12 @@ if ($PSCmdlet.ParameterSetName -eq 'PublisherRefusal')
     return
 }
 
+if ($PSCmdlet.ParameterSetName -eq 'MissingReferences')
+{
+    Invoke-MissingReferencesRefusal
+    return
+}
+
 $packageRoot = (Resolve-Path -LiteralPath $PackagePath).Path
 $archive = (Resolve-Path -LiteralPath $ArchivePath).Path
 
@@ -401,6 +447,9 @@ Assert-Equal 'Dororong.exe' $productExecutables[0].Name 'The product executable 
 
 $version = [Diagnostics.FileVersionInfo]::GetVersionInfo($apphost)
 Assert-Equal '도로롱 (Dororong)' $version.ProductName 'Product metadata name changed.'
+Assert-Equal '도로롱 (Dororong)' $version.FileDescription 'Product executable file description changed.'
+Assert-Equal 'Dororong.App.dll' $version.InternalName 'Product executable internal name changed.'
+Assert-Equal 'Dororong.App.dll' $version.OriginalFilename 'Product executable original filename changed.'
 Assert-Equal 'JOEWRKS' $version.CompanyName 'Product metadata company changed.'
 Assert-Equal '0.1.0' $version.ProductVersion 'Product metadata version changed.'
 Assert-Equal '0.1.0.0' $version.FileVersion 'Product file version changed.'

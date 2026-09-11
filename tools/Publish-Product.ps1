@@ -50,6 +50,15 @@ Assert-True (-not (Test-Path -LiteralPath $candidateRoot)) `
     "Refusing to overwrite or clean an existing candidate path: $candidateRoot"
 
 $projectPath = Join-Path $repositoryRoot 'src/Dororong.App/Dororong.App.csproj'
+$matchingRidOutput = Join-Path $repositoryRoot 'tests/Dororong.App.Tests/bin/Release/net8.0-windows/win-x64'
+$referenceAppPath = Join-Path $matchingRidOutput 'Dororong.App.dll'
+$referenceCorePath = Join-Path $matchingRidOutput 'Dororong.Core.dll'
+Assert-True (Test-Path -LiteralPath $referenceAppPath -PathType Leaf) `
+    "Required tested win-x64 reference is missing: $referenceAppPath"
+Assert-True (Test-Path -LiteralPath $referenceCorePath -PathType Leaf) `
+    "Required tested win-x64 reference is missing: $referenceCorePath"
+$referenceAppDll = (Resolve-Path -LiteralPath $referenceAppPath).Path
+$referenceCoreDll = (Resolve-Path -LiteralPath $referenceCorePath).Path
 $runtimePath = Join-Path $candidateRoot 'runtime'
 $archivePath = Join-Path $candidateRoot 'Dororong-win-x64.zip'
 
@@ -140,9 +149,6 @@ Assert-True (-not (Test-Path -LiteralPath $developmentApphost)) 'Development app
 
 Compress-Archive -Path (Join-Path $resolvedRuntime '*') -DestinationPath $archivePath -CompressionLevel Optimal
 $archiveHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash
-$matchingRidOutput = Join-Path $repositoryRoot 'tests/Dororong.App.Tests/bin/Release/net8.0-windows/win-x64'
-$referenceAppDll = (Resolve-Path -LiteralPath (Join-Path $matchingRidOutput 'Dororong.App.dll')).Path
-$referenceCoreDll = (Resolve-Path -LiteralPath (Join-Path $matchingRidOutput 'Dororong.Core.dll')).Path
 
 Write-Output "CANDIDATE_PATH=$candidateRoot"
 Write-Output "PACKAGE_PATH=$resolvedRuntime"

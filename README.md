@@ -17,13 +17,15 @@ Run these commands from the repository root:
 ```powershell
 dotnet restore DororongDesktopPet.sln
 dotnet test tests/Dororong.Core.Tests --configuration Release --no-restore
-dotnet test tests/Dororong.App.Tests --configuration Release --no-restore
+dotnet restore tests/Dororong.App.Tests/Dororong.App.Tests.csproj --runtime win-x64 -p:RuntimeFrameworkVersion=8.0.31 -p:TargetLatestRuntimePatch=false
+dotnet test tests/Dororong.App.Tests/Dororong.App.Tests.csproj --configuration Release --runtime win-x64 --self-contained true --no-restore -p:RuntimeFrameworkVersion=8.0.31 -p:TargetLatestRuntimePatch=false
 dotnet build DororongDesktopPet.sln --configuration Release --no-restore
 dotnet run --project src/Dororong.App/Dororong.App.csproj --configuration Release
 & tools/Publish-Product.ps1 -OutputPath artifacts/product-shell/candidate-YYYYMMDD-HHMMSS
+& tests/Dororong.ProductPackage.Tests.ps1 -PackagePath artifacts/product-shell/candidate-YYYYMMDD-HHMMSS/runtime -ArchivePath artifacts/product-shell/candidate-YYYYMMDD-HHMMSS/Dororong-win-x64.zip
 ```
 
-The product publisher refuses an existing output directory and creates a complete self-contained `runtime` folder plus `Dororong-win-x64.zip` under a fresh `artifacts/product-shell/candidate-*` directory. It pins the bundled Core, Windows Desktop and native host runtime to 8.0.31, retains `Dororong.App.dll` and its pack-resource identity, and names only the product apphost `Dororong.exe`.
+The explicit self-contained win-x64 App test at .NET 8.0.31 is a required publishing prerequisite: it produces the tested `Dororong.App.dll` and `Dororong.Core.dll` under `tests/Dororong.App.Tests/bin/Release/net8.0-windows/win-x64`. Run it after the final source change, then do not rebuild those reference DLLs before publishing and validating. The product publisher checks both references before creating any candidate output, refuses an existing output directory, and creates a complete self-contained `runtime` folder plus `Dororong-win-x64.zip` under a fresh `artifacts/product-shell/candidate-*` directory. It pins the bundled Core, Windows Desktop and native host runtime to 8.0.31, retains `Dororong.App.dll` and its pack-resource identity, and names only the product apphost `Dororong.exe`. The validator requires the package App/Core bytes to match those exact tested RID references.
 
 Run test/build commands sequentially to avoid locked WPF test assemblies. Keep the complete output folder together, including DLLs and runtime configuration. Exit any older pre-shell development copy before the first candidate launch; the current shell then limits Dororong to one process for the same user and login session, and a duplicate launch exits successfully without changing the existing window.
 

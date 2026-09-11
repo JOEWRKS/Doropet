@@ -18,7 +18,8 @@ internal static class ProductIdentity
 
     private static string BuildInstanceName()
     {
-        var sid = WindowsIdentity.GetCurrent().User?.Value
+        using var identity = WindowsIdentity.GetCurrent();
+        var sid = identity.User?.Value
             ?? throw new InvalidOperationException("The current Windows user has no SID.");
         return $@"Local\JOEWRKS.Dororong.{sid}";
     }

@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Globalization;
 using System.IO;
 using System.Security;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 
@@ -23,6 +24,7 @@ internal sealed class DiagnosticLog
     private const int MaxFileBytes = 1_048_576;
     private const int MaxExceptionTypeLength = 256;
     private const int MaxMethodLength = 128;
+    private static readonly TimeSpan TransactionLockTimeout = TimeSpan.FromMilliseconds(10);
     private readonly string directory;
     private readonly object writeGate = new();
 
@@ -50,6 +52,12 @@ internal sealed class DiagnosticLog
     private void WriteRecord(byte[] record)
     {
         Directory.CreateDirectory(directory);
+        using var transactionLock = TryAcquireTransactionLock();
+        if (transactionLock is null)
+        {
+            return;
+        }
+
         var currentPath = Path.Combine(directory, "diagnostic.log");
         var currentLength = File.Exists(currentPath) ? new FileInfo(currentPath).Length : 0;
         if (currentLength + record.Length > MaxFileBytes)
@@ -65,6 +73,40 @@ internal sealed class DiagnosticLog
             bufferSize: 4096,
             FileOptions.None);
         stream.Write(record);
+    }
+
+    private FileStream? TryAcquireTransactionLock()
+    {
+        var lockPath = Path.Combine(directory, ".diagnostic.lock");
+        var started = Stopwatch.GetTimestamp();
+        do
+        {
+            try
+            {
+                return new FileStream(
+                    lockPath,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None,
+                    bufferSize: 1,
+                    FileOptions.DeleteOnClose);
+            }
+            catch (IOException)
+            {
+                Thread.Yield();
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return null;
+            }
+            catch (SecurityException)
+            {
+                return null;
+            }
+        }
+        while (Stopwatch.GetElapsedTime(started) < TransactionLockTimeout);
+
+        return null;
     }
 
     private void Rotate(string currentPath)

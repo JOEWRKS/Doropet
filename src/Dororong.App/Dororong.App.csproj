@@ -50,6 +50,7 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets\dororong.ico</ApplicationIcon>
+    <AssemblyTitle>도로롱 (Dororong)</AssemblyTitle>
     <Product>도로롱 (Dororong)</Product>
     <Company>JOEWRKS</Company>
     <Version>0.1.0</Version>
