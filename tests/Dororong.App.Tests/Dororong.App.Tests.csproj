@@ -22,6 +22,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Dororong.App\Dororong.App.csproj" />
+    <ProjectReference Include="..\support\Dororong.SingleInstanceProbe\Dororong.SingleInstanceProbe.csproj"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>
