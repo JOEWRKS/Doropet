@@ -15,12 +15,29 @@ public partial class PetLoopPlatformTests
 {
     [Theory]
     [InlineData(FacingDirection.Left)] [InlineData(FacingDirection.Right)]
+    public void Perched_body_press_cannot_detach_or_replace_the_visible_pose(FacingDirection facing) => CheekProductTests.Sta(() =>
+    {
+        using var h = PerchLocalAttach(facing); var p = h.Presenter!;
+        var position = h.Position;
+        var press = PressImage(h, p.EdgePerchImage, new(40, 70));
+        Assert.Equal(DirectInteractionTarget.ClickOnly, press.Target);
+        h.Tick(); h.Pointer = new(true, h.Pointer.Position + new PointD(80, -50)); h.Tick(80);
+        Assert.Equal(position, h.Position);
+        Assert.Equal(EdgePerchPhase.Attached, h.Platforms.PerchPhase);
+        Assert.Same(p.EdgePerchImage, VisibleImages(p).Single());
+        h.Down = false; h.Tick();
+        Assert.Equal(EdgePerchPhase.Attached, h.Platforms.PerchPhase);
+        Assert.Equal(h.Captures, h.Releases);
+    });
+
+    [Theory]
+    [InlineData(FacingDirection.Left)] [InlineData(FacingDirection.Right)]
     public void Perch_regrab_displays_supplied_eight_before_any_pointer_movement(FacingDirection facing) => CheekProductTests.Sta(() =>
     {
         using var h=PerchLocalAttach(facing);var p=h.Presenter!;
         var expected=PerchExpressionTests.Pixels(ForelegFlutterTests.Source());
         var position=h.Position;
-        var press=PressImage(h,p.EdgePerchImage,new(40,70));
+        var press=PressImage(h,p.EdgePerchImage,new(40,30));
         var anchor=HeadPullAnchoring.Capture(p.EdgePerchImage,p,press.WindowLocalPosition,facing);
         Assert.NotNull(anchor);h.Tick();
         Assert.Equal(DirectInteractionPhase.BodyPending,h.Direct.Phase);
@@ -55,7 +72,7 @@ public partial class PetLoopPlatformTests
     public void Perch_regrab_short_drag_stays_fully_hanging_and_releases_from_that_pose(FacingDirection facing) => CheekProductTests.Sta(() =>
     {
         using var h=PerchLocalAttach(facing);var p=h.Presenter!;
-        PressImage(h,p.EdgePerchImage,new(40,70));h.Tick();
+        PressImage(h,p.EdgePerchImage,new(40,30));h.Tick();
         var origin=h.Pointer.Position;
         h.Pointer=new(true,origin+new PointD(0,-12));h.Tick();
         Assert.Equal(DirectInteractionPhase.BodyDragHold,h.Direct.Phase);
@@ -158,7 +175,7 @@ public partial class PetLoopPlatformTests
     public void PerchLocalInteraction_noncheek_regrab_detaches_at_displayed_position(FacingDirection facing) => CheekProductTests.Sta(() =>
     {
         using var h=PerchLocalAttach(facing);var p=h.Presenter!;var position=h.Position;
-        var press=PressImage(h,p.EdgePerchImage,new(40,70));Assert.False(press.IsAttachedCheek);
+        var press=PressImage(h,p.EdgePerchImage,new(40,30));Assert.False(press.IsAttachedCheek);
         h.Tick();Assert.Equal(position,h.Position);Assert.Equal(EdgePerchPhase.None,h.Platforms.PerchPhase);
         Assert.Equal(DirectInteractionPhase.BodyPending,h.Direct.Phase);
         Assert.Equal(facing,h.Direct.PressFacing);

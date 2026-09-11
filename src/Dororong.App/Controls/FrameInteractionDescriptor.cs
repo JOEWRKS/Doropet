@@ -84,6 +84,14 @@ internal sealed class FrameInteractionDescriptor
             : canonicalSign;
     }
 
+    // Alternate sleep poses move the head with their cheek landmarks. Only
+    // that area can wake-and-carry; the remaining opaque body is click-only.
+    internal bool IsHeadOrCheek(PointD canonicalPoint) =>
+        Contains(_leftCheek, canonicalPoint) || Contains(_rightCheek, canonicalPoint) ||
+        (canonicalPoint.X >= Math.Max(0, _rightCheek.X - 16) &&
+         canonicalPoint.X < _leftCheek.Right &&
+         canonicalPoint.Y < Math.Min(_leftCheek.Y, _rightCheek.Y));
+
     private static bool Contains(RectD rectangle, PointD point) =>
         point.X >= rectangle.X &&
         point.X < rectangle.Right &&

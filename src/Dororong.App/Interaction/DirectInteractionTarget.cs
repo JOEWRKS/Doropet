@@ -6,7 +6,8 @@ internal enum DirectInteractionTarget
     Body,
     LeftCheek,
     RightCheek,
-    FiveRegionBody
+    FiveRegionBody,
+    ClickOnly
 }
 
 internal enum DirectInteractionPhase

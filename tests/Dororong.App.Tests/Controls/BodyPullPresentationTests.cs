@@ -12,6 +12,26 @@ namespace Dororong.App.Tests.Controls;
 
 public sealed class BodyPullPresentationTests
 {
+    [Theory]
+    [InlineData(FacingDirection.Left)]
+    [InlineData(FacingDirection.Right)]
+    public void Product_body_press_is_click_only_without_allocating_a_pull_capture(FacingDirection facing) => Sta(() =>
+    {
+        var p = new DororongPresenter();
+        p.Render(new(PetState.Idle, default, facing, 0, false, null), DirectInteractionSnapshot.None); Layout(p);
+        var image = (AlphaHitTestImage)p.FindName("DororongImage");
+        foreach (var anchor in new Point[] { new(23, 77), new(42, 82), new(66, 80), new(53, 70), new(70, 61) })
+        {
+            var press = Assert.IsType<DirectInteractionPressEventArgs>(p.CreateDirectPress(image, anchor));
+            Assert.Equal(DirectInteractionTarget.ClickOnly, press.Target);
+            Assert.Null(press.BodyCapture);
+            Assert.False(press.StartsHanging);
+        }
+        Assert.Equal(DirectInteractionTarget.Body, p.CreateDirectPress(image, new(35, 35))!.Target);
+        Assert.Equal(DirectInteractionTarget.RightCheek, p.CreateDirectPress(image, new(16, 58))!.Target);
+        Assert.Null(p.CreateDirectPress(image, new(0, 0)));
+    });
+
     [Fact]
     public void Supported_reach_fits_the_unchanged_window_for_actual_awake_visible_transforms() => Sta(() =>
     {

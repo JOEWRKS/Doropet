@@ -11,6 +11,27 @@ namespace Dororong.App.Tests.Runtime;
 
 public sealed class ManualSitLoopTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Product_seated_body_drag_keeps_the_seated_art_and_hold(bool supported) => Controls.EdgePerchPresentationTests.Sta(() =>
+    {
+        using var h = new Harness(supported); h.Loop.Start();
+        if (supported) h.Tick(40);
+        h.Sit(); h.Tick(15);
+        var held = h.Position; var source = h.Image.Source;
+        var press = Assert.IsType<DirectInteractionPressEventArgs>(h.Presenter.CreateDirectPress((AlphaHitTestImage)h.Image, new(53, 70)));
+        Assert.Equal(DirectInteractionTarget.ClickOnly, press.Target);
+        h.Down = true; h.Pointer = new(true, h.Position + press.WindowLocalPosition);
+        h.Loop.NotifyDirectInteractionPressed(press); h.Tick();
+        h.Pointer = new(true, h.Pointer.Position + new PointD(90, -50)); h.Tick(8);
+        Assert.Equal(held, h.Position);
+        Assert.Same(source, h.Image.Source);
+        h.Down = false; h.Tick(40);
+        Assert.Equal(held, h.Position);
+        Assert.True(ReferenceEquals(LocomotionFrames.Sit(1), h.Image.Source) || ReferenceEquals(LocomotionFrames.Sit(1, true), h.Image.Source));
+    });
+
     [Fact]
     public void Sit_command_stops_an_active_walk_and_blinks_while_held() => Controls.EdgePerchPresentationTests.Sta(() =>
     {

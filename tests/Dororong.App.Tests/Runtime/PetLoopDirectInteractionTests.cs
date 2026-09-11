@@ -9,6 +9,28 @@ namespace Dororong.App.Tests.Runtime;
 public sealed partial class PetLoopDirectInteractionTests
 {
     [Fact]
+    public void Click_only_body_press_stays_fixed_captures_release_and_never_becomes_head_drag()
+    {
+        using var h = new LoopHarness(CreateIdleBrain);
+        h.Start(); h.Press(DirectInteractionTarget.ClickOnly, 0); h.Tick();
+        Assert.True(h.Renders[^1].Core.IsDirectInteractionPending);
+        Assert.Equal(1, h.CaptureCount);
+        var origin = h.WindowPosition;
+        h.MovePointerBy(new(80, -50)); h.Tick();
+        Assert.Equal(origin, h.WindowPosition);
+        Assert.Equal(DirectInteractionTarget.ClickOnly, h.Renders[^1].Direct.Target);
+        Assert.Null(h.Renders[^1].Direct.BodyPull);
+        Assert.NotEqual(PetState.Dragged, h.Renders[^1].Core.State);
+        h.Release();
+        Assert.Equal(DirectInteractionTarget.None, h.Renders[^1].Direct.Target);
+        Assert.Equal(1, h.ReleaseCount);
+        Assert.NotEqual(PetState.ClickReaction, h.Renders[^1].Core.State);
+        h.Press(DirectInteractionTarget.ClickOnly, 0); h.Release();
+        Assert.Equal(PetState.ClickReaction, h.Renders[^1].Core.State);
+        Assert.Equal(0, h.FaultCount);
+    }
+
+    [Fact]
     public void Captured_cheek_below_carry_threshold_preserves_position_and_release_without_click() => Controls.CheekProductTests.Sta(() =>
     {
         using var h=new LoopHarness(CreateIdleBrain);h.Start();var position=h.WindowPosition;

@@ -16,4 +16,6 @@ public readonly record struct PetInput(
     bool SuspendAutonomousMotion = false,
     bool SurfaceBoundMotion = false,
     bool SuppressPointerReactions = false,
-    bool TrackPointerFacing = false);
+    bool TrackPointerFacing = false,
+    bool ClickOnlyPress = false,
+    FacingDirection? TrackingFacingOverride = null);

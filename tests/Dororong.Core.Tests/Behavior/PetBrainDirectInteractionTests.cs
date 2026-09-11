@@ -7,6 +7,32 @@ namespace Dororong.Core.Tests.Behavior;
 public sealed class PetBrainDirectInteractionTests
 {
     [Fact]
+    public void Click_only_press_never_carries_and_movement_cancels_click_even_after_return()
+    {
+        var brain = PetTestInput.CreateReactionBrain();
+        var origin = new PointD(160, 150);
+        brain.Update(PetTestInput.At(.016, origin, true, bodyPressPosition: origin) with { ClickOnlyPress = true });
+        var moved = brain.Update(PetTestInput.At(.016, new(210, 100), true));
+        Assert.Equal(new PointD(100, 100), moved.Position);
+        Assert.NotEqual(PetState.Dragged, moved.State);
+        brain.Update(PetTestInput.At(.016, origin, true));
+        var released = brain.Update(PetTestInput.At(.016, origin));
+        Assert.Equal(PetState.Idle, released.State);
+        Assert.False(released.IsDirectInteractionPending);
+    }
+
+    [Fact]
+    public void Click_only_short_press_keeps_click_reaction_and_next_head_press_can_drag()
+    {
+        var brain = PetTestInput.CreateReactionBrain();
+        var origin = new PointD(160, 150);
+        brain.Update(PetTestInput.At(.016, origin, true, bodyPressPosition: origin) with { ClickOnlyPress = true });
+        Assert.Equal(PetState.ClickReaction, brain.Update(PetTestInput.At(.016, origin)).State);
+        brain.Update(PetTestInput.At(.016, origin, true, bodyPressPosition: origin));
+        Assert.Equal(PetState.Dragged, brain.Update(PetTestInput.At(.016, new(210, 100), true)).State);
+    }
+
+    [Fact]
     public void Local_cheek_interaction_wakes_sleep_and_suppresses_pointer_reaction()
     {
         var brain = PetTestInput.CreateSleepingBrain();

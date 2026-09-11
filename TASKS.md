@@ -1,5 +1,174 @@
 # Plan
 
+## Accepted pounce save boundary — 2026-09-11
+
+User accepted the higher inverted-U version ("좋네 이대로 커밋 푸시") and
+requested committing and pushing the current feature branch. This supersedes
+the pending visual acceptance below; no further behavior changes are included.
+- [x] Fresh pre-commit verification: Core241/App816 Release tests and browser
+      controller8 passed; diff whitespace check clean. App report:
+      tests/Dororong.App.Tests/TestResults/commit-pounce-accepted.trx.
+- [x] Scope reviewed: native pounce, head/cheek-only drag routing, preview
+      sources/docs and regression tests. Generated TestResults stay local.
+- Delivery: commit and push on feature/dororong-m1-expression-animation,
+  including the two preceding local checkpoints. No merge, PR, runtime restart
+  or worktree cleanup requested. Confirm remote commit parity after push.
+
+## Higher inverted-U trajectory — 2026-09-11
+
+User requested changing only jump trajectory, keeping the accepted easing.
+Raise arc9→12DIP in native/browser samplers; preserve horizontal easing/travel,
+340ms flight, body tilt/scale, landing, trigger and3s tracking.12DIP stays within
+the existing platform hop limit, so no physics/input changes are needed.
+- [x] Native sampler/both-facing product peak tests observed3 RED failures;
+      browser quarter/peak/end test observed1 RED failure before changing height.
+- [x] Focused/native full verification, inspect regenerated WPF contact sheet,
+      publish new runtime and replace exact PID46680; preserve prior runtime.
+      Focused14 native/browser8 GREEN, full Core241/App816 GREEN; black WPF
+      sheet inspected; diff check clean. Running PID14064 from
+      C:/Users/tjdwo/Downloads/doro/pounce-arc-20260911/runtime with responsive
+      process and both loaded module paths verified. App/Core match tested DLLs.
+      App SHA256:D85ED2271CD052D201F7ED155B5908358702B76B9DC4DA18B0AE6E2780DC7647
+      Core SHA256 unchanged:6F86FB89DCD3CBBD0350BEDE7FD9877977871B7356571B234213A1D735971847
+      Previous pounce runtime retained. No commit/push; user visual feel pending.
+
+## Native short-pounce implementation plan — 2026-09-11
+
+**Goal:** Promote the approved preview into the running desktop product.
+**Architecture:** A deterministic PounceSession in Controls owns watch/flight/
+landing/track timing and per-tick horizontal travel. Presenter composes the
+existing hunt atlas/head/eyes with the approved forepaw pivot. PetLoop applies
+horizontal travel and the retained-support vertical offset through platform
+physics, not a second window-position writer. Direct input/Sit/perch/unsupported
+physics cancel preparation and take priority. No new raster assets or packages.
+**Spec:** tools/PreviewLocomotion/POUNCE.md plus the approved v3 preview.
+**Constraints:**1.5s continuous near dwell;340ms flight;280ms landing;3s upright
+tracking before fresh dwell;28DIP maximum travel stopping8DIP short;9DIP arc;
+direction locked during jump; preserve head/cheek-only dragging. Existing linked
+worktree and prior dirty changes retained; no commit/push requested.
+
+### Task 1 — Native timing and motion sampler
+
+Files: create src/Dororong.App/Controls/PounceSession.cs and
+tests/Dororong.App.Tests/Controls/PounceSessionTests.cs.
+Interface: Advance(seconds, near, targetDeltaX, facing, blocked=false) returns
+PouncePose with Phase, DeltaX, OffsetY, Direction, Age, TrackingRemaining,
+AngleRadians, ScaleX/Y. Reset retires timers without resetting world position.
+- [x] RED: Advance1.49s remains Watch; another.01s enters Flight;170ms has
+      DeltaX14/OffsetY-9 for distant right prey. Departure resets dwell;
+      direction changes cannot reverse flight. Landing enters Track for full3s;
+      pointer may stay nearby but fresh1.5s required; blocked resets without travel.
+- [x] GREEN: port preview state boundary consumption and analytic pose equations;
+      guard nonfinite delta/target. Run dotnet test tests/Dororong.App.Tests -c
+      Release --filter FullyQualifiedName~PounceSessionTests.
+
+### Task 2 — Product integration and delivery
+
+Files: DororongPresenter.Hunting.cs, PetLoop.cs, Runtime/PetLoopRuntime.cs;
+tests/Runtime/HuntingLoopTests.cs and new Runtime/PounceLoopTests.cs;
+new Controls/PouncePresentationTests.cs. Add a host GetPouncePose callback for
+opt-in native integration; legacy hunt-only test hosts remain explicit.
+- [x] RED: actual presenter/loop nearby pointer produces positive forward travel
+      and a raised sole, lands on the same support, stays upright/fixed during
+      tracking, then repeats only after fresh dwell. Both directions; head input,
+      Sit and owner loss interrupt without snapback. Existing head/cheek tests pass.
+- [x] GREEN: advance controller from accepted near geometry; supply pose via
+      host callback; apply one bounded position update through platform support.
+      Render flight hunt-age interpolation to2.05, landing to2.6, upright track
+      frame156; keep head/eyes/body tracking active outside prep radius in Track.
+      Apply approved forepaw-pivot angle/scale before platform sole correction.
+      Evidence:4 controller failures and3 loop failures observed before their
+      implementation, then5 controller/6 real-WPF loop tests GREEN. Both-facing
+      contact sheets inspected at artifacts/repro/pounce-product-20260911.
+      Review follow-up: mid-flight Sit/body ClickOnly reproduced2 RED failures
+      (9DIP instant drop). Clearing the supported hop offset retained its owner;
+      now that cancellation releases support from displayed height into falling,
+      without altering direct head/cheek carry or real owner-loss physics.
+      A quick ClickOnly press+release between ticks reproduced one further RED;
+      its queued click now triggers the same support release. Focused5 controller/
+      9 loop tests GREEN. Scoped review approved the corrected guard. An obsolete
+      full run was stopped (545 tests completed) after a concurrent test rebuild
+      hit its DLL lock; that aborted run is not a pass. Final frozen suite reruns
+      use native-pounce-verified.trx and run without concurrent test builds.
+- [x] Verify Core/App Release suites; capture actual WPF flight/landing/track
+      frames on black/white backgrounds; inspect outlines and frame transitions.
+      Independent read-only review; fix concrete blockers with RED/GREEN evidence.
+      Final Core241/App816 GREEN (1057 total), preview controller7 GREEN, diff
+      check clean, hunt/locomotion asset hashes unchanged. Scoped final review
+      approved after the three cancellation regressions; native contact sheets
+      show both directions and upright tracking. This is WPF automation, not a
+      claim of live Windows pointer-feel acceptance.
+- [x] Publish a new runtime directory, compare DLLs to tested assemblies, replace
+      exact PID12640 only after green verification, verify modules/responsiveness.
+      Keep prior runtime as rollback; report live user feel separately.
+      Running PID46680 from C:/Users/tjdwo/Downloads/doro/pounce-20260911/runtime.
+      Both loaded DLL paths and responsiveness verified; prior runtime retained.
+      Tested/published App SHA256:4B9C736948B90FD395B678B3939A07C8ED1E5DFC07CAF82A61A39CE53D4B8337
+      Core SHA256:6F86FB89DCD3CBBD0350BEDE7FD9877977871B7356571B234213A1D735971847
+      No commit/push. Live user acceptance remains pending.
+
+## Approved head/cheek-only product dragging — 2026-09-11
+
+User approved removing arm/front-paw, belly and rump drags from the desktop
+product. Preserve head carry, cheek pulling, normal click reaction and Sit;
+disabled body regions must not fall through to head carry. Pounce stays preview-only.
+- [x] Product press boundary emits ClickOnly for body regions, without creating
+      a body-pull capture. Perch/sleep/splat fallback is limited to head regions.
+      The archived region renderer/session and their diagnostics remain intact.
+- [x] Click-only button ownership cannot enter carry; threshold movement cancels
+      the click even if the pointer returns. Short clicks remain normal clicks.
+      Freeze the displayed posture during the hold; keep sit/perch ownership.
+- [x] Expected RED failures observed for actual body routing, loop ownership,
+      core carry, seated-pose replacement and landing-body fallback; focused
+      GREEN checks now pass, including head/cheek preservation and both facings.
+- [x] Full Release Core241/App802 passed; scoped read-only review found no
+      blocking issues. Diff check passed; hunt/locomotion assets unchanged.
+      Published C:/Users/tjdwo/Downloads/doro/head-cheek-only-20260911/runtime,
+      verified App/Core DLL parity with tested assemblies, replaced exact old
+      PID16804 with PID12640. Responsive process and both loaded module paths
+      verified. Old hunt-wake runtime retained; no commit/push or pounce port.
+      App SHA256:7F51E8A233B2F5A9DF4E6D5B959920FF348ECDA19788CFF309711BE6F4F4788C
+      Core SHA256:548A14167294D44887839268D6CF6F796E2EA5DE7507A6FF88C0EBCB09B9EB42
+- [ ] Live user interaction acceptance (automated WPF tests are not live input).
+
+## Approved post-pounce tracking state — 2026-09-11
+
+User approved a separate upright tracking state after landing: hold position,
+track head angle/whole eyes/body facing for3s, then prepare if still nearby.
+Fresh1.5s dwell required before another hop; departure cancels preparation.
+This supersedes the earlier one-shot/departure-latch rearm rule below.
+- [x] Explicit watch/flight/landing/track controller with boundary-aware time
+      consumption. Preserve existing hop geometry, no product modifications.
+      Auto preview/scrubber extended to show tracking and the second jump.
+- [x]4 expected RED failures before implementation, then7/7 controller tests
+      GREEN. Browser test verifies upright frame, fixed pose/position, body
+      flip, changing head/eye pixels,3s wait and fresh dwell without leaving.
+      Prior hunt checks/syntax/diff checks pass. Inspected tracking-black.png
+      under artifacts/repro/pounce-preview-20260911. Opened2800/?v=3.
+- [x] User approved native integration; delivered by the native plan above.
+      Checkpoint719d300 and prior hunt-wake/head-cheek runtimes preserved.
+
+## Approved short-pounce preview — 2026-09-11
+
+User approved the short forward-hop design, adding sustained nearby mouse as
+the trigger. Preview only; desktop hunt-wake runtime remains PID16804.
+Checkpoint before this work:719d300 (local only).
+- [x] Separate pounce controller:1.5s continuous dwell, reset on departure,
+     28px maximum native travel capped short of target,9px low arc,340ms
+      flight and280ms forepaw-pivot landing/recovery. One shot per approach;
+      rearm after leaving350ms and a1.2s post-landing rest. Lock flight facing.
+- [x] New preview at127.0.0.1:2800, PID16752; reuse approved hunt atlas/curves
+      without modifying existing preview2799 or native assets. Automatic demo,
+      real mouse mode, slow playback, pause/scrub, both directions/black ground.
+- [x]4 controller tests observed RED before implementation then GREEN; prior
+      hunt checks pass. Headless Chrome real-pointer test passes dwell/reset,
+      one-shot/rearm with no page errors. Inspected flight/landing white/black
+      proof at artifacts/repro/pounce-preview-20260911/contact-sheet.png.
+- [x] Independent review found cooldown swallowing an earlier departure;
+      latched the qualifying exit. Regression RED then5/5 GREEN; rereview clear.
+      Updated preview opened at2800/?v=2; native assets/process unchanged.
+- [ ] User visual approval before product port.
+
 ## Save checkpoint / next short pounce — 2026-09-11
 
 User requested saving the accepted product through hunting wake-up, then a

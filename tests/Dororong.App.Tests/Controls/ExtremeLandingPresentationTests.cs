@@ -11,6 +11,17 @@ namespace Dororong.App.Tests.Controls;
 
 public class ExtremeLandingPresentationTests
 {
+    [Fact]
+    public void Landing_body_pixels_are_click_only_but_head_can_still_be_grabbed() => CheekProductTests.Sta(() =>
+    {
+        var p = Create(); var sole = p.MeasurePlatformGeometry()!.Value.Contact.SoleY;
+        p.ApplyPlatformPose(new(PlatformPhase.Landing, new(100,100), new(0,0,1), .574, 0)
+            { IsExtremeLanding = true, LegSpread = 1 }, sole);
+        var image = ((Canvas)p.FindName("BodyGroup")).Children.OfType<AlphaHitTestImage>().Single(i => i.Visibility == Visibility.Visible);
+        Assert.Equal(DirectInteractionTarget.ClickOnly, p.CreateDirectPress(image, new(32 + 88, 32 + 81))!.Target);
+        Assert.Equal(DirectInteractionTarget.Body, p.CreateDirectPress(image, new(32 + 35, 32 + 35))!.Target);
+    });
+
     [Theory]
     [InlineData(FacingDirection.Left)] [InlineData(FacingDirection.Right)]
     public void Both_facing_directions_fit_the_product_transparent_viewport(FacingDirection facing) => CheekProductTests.Sta(() =>

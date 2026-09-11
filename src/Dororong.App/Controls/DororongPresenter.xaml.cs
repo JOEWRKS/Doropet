@@ -285,6 +285,10 @@ public partial class DororongPresenter : UserControl
 
     private void RenderPose(PetSnapshot snapshot, DirectInteractionSnapshot directInteraction, TimeSpan elapsed)
     {
+        // Disabled body drags retain the actual pose (including seated/hunting
+        // art), rather than entering pending head squash or a body overlay.
+        if (directInteraction.Target == DirectInteractionTarget.ClickOnly) return;
+
         if (_sittingRequested && !_locomotionBlocked && !_edgePerch.IsAttached &&
             !snapshot.IsDirectInteractionPending && snapshot.State != PetState.ClickReaction &&
             directInteraction.Target == DirectInteractionTarget.None && directInteraction.HeadLanding is null)
@@ -976,6 +980,7 @@ public partial class DororongPresenter : UserControl
 
     private void ResetPose()
     {
+        RestorePounceTransform();
         if (_headSamplingOverride)
         {
             RenderOptions.SetBitmapScalingMode(DororongImage, _beforeHeadSampling);
@@ -1030,6 +1035,18 @@ public partial class DororongPresenter : UserControl
         var splat = ReferenceEquals(pressedImage, extreme);
         var framePosition = perchHit ? new PointD(48, 48) : splat ? new PointD(40,40) : GetVisibleFramePoint(sourcePosition);
         var target = splat || (perchHit && !_edgePerch.IsAttached) ? DirectInteractionTarget.Body : ClassifyOpaqueSourcePoint(sourcePosition, opaque: true);
+        // Keep the old region map for rendering diagnostics, but no product
+        // input may start an arm/belly/rump pull or fall back to head carry.
+        if (target == DirectInteractionTarget.FiveRegionBody)
+            target = DirectInteractionTarget.ClickOnly;
+        if (splat && !InteractionHitMap.IsUpperHead(new(sourcePosition.X - 32, sourcePosition.Y - 32)))
+            target = DirectInteractionTarget.ClickOnly;
+        if (target == DirectInteractionTarget.Body && perchHit &&
+            !InteractionHitMap.IsUpperHead(new(sourcePosition.X - 8, sourcePosition.Y + 6)))
+            target = DirectInteractionTarget.ClickOnly;
+        if (target == DirectInteractionTarget.Body && !perchHit && !splat && !CanUseBodyMap &&
+            !_activeInteractionDescriptor.IsHeadOrCheek(sourcePosition))
+            target = DirectInteractionTarget.ClickOnly;
         if (target == DirectInteractionTarget.None)
         {
             return null;
@@ -1038,22 +1055,13 @@ public partial class DororongPresenter : UserControl
 
         var windowPosition = pressedImage.TranslatePoint(imagePosition,this);
         var facing=perchHit ? _edgePerch.Facing : _activeFacing;
-        BodyPullCapture? bodyCapture = null;
         CheekPullCapture? cheekCapture = null;
         if (target == DirectInteractionTarget.RightCheek && !TryCreateCheekPullCapture(sourcePosition, out cheekCapture)) return null;
-        if (target == DirectInteractionTarget.FiveRegionBody)
-        {
-            var actual = pressedImage.TranslatePoint(imagePosition,DororongImage);
-            var scale = Math.Min(DororongImage.ActualWidth / 96, DororongImage.ActualHeight / 96);
-            var precise = new PointD((actual.X - (DororongImage.ActualWidth - 96 * scale) / 2) / scale, (actual.Y - (DororongImage.ActualHeight - 96 * scale) / 2) / scale);
-            if (!TryCreateBodyPullCapture(precise, out bodyCapture)) return null;
-        }
         return new DirectInteractionPressEventArgs(
                 target,
                 new PointD(windowPosition.X, windowPosition.Y),
                 framePosition,
-                _activeInteractionDescriptor.GetScreenOutwardSign(target, facing),
-                bodyCapture) { CheekCapture = cheekCapture, PressFacing=facing,
+                _activeInteractionDescriptor.GetScreenOutwardSign(target, facing)) { CheekCapture = cheekCapture, PressFacing=facing,
                     IsAttachedCheek=perchHit && _edgePerch.IsAttached && cheekCapture is not null,
                     StartsHanging=perchHit && _edgePerch.IsAttached && target == DirectInteractionTarget.Body };
     }

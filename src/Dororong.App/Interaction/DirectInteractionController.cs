@@ -116,6 +116,7 @@ internal sealed class DirectInteractionController
         Current = target switch
         {
             DirectInteractionTarget.Body => new(target, DirectInteractionPhase.BodyPending, pointerPosition, pointerPosition, 0, 0, false),
+            DirectInteractionTarget.ClickOnly => new(target, DirectInteractionPhase.BodyPending, pointerPosition, pointerPosition, 0, 0, true),
             DirectInteractionTarget.LeftCheek or DirectInteractionTarget.RightCheek => new(target, DirectInteractionPhase.CheekPress, pointerPosition, pointerPosition, 0, 0, true),
             _ => DirectInteractionSnapshot.None
         };
@@ -165,6 +166,13 @@ internal sealed class DirectInteractionController
         }
 
         if (Current.Target == DirectInteractionTarget.FiveRegionBody || HasCheekCarry) return Current;
+
+        // A body click owns button release, never a carry or deformation session.
+        if (Current.Target == DirectInteractionTarget.ClickOnly)
+        {
+            if (!primaryButtonDown) Cancel();
+            return Current;
+        }
 
         var pointerAvailable = pointer.IsAvailable && (!_distanceDrivenBody ||
             HeadPullDistance.TryMeasure(Current.PressOrigin, pointer.Position, _headDragThreshold, out _));

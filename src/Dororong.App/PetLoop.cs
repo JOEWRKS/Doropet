@@ -36,6 +36,7 @@ internal sealed class PetLoop : IDisposable
     private bool _cleanupComplete;
     private bool _primaryWasDown;
     private bool _sitRequested;
+    private double _lastPounceOffset;
 
     public PetLoop(Window window, DororongPresenter presenter, DesktopInput input)
         : this(
@@ -192,7 +193,9 @@ internal sealed class PetLoop : IDisposable
             var seatedCheek = _sitRequested && !attachedCheek &&
                 (_directInteractionController.Current.IsSeatedCheek ||
                  _queuedDirectPress is { Target: DirectInteractionTarget.RightCheek, CheekCapture: not null });
-            var stationaryCheek = attachedCheek || seatedCheek;
+            var clickOnly = _queuedDirectPress?.Target == DirectInteractionTarget.ClickOnly ||
+                _directInteractionController.Current.Target == DirectInteractionTarget.ClickOnly;
+            var stationaryCheek = attachedCheek || seatedCheek || clickOnly;
             var capturedAtEntry = OwnsCapturedPosition(_snapshot, _directInteractionController.Current);
             var canBeginPress = _queuedDirectPress is not null &&
                 _directInteractionController.Current.Target == DirectInteractionTarget.None;
@@ -242,7 +245,7 @@ internal sealed class PetLoop : IDisposable
                     _directInteractionController.Begin(queuedPress.Target, globalPressPosition, queuedPress.OutwardSign);
                 }
                 _directInteractionController.SetPressContext(queuedPress.PressFacing, attachedCheek, queuedPress.StartsHanging);
-                if (queuedPress.Target == DirectInteractionTarget.Body)
+                if (queuedPress.Target is DirectInteractionTarget.Body or DirectInteractionTarget.ClickOnly)
                 {
                     bodyPress = globalPressPosition;
                 }
@@ -266,6 +269,14 @@ internal sealed class PetLoop : IDisposable
             _host.SetLocomotionBlocked?.Invoke(platforms?.SuspendsAutonomousMotion ?? false);
             var holdHunt = _host.UpdateHunting?.Invoke(previous, directBeforeCore, pointer, delta,
                 primaryButtonDown || queuedPress is not null) ?? false;
+            var pounce = _host.GetPouncePose?.Invoke() ?? PouncePose.Rest;
+            // Sit/body clicks retire the jump without taking carry ownership.
+            // Release its retained support offset into real falling physics;
+            // otherwise clearing the offset teleports the pet down by up to12DIP.
+            if (!pounce.IsJump && _lastPounceOffset < 0 &&
+                (primaryButtonDown || _sitRequested || clickOnly) &&
+                (stationaryCheek || !OwnsCapturedPosition(previous, directBeforeCore)))
+                platforms?.Reset(displayed);
             var holdWalk = directBeforeCore.Target == DirectInteractionTarget.None &&
                 queuedPress is null && (_host.HoldLocomotionWalk?.Invoke(previous) ?? false);
             var current = brain.Update(new PetInput(
@@ -283,12 +294,18 @@ internal sealed class PetLoop : IDisposable
                     (_sitRequested && previous.State != PetState.ClickReaction),
                 SurfaceBoundMotion: platforms is not null,
                 SuppressPointerReactions: _host.UpdateHunting is not null,
-                TrackPointerFacing: holdHunt));
+                TrackPointerFacing: holdHunt,
+                ClickOnlyPress: queuedPress?.Target == DirectInteractionTarget.ClickOnly,
+                TrackingFacingOverride: pounce.IsJump ? pounce.Direction : null));
             // The idle-to-walk boundary may occur inside Update. Retain support
             // position on that first tick too, before platform physics advances.
             if (directBeforeCore.Target == DirectInteractionTarget.None && queuedPress is null &&
                 (_host.HoldLocomotionWalk?.Invoke(current) ?? false))
                 current = brain.ApplyPlatformPosition(displayed);
+            if (pounce.IsEngaged)
+                current = brain.ApplyPlatformPosition(workArea.ClampTopLeft(current.Position +
+                    new PointD(pounce.DeltaX, platforms is null ? pounce.OffsetY - _lastPounceOffset : 0), petSize));
+            _lastPounceOffset = pounce.OffsetY;
             var directCurrent = _directInteractionController.Advance(
                 delta,
                 pointer,
@@ -338,7 +355,8 @@ internal sealed class PetLoop : IDisposable
                     targetSole = platforms.Contact.SoleY;
                     var clickHop = current.State == PetState.ClickReaction
                         ? BodyClickTransformSampler.SampleConfirmedClick(current.Phase).TranslationY : 0;
-                    var pose = platforms.Advance(elapsed, delta, displayed, current.Position, platforms.Contact, directOwns, clickHop);
+                    var pose = platforms.Advance(elapsed, delta, displayed, current.Position, platforms.Contact, directOwns,
+                        pounce.IsJump ? pounce.OffsetY : clickHop);
                     if (!directOwns)
                     {
                         current = brain.ApplyPlatformPosition(pose.Position);
@@ -530,7 +548,8 @@ internal sealed class PetLoop : IDisposable
             HoldLocomotionWalk = presenter.HoldLocomotionWalk,
             SetLocomotionBlocked = presenter.SetLocomotionBlocked,
             SetSittingRequested = presenter.SetSittingRequested,
-            UpdateHunting = presenter.UpdateHunting,
+            UpdateHunting = presenter.UpdateHuntingWithPounce,
+            GetPouncePose = () => presenter.Pounce,
             Platforms = new PetPlatformRuntime(new DesktopSceneSource(new DesktopSceneNative(source.Handle), background: true),
                 position => DesktopCoordinateMap.FromPresenter(presenter, position),
                 presenter.MeasurePlatformGeometry, presenter.ApplyPlatformPose, DesktopMetadataReader.ReadMonitorBounds,

@@ -1,0 +1,12 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>도로롱 · 짧게 폴짝</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f1ed;color:#302b2d;font:14px/1.6 system-ui}main{max-width:800px;margin:auto;padding:24px 20px}small{color:#935c75;letter-spacing:.15em}h1{font-size:25px;margin:6px 0}p{color:#796b73}.panel{border:1px solid #d8cdd2;border-radius:14px;overflow:hidden;background:#fcfaf8}.bar{display:flex;justify-content:space-between;gap:10px;padding:10px 16px;border-bottom:1px solid #e5dade;font-size:12px}canvas{display:block;width:100%;height:300px}.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:16px 0}button,select{font:inherit;padding:8px 13px;border:1px solid #cbbac3;border-radius:8px;background:white;color:inherit}button.active{background:#805169;color:white}input{accent-color:#805169}#timeline{width:100%}.sub{display:flex;gap:18px;align-items:center}.sub canvas{width:240px;height:130px;flex-shrink:0}.sub p{font-size:12px}.note{font-size:12px}@media(max-width:500px){.sub{flex-wrap:wrap}}
+</style><main><small>DORORONG / MOTION STUDY</small><h1>가만히… 폴짝!</h1>
+<p>가까이 1.5초 → 폴짝 → 기본 자세로 3초 추적 → 다시 준비.</p>
+<div class="panel"><div class="bar"><span id="label">이미지 준비 중</span><span id="status">미리보기 전용</span></div><canvas id="stage" width="720" height="300" aria-label="도로롱 가까이에 마우스를 1.5초 두면 짧게 뛰어듭니다."></canvas></div>
+<div class="controls"><button id="auto" class="active">자동 시연</button><button id="mouse">마우스 반응</button><button id="replay">처음부터</button><button id="pause">일시정지</button><label>속도 <select id="speed"><option value="1">1×</option><option value=".5">0.5×</option></select></label><label><input id="right" type="checkbox">오른쪽 시연</label><label><input id="black" type="checkbox">검은 배경</label></div>
+<label class="note" for="timeline">자동 시연 구간 확인</label><input id="timeline" type="range" min="0" max="7.8" step="0.01" value="0">
+<div class="sub"><canvas id="native" width="240" height="130" aria-label="작은 크기 비교"></canvas><p>착지 후 3초는 제자리에서 머리·눈·몸 방향만 추적.<br>3초 뒤에도 가까이 있으면 다시 준비해요.<br>준비 중 1.5초 머물면 다음 도약. 멀어지면 준비 취소.</p></div>
+<p class="note">새 도약은 미리보기 전용입니다. 바탕화면 제품은 저장한 버전 그대로 유지됩니다.</p>
+<script src="/hunt-motion.js"></script><script src="/gaze-motion.js"></script><script src="/gaze-eyes.js"></script><script src="/gaze-compose.js"></script><script src="/pounce-motion.js"></script><script src="/pounce-preview.js"></script></main></html>

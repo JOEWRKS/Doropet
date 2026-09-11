@@ -17,6 +17,8 @@ public sealed class PetBrain
     private PointD? _pressPosition;
     private PointD? _grabOffset;
     private bool _distanceDrivenBodyDrag;
+    private bool _clickOnlyPress;
+    private bool _clickCanceledByMovement;
     private TimeSpan _inactivity;
 
     public PetBrain(BehaviorTuning tuning, IRandomSource random, PointD initialPosition)
@@ -90,7 +92,8 @@ public sealed class PetBrain
         {
             if (input.TrackPointerFacing && !handledDirectInteraction && !_pressPosition.HasValue &&
                 !input.LocalInteractionActive && _state is PetState.Idle or PetState.Walk or PetState.Sleep &&
-                input.Pointer.IsAvailable && double.IsFinite(input.Pointer.Position.X) && double.IsFinite(input.Pointer.Position.Y))
+                (input.TrackingFacingOverride is not null ||
+                 input.Pointer.IsAvailable && double.IsFinite(input.Pointer.Position.X) && double.IsFinite(input.Pointer.Position.Y)))
             {
                 // The host has accepted a nearby hunting interaction. Wake
                 // without restoring the legacy startled retreat/curious path.
@@ -99,7 +102,9 @@ public sealed class PetBrain
                     ResetInactivity();
                     StartIdle();
                 }
-                var dx = input.Pointer.Position.X - petCenter.X;
+                var dx = input.TrackingFacingOverride is { } lockedFacing
+                    ? lockedFacing == FacingDirection.Left ? -9 : 9
+                    : input.Pointer.Position.X - petCenter.X;
                 // Hold the last side around the center so tiny cursor movements
                 // do not make the entire sprite alternate mirror parity.
                 if (Math.Abs(dx) > 8)
@@ -222,6 +227,8 @@ public sealed class PetBrain
             _pressPosition = pressPosition;
             _grabOffset = pressPosition - _position;
             _distanceDrivenBodyDrag = input.DistanceDrivenBodyDrag;
+            _clickOnlyPress = input.ClickOnlyPress;
+            _clickCanceledByMovement = false;
             ResetInactivity();
             if (_state == PetState.Sleep)
             {
@@ -274,9 +281,11 @@ public sealed class PetBrain
             : Math.Abs(input.Pointer.Position.X - savedPressPosition.X) >= input.DragThreshold.Width ||
               Math.Abs(input.Pointer.Position.Y - savedPressPosition.Y) >= input.DragThreshold.Height);
 
+        if (_clickOnlyPress && crossedDragThreshold) _clickCanceledByMovement = true;
+
         if (input.PrimaryButtonDown)
         {
-            if (crossedDragThreshold && _grabOffset is { } dragOffset)
+            if (!_clickOnlyPress && crossedDragThreshold && _grabOffset is { } dragOffset)
             {
                 ResetInactivity();
                 _state = PetState.Dragged;
@@ -288,8 +297,9 @@ public sealed class PetBrain
             return handled;
         }
 
+        var canceled = _clickCanceledByMovement;
         ClearDirectInteraction();
-        if (!input.Pointer.IsAvailable || crossedDragThreshold)
+        if (!input.Pointer.IsAvailable || crossedDragThreshold || canceled)
         {
             StartIdle();
         }
@@ -307,6 +317,8 @@ public sealed class PetBrain
         _pressPosition = null;
         _grabOffset = null;
         _distanceDrivenBodyDrag = false;
+        _clickOnlyPress = false;
+        _clickCanceledByMovement = false;
     }
 
     public void CancelDirectInteraction()
