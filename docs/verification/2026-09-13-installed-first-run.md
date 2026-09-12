@@ -36,8 +36,21 @@ events were checked directly. The initial exit watcher timed out before the
 user's later Exit action, so the original process exit code was not captured.
 Do not infer exit0 solely from Stopped and process disappearance.
 
-Relaunch after normal exit is still untested in this installed-host trial. This
-does not establish clean-guest, failure-injection, every DPI/multi-monitor/session,
+The checks do not establish clean-guest, failure-injection, every DPI/multi-monitor/session,
 signing or distribution-rights readiness. Existing character context-menu label
 Exit differs from Korean tray 종료; this is a recorded polish observation, not a
 functional change made during verification.
+
+## Relaunch follow-up
+
+User approved relaunch after normal exit. A fresh baseline verified zero running
+product processes, previous Stopped event, all467 installed payload hashes, and
+preserved original data. The exact installed executable relaunched as PID14528
+at2026-09-13T01:16:32+09:00 and emitted Started at01:16:33. A second invocation
+PID44368 exited0, leaving only PID14528. No new failure events were recorded;
+the pre-relaunch log bytes remain an identical prefix.
+
+Evidence: `artifacts/installer/host-relaunch-20260913-01/`, including the saved
+pre-relaunch log and `relaunch-result.json`. This is runtime relaunch/duplicate
+evidence, not an autonomous visual capture. Character/tray reappearance awaits
+user confirmation. Final state is now installed and intentionally running.

@@ -11,7 +11,9 @@ No source feature changes, build smoke, elevation, forced termination or uploads
 - [x] Installed first-run rendering, product tray identity and menus (user screenshots).
 - [x] Log-folder command and tray/icon disappearance confirmed by user; duplicate
   prevention and process disappearance/Stopped log checked independently.
-- [ ] Relaunch after normal exit (not yet exercised).
+- [x] Relaunch after normal exit: installed PID14528 Started; duplicate PID44368
+  exited0 and only PID14528 remains; original data prefix unchanged, no new errors.
+- [ ] User confirmation of character/tray reappearance after this relaunch.
 - [x] Evidence/limitations and final installed-but-stopped state documented.
 
 Directory02 installation verified (467 immutable payload files, registration and
@@ -24,7 +26,14 @@ original data prefix unchanged. Installed product retained, stopped. Original
 exit code was not captured (earlier watcher timed out); do not claim exit0.
 Computer Use could not target the transparent pet/tray; UI results are explicitly
 user-assisted, not autonomous UI passes. Evidence host-first-run-20260913-01;
-report docs/verification/2026-09-13-installed-first-run.md. Relaunch remains open.
+report docs/verification/2026-09-13-installed-first-run.md.
+
+Relaunch follow-up: user approved ㄱㄱ. Fresh stopped baseline and all467 installed
+payload hashes rechecked. Exact installed executable launched at01:16:32+09:00;
+Started at01:16:33. Duplicate prevention passed again; no failure diagnostics or
+original-data changes. Evidence artifacts/installer/host-relaunch-20260913-01.
+Product now intentionally left installed and running. Rendering/tray reappearance
+has not been independently captured; await user visual confirmation only.
 
 ## Reinstall empty-directory regression — 2026-09-13
 
