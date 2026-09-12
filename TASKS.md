@@ -1,5 +1,31 @@
 # Plan
 
+## Installed first-run / tray acceptance — 2026-09-13
+
+User approved the next check: install the reviewed directory02 candidate, launch
+the installed product, inspect actual character/tray UI, exercise log-folder and
+normal Exit commands, check duplicate/relaunch behavior and record evidence.
+Use Computer Use for Windows UI interactions; preserve existing data with backup.
+No source feature changes, build smoke, elevation, forced termination or uploads.
+- [x] Clean baseline/backup and exact candidate installation.
+- [x] Installed first-run rendering, product tray identity and menus (user screenshots).
+- [x] Log-folder command and tray/icon disappearance confirmed by user; duplicate
+  prevention and process disappearance/Stopped log checked independently.
+- [ ] Relaunch after normal exit (not yet exercised).
+- [x] Evidence/limitations and final installed-but-stopped state documented.
+
+Directory02 installation verified (467 immutable payload files, registration and
+shortcut metadata); PID4292 started. Duplicate PID39080 exited0 and original alone
+remained. User later supplied the notification-area screenshot with 도로롱0.1.0,
+로그 폴더 열기, 종료 and confirmed both commands/character+tray disappearance.
+Final read-only verification: PID4292 Stopped at2026-09-13T01:13:38+09:00; zero
+product processes, zero new diagnostic failure events, all467 payload hashes and
+original data prefix unchanged. Installed product retained, stopped. Original
+exit code was not captured (earlier watcher timed out); do not claim exit0.
+Computer Use could not target the transparent pet/tray; UI results are explicitly
+user-assisted, not autonomous UI passes. Evidence host-first-run-20260913-01;
+report docs/verification/2026-09-13-installed-first-run.md. Relaunch remains open.
+
 ## Reinstall empty-directory regression — 2026-09-13
 
 - [x] RED: normal candidate05 reinstall/uninstall left 14 empty children + root;
