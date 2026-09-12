@@ -88,6 +88,8 @@ begin
   Result := True;
 end;
 
+#include "InstallerDirectories.iss"
+
 function AcquireOperationGate(Path: String; var Handle: THandle): Boolean;
 begin
   Result := False;

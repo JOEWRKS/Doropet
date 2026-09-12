@@ -90,7 +90,7 @@ Add-Type -AssemblyName System.Drawing
 $icon = [Drawing.Icon]::ExtractAssociatedIcon((Join-Path $stage 'Dororong.exe'))
 $iconStream = [IO.File]::Create((Join-Path $output 'dororong.ico'))
 try { $icon.Save($iconStream) } finally { $iconStream.Dispose(); $icon.Dispose() }
-$sourceHashes = @('installer/Dororong.iss','installer/InstallerPolicy.iss','tools/Build-Installer.ps1','tools/installer/InstallerPayload.psm1','tests/Dororong.ProductPackage.Tests.ps1') | ForEach-Object {
+$sourceHashes = @('installer/Dororong.iss','installer/InstallerPolicy.iss','installer/InstallerDirectories.iss','tools/Build-Installer.ps1','tools/installer/InstallerPayload.psm1','tests/Dororong.ProductPackage.Tests.ps1') | ForEach-Object {
     [pscustomobject]@{ path=$_; sha256=(Get-FileHash (Join-Path $root $_)).Hash }
 }
 $generatedHashes = @('payload-files.iss','payload-policy.iss','dororong-owned-files.txt','dororong.ico') | ForEach-Object {

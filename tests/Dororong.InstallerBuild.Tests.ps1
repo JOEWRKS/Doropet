@@ -83,11 +83,11 @@ if ($Phase -in 'Policy','All') {
     }
     Check ($process.ExitCode -ne 0) 'Harness did not abort setup.'
     $log = Get-Content (Join-Path $testRoot 'harness.log') -Raw
-    Check ($log.Contains('POLICY PASS: 37 checks; returning False before installation')) 'Compiled policy assertions failed.'
+    Check ($log.Contains('POLICY PASS: directory lifecycle and existing file/shortcut checks; returning False before installation')) 'Compiled policy assertions failed.'
     Check (-not $log.Contains('UNSAFE_INSTALL_TRANSITION')) 'Harness entered installation.'
     Check (-not (Test-Path (Join-Path $testRoot 'must-never-install'))) 'Harness wrote installation payload.'
     Check (-not (Test-Path (Join-Path $fixture 'operation.lock'))) 'Gate did not clean up on close.'
-    Write-Output "POLICY PASS: compiled shared policy, 37 checks, abort exit $($process.ExitCode); evidence $testRoot"
+    Write-Output "POLICY PASS: compiled shared directory/file/shortcut policy, abort exit $($process.ExitCode); evidence $testRoot"
 }
 if ($Phase -in 'Build','All') {
     if (-not $CandidatePath) { $CandidatePath = Join-Path $artifacts ('candidate-' + (Get-Date -Format 'yyyyMMdd-HHmmss')) }

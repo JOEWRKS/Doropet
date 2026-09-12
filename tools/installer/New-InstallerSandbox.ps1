@@ -29,7 +29,7 @@ NoReparse $candidate
 NoReparse $toolchain
 $evidence = Get-Content -LiteralPath "$candidate/build-evidence.json" -Raw | ConvertFrom-Json
 Require ($evidence.schemaVersion -eq 1 -and $evidence.version -eq '0.1.0' -and $evidence.validatorExitCode -eq 0 -and $evidence.compilerExitCode -eq 0 -and $evidence.payloadFileCount -eq 467) 'Candidate build evidence contract mismatch.'
-Require ((Hash "$candidate/Dororong-Setup-0.1.0-win-x64.exe") -eq 'AEDE2B7D36A10DEADA800832C99DBD134BC1F4DEEEEA39B48D1F51CE166D5D5D') 'Reviewed candidate hash mismatch.'
+Require ((Hash "$candidate/Dororong-Setup-0.1.0-win-x64.exe") -eq '5BEAA5294FC9B73C527CB06404425C87320B421BD225223DAA9B8D253B13E61E') 'Reviewed candidate hash mismatch.'
 Require ((Hash "$toolchain/ISCC.exe") -eq 'D06EBD38F38E3CEE60A3C50CC45BD449D77E0BC6A5CABC607EA9886808E4DE1A') 'Pinned compiler hash mismatch.'
 Require ((Hash $evidence.archivePath) -eq '7BB45700A174D98123383B52FB39C913CA2F9EDA924827CBD14D97C136E20BC6') 'Frozen archive hash mismatch.'
 foreach ($source in $evidence.sourceFiles) { Require ((Hash (Join-Path $repo $source.path)) -eq $source.sha256) "Build source drift: $($source.path)" }
@@ -53,6 +53,7 @@ $utf8Bom = New-Object System.Text.UTF8Encoding($true)
 [IO.File]::WriteAllText("$inputDir/Invoke-InstallerAcceptance.ps1", [IO.File]::ReadAllText("$repo/tests/installer/Invoke-InstallerAcceptance.ps1"), $utf8Bom)
 [IO.File]::WriteAllText("$inputDir/InstallerAcceptanceGate.ps1", [IO.File]::ReadAllText("$repo/tests/installer/InstallerAcceptanceGate.ps1"), $utf8Bom)
 Copy-Item -LiteralPath "$repo/installer/InstallerPolicy.iss" -Destination "$inputDir/InstallerPolicy.iss"
+Copy-Item -LiteralPath "$repo/installer/InstallerDirectories.iss" -Destination "$inputDir/InstallerDirectories.iss"
 Copy-Item -LiteralPath "$candidate/payload.json" -Destination "$inputDir/payload.json"
 # This separately identified package tests shared policy through REAL guest installs.
 # Its versions, target, registry identity and bytes never become product evidence.
@@ -138,7 +139,7 @@ $handoff = [ordered]@{
     configSha256=(Hash "$destination/acceptance.wsb")
     installerSha256=$evidence.installerSha256; archiveSha256=$evidence.archiveSha256
     fixtureId='{D9BAFA26-9406-49E2-8C81-C8F41DD7C033}'; fixtureVersions=@('1.0.0', '1.10.0', '1.2.0')
-    inputFiles=@('Invoke-InstallerAcceptance.ps1', 'InstallerAcceptanceGate.ps1', 'InstallerPolicy.iss', 'payload.json', 'VersionFixture.iss' | ForEach-Object { @{name=$_; sha256=(Hash "$inputDir/$_")} })
+    inputFiles=@('Invoke-InstallerAcceptance.ps1', 'InstallerAcceptanceGate.ps1', 'InstallerPolicy.iss', 'InstallerDirectories.iss', 'payload.json', 'VersionFixture.iss' | ForEach-Object { @{name=$_; sha256=(Hash "$inputDir/$_")} })
 }
 [IO.File]::WriteAllText("$inputDir/handoff.json", ($handoff | ConvertTo-Json -Depth 8), $utf8Bom)
 Write-Output "SANDBOX_CONFIG=$destination\acceptance.wsb"

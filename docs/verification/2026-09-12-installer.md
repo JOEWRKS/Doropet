@@ -1,5 +1,10 @@
 # Installer candidate and isolated acceptance — 2026-09-12
 
+**Superseded candidate:** the directory-ownership fix and normal-host regression
+results are in [2026-09-13 verification](2026-09-13-installer-directories.md).
+The hashes and commands below describe the historical candidate05 and handoff;
+current acceptance tools intentionally pin the newer reviewed candidate instead.
+
 The local unsigned installer is compiler-built and reviewed. Isolated guest
 lifecycle rows remain **UNVERIFIED** because this host has Windows Sandbox disabled,
 no WindowsSandbox.exe and no available existing VM. No Sandbox launch, feature

@@ -1,5 +1,34 @@
 # Plan
 
+## Reinstall empty-directory regression — 2026-09-13
+
+- [x] RED: normal candidate05 reinstall/uninstall left 14 empty children + root;
+  fresh-install control removed them. Existing evidence retained unchanged.
+- [x] Preserve only installer-created directory identities across log overwrite,
+  without appending stale file ownership. Preserve pre-existing/user directories.
+- [x] Compiled policy tests: persistence, nested empty-only cleanup, user content,
+  invalid paths/reparse refusal, conservative legacy ownership.
+- [x] Fresh immutable candidate, normal host install/reinstall/uninstall verification,
+  scoped review and evidence. No failure injection, elevation or product changes.
+
+Final candidate directory02 SHA256
+5BEAA5294FC9B73C527CB06404425C87320B421BD225223DAA9B8D253B13E61E.
+Normal host fresh install/reinstall/uninstall all exit0: 467 payload hashes,
+directory ownership persistence, HKCU/Start-menu identity, no desktop link or
+auto-launch, original data unchanged, app root/registration/links/lock absent
+after removal. Evidence artifacts/installer/host-normal-20260913-directory-02.
+Scoped review P2 metadata-save success guard fixed and rereview cleared.
+Intermediate directory01 log comparison caught native build smoke appending two
+events; original bytes preserved, no log truncation. Final baseline was backed up
+after builds and stayed byte-identical through the complete final lifecycle.
+Report docs/verification/2026-09-13-installer-directories.md. Legacy unknown
+directory ownership remains conservative; guest/failure/visual/signing gates open.
+Guest handoff pin/include updated; non-installing acceptance All passes (PS5
+process count, host refusal, pure gate predicates, configuration and three inert
+fixture compiles). Payload safety suite passes. Current prepared-only handoff:
+artifacts/installer/sandbox-test-3696c3f7e6024f5caa22afd560fecf4c/acceptance.wsb.
+No Sandbox launched. Final host removed/data-preservation check repeated PASS.
+
 ## User-local installer implementation plan — 2026-09-12
 
 Normal host trial complete with one open cleanup issue (2026-09-12): candidate05

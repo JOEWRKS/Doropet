@@ -58,7 +58,7 @@ function Assert-InstallerAcceptanceGatePredicates {
             throw "input hash mismatch: $($file.name)"
         }
     }
-    if ($ReviewedSetupHash -cne 'AEDE2B7D36A10DEADA800832C99DBD134BC1F4DEEEEA39B48D1F51CE166D5D5D') {
+    if ($ReviewedSetupHash -cne '5BEAA5294FC9B73C527CB06404425C87320B421BD225223DAA9B8D253B13E61E') {
         throw 'reviewed setup hash mismatch'
     }
     if ($CompilerHash -cne 'D06EBD38F38E3CEE60A3C50CC45BD449D77E0BC6A5CABC607EA9886808E4DE1A') {

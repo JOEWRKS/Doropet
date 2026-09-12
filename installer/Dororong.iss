@@ -49,6 +49,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; Flags: unchecked
 [Files]
 #include BuildRoot + "\payload-files.iss"
 
+[Dirs]
+; Re-register only an installer-created root after uninstall-log overwrite.
+; Inno retries this empty-only removal after deleting its own uninstall files.
+Name: "{app}"; Flags: uninsalwaysuninstall; Check: InstallerOwnsRoot
+
 [Icons]
 Name: "{userprograms}\도로롱"; Filename: "{app}\Dororong.exe"; WorkingDir: "{app}"
 Name: "{userdesktop}\도로롱"; Filename: "{app}\Dororong.exe"; WorkingDir: "{app}"; Tasks: desktopicon
@@ -69,6 +74,14 @@ var
   Incoming, IncomingHashes, Previous: TArrayOfString;
   InstallStarted, InstallVerified: Boolean;
   DesktopPreviouslyOwned, DesktopWillBeOwned: Boolean;
+  OwnedDirectories: TArrayOfString;
+  RootDirectoryOwned: Boolean;
+  OwnershipRecorded: Boolean;
+
+function InstallerOwnsRoot: Boolean;
+begin
+  Result := RootDirectoryOwned;
+end;
 
 function FixedRoot: String;
 begin
@@ -162,6 +175,10 @@ begin
   if not NoReparseComponents(FixedRoot) then begin Reason := 'Installation path is unsafe or inaccessible.'; Exit; end;
   if not ExistingIdentity(Reason) then Exit;
   if not ReadShortcutOwnership(Reason) then Exit;
+  if not DecodeDirectoryOwnership(GetPreviousData('DirectoryOwnershipV1', ''), OwnedDirectories, RootDirectoryOwned) then begin
+    Reason := 'Directory ownership is unreadable. Repair Dororong before continuing.'; Exit;
+  end;
+  if not PreflightOwnedDirectories(FixedRoot, OwnedDirectories, Reason) then Exit;
   if not PreflightOwnedFiles(FixedRoot, Previous, Reason) then Exit;
   if not PreflightOwnedFiles(FixedRoot, Incoming, Reason) then Exit;
   if not PreflightOwnedShortcuts(ExpandConstant('{userprograms}'), ExpandConstant('{userdesktop}'),
@@ -219,6 +236,10 @@ end;
 
 procedure RegisterPreviousData(PreviousDataKey: Integer);
 begin
+  OwnershipRecorded := False;
+  if not SetPreviousData(PreviousDataKey, 'DirectoryOwnershipV1',
+    EncodeDirectoryOwnership(OwnedDirectories, RootDirectoryOwned)) then
+    RaiseException('Cannot record directory ownership. Repair or reinstall is required.');
   if WizardIsTaskSelected('desktopicon') then begin
     if not SetPreviousData(PreviousDataKey, 'DesktopIconOwned', '1') then
       RaiseException('Cannot record desktop shortcut ownership. Repair or reinstall is required.');
@@ -226,6 +247,7 @@ begin
     if not SetPreviousData(PreviousDataKey, 'DesktopIconOwned', '0') then
       RaiseException('Cannot record desktop shortcut ownership. Repair or reinstall is required.');
   end;
+  OwnershipRecorded := True;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -235,6 +257,8 @@ begin
     DesktopWillBeOwned := WizardIsTaskSelected('desktopicon');
     if not SamePath(WizardDirValue, FixedRoot) then RaiseException('Installation directory override refused.');
     if not AllPreflight(Reason) then RaiseException(Reason);
+    if not CaptureDirectoryOwnership(FixedRoot, Incoming, OwnedDirectories, RootDirectoryOwned, Reason) then
+      RaiseException(Reason);
     SetArrayLength(Obsolete, 0);
     for I := 0 to GetArrayLength(Previous) - 1 do
       if not ContainsPath(Incoming, Previous[I]) then begin
@@ -252,6 +276,9 @@ begin
   end;
   if CurStep = ssPostInstall then begin
     InstallVerified := False;
+    { Inno logs and catches RegisterPreviousData exceptions. Do not report a
+      successful install unless both ownership records were actually saved. }
+    if not OwnershipRecorded then RaiseException('Ownership recording failed. Repair or reinstall is required.');
     for I := 0 to GetArrayLength(Incoming) - 1 do begin
       Path := AddBackslash(FixedRoot) + Incoming[I];
       if not NoReparseComponents(Path) or not FileExists(Path) then RaiseException('Installed payload incomplete. Repair or reinstall is required.');
@@ -291,6 +318,10 @@ begin
   if not ReadOwnership(Previous) then begin Refuse('Ownership manifest unreadable. Repair Dororong before uninstalling.'); Exit; end;
   if not RegKeyExists(HKCU64, RegistrationKey) then begin Refuse('Product registration unreadable. Repair Dororong before uninstalling.'); Exit; end;
   if not ReadShortcutOwnership(Reason) then begin Refuse(Reason); Exit; end;
+  if not DecodeDirectoryOwnership(GetPreviousData('DirectoryOwnershipV1', ''), OwnedDirectories, RootDirectoryOwned) then begin
+    Refuse('Directory ownership unreadable. Repair Dororong before uninstalling.'); Exit;
+  end;
+  if not PreflightOwnedDirectories(FixedRoot, OwnedDirectories, Reason) then begin Refuse(Reason); Exit; end;
   if not PreflightProductFiles(FixedRoot, ExpandConstant('{userprograms}'), ExpandConstant('{userdesktop}'),
     ShortcutFile, Previous, DesktopPreviouslyOwned, Reason) then begin Refuse(Reason); Exit; end;
   Result := True;
@@ -300,10 +331,12 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var Reason: String;
 begin
   if CurUninstallStep = usUninstall then begin
+    if not PreflightOwnedDirectories(FixedRoot, OwnedDirectories, Reason) then RaiseException(Reason);
     { Recheck all locations before checked shortcut-then-payload removal. A
       failure here is fatal; Inno later processes registration and its metadata. }
     if not RemoveProductFiles(FixedRoot, ExpandConstant('{userprograms}'), ExpandConstant('{userdesktop}'),
       ShortcutFile, Previous, DesktopPreviouslyOwned, Reason) then RaiseException(Reason);
+    if not RemoveOwnedDirectories(FixedRoot, OwnedDirectories, Reason) then RaiseException(Reason);
   end;
 end;
 

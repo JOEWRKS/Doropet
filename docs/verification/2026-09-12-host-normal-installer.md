@@ -1,5 +1,9 @@
 # Normal non-elevated host installer trial — 2026-09-12
 
+**Follow-up:** the empty-directory issue was subsequently fixed and verified in
+[2026-09-13 regression results](2026-09-13-installer-directories.md). This report
+retains the original failing candidate05 evidence unchanged.
+
 User explicitly authorized backup followed by normal installation, unchanged
 same-version reinstallation and uninstallation on this account. No failure
 injection, file corruption, forced process termination, BIOS/Windows feature

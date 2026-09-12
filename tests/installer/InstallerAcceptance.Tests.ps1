@@ -1,6 +1,6 @@
 param(
     [ValidateSet('ProcessCount', 'Boundary', 'GatePredicates', 'Config', 'All')][string]$Phase = 'All',
-    [string]$CandidatePath = 'artifacts/installer/candidate-20260912-task1002-05',
+    [string]$CandidatePath = 'artifacts/installer/candidate-20260913-directory-02',
     [string]$PreparedToolchainPath = 'artifacts/installer/toolchain-inno-7.1.0-x64-20260912-02'
 )
 $ErrorActionPreference = 'Stop'
@@ -93,7 +93,7 @@ if ($Phase -in @('GatePredicates', 'All')) {
     $common = @{
         Handoff=$handoff; Nonce=$nonce; Config=$config; Mappings=$maps; MappingAvailability=$available; ObservedConfigHash='CONFIGHASH'
         Identity=$identity; HostOutputAccessible=$false; ActualInputHashes=$hashes
-        ReviewedSetupHash='AEDE2B7D36A10DEADA800832C99DBD134BC1F4DEEEEA39B48D1F51CE166D5D5D'
+        ReviewedSetupHash='5BEAA5294FC9B73C527CB06404425C87320B421BD225223DAA9B8D253B13E61E'
         CompilerHash='D06EBD38F38E3CEE60A3C50CC45BD449D77E0BC6A5CABC607EA9886808E4DE1A'; ResultCount=0
     }
     Assert-InstallerAcceptanceGatePredicates @common
@@ -135,7 +135,7 @@ if ($Phase -in @('Config', 'All')) {
     Assert ($writes.Count -eq 1 -and $writes[0].HostFolder -eq "$destination\results") 'Exactly the fresh results directory may be writable.'
     Assert (@($mappings | Where-Object ReadOnly -eq 'true').Count -eq 3) 'Every input mapping must be read-only.'
     $handoff = Get-Content -LiteralPath "$destination/input/handoff.json" -Raw | ConvertFrom-Json
-    Assert ($handoff.installerSha256 -eq 'AEDE2B7D36A10DEADA800832C99DBD134BC1F4DEEEEA39B48D1F51CE166D5D5D') 'Handoff must pin the reviewed candidate.'
+    Assert ($handoff.installerSha256 -eq '5BEAA5294FC9B73C527CB06404425C87320B421BD225223DAA9B8D253B13E61E') 'Handoff must pin the reviewed candidate.'
     Assert ($handoff.configSha256 -eq (Get-FileHash "$destination/acceptance.wsb").Hash) 'Handoff must bind the generated configuration.'
     $result = & powershell.exe -NoProfile -File tests/installer/Invoke-InstallerAcceptance.ps1 -CandidatePath $CandidatePath -HandoffPath "$destination/input/handoff.json" -ResultPath "$destination/results" 2>&1 | Out-String
     Assert ($LASTEXITCODE -eq 2 -and $result -match 'UNVERIFIED: isolation') 'A host-path replay of generated artifacts must fail at the fixed guest-path guard.'

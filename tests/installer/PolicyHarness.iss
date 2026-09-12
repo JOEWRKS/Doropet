@@ -25,9 +25,10 @@ end;
 
 function InitializeSetup: Boolean;
 var
-  Root, Reason: String;
+  Root, Reason, RecordValue: String;
   Gate1, Gate2: THandle;
-  Paths: TArrayOfString;
+  Paths, Directories: TArrayOfString;
+  RootOwned: Boolean;
 begin
   Result := False;
   Check(VersionAllowed('0.1.10', '0.1.2'), 'numeric higher');
@@ -84,7 +85,52 @@ begin
   Check(RemoveProductFiles(Root, Root + '\programs-clear', Root + '\desktop-clear',
     'owned.lnk', Paths, True, Reason), 'owned unlocked shortcut and payload removal');
   Check(not FileExists(Root + '\desktop-clear\owned.lnk'), 'owned desktop shortcut removed');
-  Log('POLICY PASS: 37 checks; returning False before installation');
+  { The normal-host candidate05 lifecycle test is the RED regression: its
+    overwrite reinstall loses directory records. Exercise the new directory
+    policy here without installing a product or touching user locations. }
+  Check(DecodeDirectoryOwnership('', Directories, RootOwned), 'legacy ownership accepted conservatively');
+  Check((GetArrayLength(Directories) = 0) and not RootOwned, 'legacy does not claim existing directories');
+  ForceDirectories(Root + '\directory-case\preexisting');
+  SetArrayLength(Paths, 3);
+  Paths[0] := 'new\nested\payload.txt';
+  Paths[1] := 'preexisting\payload.txt';
+  Paths[2] := 'top.txt';
+  Check(CaptureDirectoryOwnership(Root + '\directory-case', Paths, Directories, RootOwned, Reason), 'capture missing directories');
+  Check(not RootOwned and (GetArrayLength(Directories) = 2), 'existing root and directory not claimed');
+  RecordValue := EncodeDirectoryOwnership(Directories, RootOwned);
+  ForceDirectories(Root + '\directory-case\new\nested');
+  Check(DecodeDirectoryOwnership(RecordValue, Directories, RootOwned), 'ownership survives serialization');
+  Check(CaptureDirectoryOwnership(Root + '\directory-case', Paths, Directories, RootOwned, Reason), 'reinstall preserves ownership');
+  Check(GetArrayLength(Directories) = 2, 'reinstall retains two existing owned directories');
+  ForceDirectories(Root + '\directory-case\new\user-empty');
+  Check(RemoveOwnedDirectories(Root + '\directory-case', Directories, Reason), 'empty-only removal');
+  Check(not DirExists(Root + '\directory-case\new\nested'), 'owned nested empty directory removed');
+  Check(DirExists(Root + '\directory-case\new\user-empty'), 'user empty directory preserved');
+  Check(DirExists(Root + '\directory-case\preexisting'), 'pre-existing empty directory preserved');
+  Check(RemoveDir(Root + '\directory-case\new\user-empty'), 'fixture removes its own empty user directory');
+  Check(RemoveOwnedDirectories(Root + '\directory-case', Directories, Reason), 'missing child accepted');
+  Check(not DirExists(Root + '\directory-case\new'), 'owned parent removed bottom-up');
+  Check(DecodeDirectoryOwnership('1|1|filled', Directories, RootOwned), 'root ownership roundtrip');
+  Check(RootOwned, 'root creation ownership retained');
+  ForceDirectories(Root + '\directory-case\filled');
+  SaveStringToFile(Root + '\directory-case\filled\user.txt', 'preserve', False);
+  Check(RemoveOwnedDirectories(Root + '\directory-case', Directories, Reason), 'nonempty directory is not an error');
+  Check(FileExists(Root + '\directory-case\filled\user.txt'), 'user file retained');
+  Check(not DecodeDirectoryOwnership('1|1|..\escape', Directories, RootOwned), 'directory traversal refused');
+  Check(not DecodeDirectoryOwnership('1|0|one|ONE', Directories, RootOwned), 'duplicate ownership refused');
+  Check(not DecodeDirectoryOwnership('2|1', Directories, RootOwned), 'unknown schema refused');
+  Check(not DecodeDirectoryOwnership('1|yes', Directories, RootOwned), 'invalid root ownership refused');
+  SetArrayLength(Directories, 2); Directories[0] := 'directory-case\preexisting'; Directories[1] := 'linked';
+  Check(not RemoveOwnedDirectories(Root, Directories, Reason), 'reparse directory refused before cleanup');
+  Check(DirExists(Root + '\directory-case\preexisting'), 'full directory preflight precedes removal');
+  Check(DecodeDirectoryOwnership('', Directories, RootOwned), 'reset fresh fixture ownership');
+  SetArrayLength(Paths, 1); Paths[0] := 'nested\payload.txt';
+  Check(CaptureDirectoryOwnership(Root + '\fresh-directory-case', Paths, Directories, RootOwned, Reason), 'fresh absent root captured');
+  Check(RootOwned and (GetArrayLength(Directories) = 1), 'fresh root and payload parent are owned');
+  ForceDirectories(Root + '\fresh-directory-case\nested');
+  Check(RemoveOwnedDirectories(Root + '\fresh-directory-case', Directories, Reason), 'fresh child cleanup');
+  Check(DirExists(Root + '\fresh-directory-case'), 'policy leaves root for native uninstaller metadata cleanup');
+  Log('POLICY PASS: directory lifecycle and existing file/shortcut checks; returning False before installation');
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
