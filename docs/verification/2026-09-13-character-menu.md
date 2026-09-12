@@ -41,9 +41,9 @@ activation can be denied by Windows and callback tests alone cannot prove UI.
 After the user normally exited the installed app, the verified portable candidate
 was launched as PID35480 and emitted Started. Exact running path is recorded in
 candidate `manual-launch.json`. Existing installation and installer pins remain
-unchanged. User asked to test outside-click dismissal and reopen/repeat. Live UI
-confirmation and installed-package promotion are still pending; do not describe
-automated activation-boundary tests as actual outside-click verification.
+unchanged. User was asked to test outside-click dismissal and reopen/repeat and
+confirmed success (됐음). This is user-assisted live verification, separate from
+the automated activation-boundary tests. Installed-package promotion is pending.
 
 The user normally exited the installed PID14528 to allow testing the revised
 candidate. Do not overwrite the reviewed directory02 installer or old frozen

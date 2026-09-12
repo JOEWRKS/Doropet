@@ -13,7 +13,9 @@ right-release menu-opening boundary so WPF receives normal outside dismissal.
 - [x] Publish separate current-source candidate and validate package; retain
   reviewed installer/payload unchanged. User normally exited old app; launched
   candidate PID35480 with Started event.
-- [ ] User outside-click/reopen confirmation; installer promotion after live pass.
+- [x] User confirmed outside-click behavior works (됐음) after the live test request.
+- [ ] Promote verified contextmenu candidate into a fresh installer; current
+  installed directory and directory02 installer still contain the earlier build.
 
 First full test invocation aborted before tests due missing shared8.0.31;
 self-contained rerun completed854/854 in2m18s. User normally exited PID14528;
