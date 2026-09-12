@@ -175,7 +175,29 @@ Controller resolved provenance check: official isdl.php x64 link31 points exactl
 to the pinned GitHub is-7_1_0 asset. Source payload ZIP hash remains unchanged.
 Task 1001: minor (deferred): use case-sensitive SHA assertions, ordinal expected
 sorting, and verify every manifest source hash against .source artifacts in tests.
-Task1002 next: policy/builder/non-installing harness; brief in artifacts/installer.
+Task1002 in progress via /root/installer_policy, BASEe0a8b30: policy/builder/
+non-installing harness; brief/report in artifacts/installer/task-1002-{brief,report}.md.
+Controller re-ran Task1001 prepared-toolchain focused test: exit0, clean PASS.
+Task1002 implementation af2b3f9 is in independent review. Phase All exit0:
+26 compiled checks, refusal tests, strict private-desktop package smoke and
+candidate metadata/inventory/hash checks. Candidate04 (62,754,117 bytes) SHA256
+57C7FE2973BE745A4632DA6635620AC0E724BBE32D5C17B7588255787AA888B9.
+Current path artifacts/installer/candidate-20260912-task1002-04; earlier candidates
+are retained and not deliverables. No host product installation performed.
+Task1002 review found Important gap: owned shortcut locks were omitted from
+uninstall preflight/checked removal, allowing native Inno partial-success exit0.
+Fix round1 via same implementer, BASEaf2b3f9: include owned links in refusal and
+fatal removal; compiled locked-link regression and guest lifecycle case required.
+Task 1002: fix round1 complete (af2b3f9..b4917ae): scoped re-review confirms
+finding addressed and no new breakage. 37 compiled policy checks plus full
+focused builder/native package verification exit0. Candidate05 supersedes04:
+62,756,585 bytes, SHA256
+AEDE2B7D36A10DEADA800832C99DBD134BC1F4DEEEEA39B48D1F51CE166D5D5D.
+Task 1002: complete (commits e0a8b30..b4917ae, review clean after fix round1).
+Task1003 next: isolated acceptance generator, host-refusal tests and delivery
+documentation. Actual guest lifecycle remains UNVERIFIED due environment gate.
+Preserve four test-only cyclic junctions listed in task-1002-report.md after tool
+cleanup denial; never recursively enumerate/delete the old test directories.
 Environment gate: Windows10Pro, Sandbox feature InstallState2 and executable
 absent; standard VirtualBox/VMware command paths absent. No feature enabled.
 Task1003 live acceptance remains unavailable unless an isolated guest is provided;
