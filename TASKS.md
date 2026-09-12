@@ -1,5 +1,21 @@
 # Plan
 
+## User-local installer design — 2026-09-12
+
+User approved continuing production-readiness work after the verified product shell.
+New installation subsystem: architectural brainstorming path; no installer code yet.
+- [x] Inspect repository/current candidate and installed compiler availability.
+- [x] Compare ordinary Inno Setup EXE, MSIX, and custom installer responsibilities;
+      verify official non-admin/run-state semantics. Recommend Inno Setup.
+- [x] Draft installation/update/uninstall ownership and validation policy in
+      docs/superpowers/specs/2026-09-12-user-installer-design.md; self-review.
+- [ ] User review of written design, including non-forced running-app handling,
+      default per-user path, numeric downgrade refusal and retained user logs/files.
+- [ ] After approval: implementation plan in this ledger, then TDD/package work.
+Current baselinee49aedb; approved portable candidate source074b643 remains intact.
+No compiler installation/download, host product installation, registry/shortcut
+mutation, app behavior edits, signing, purchases or push in this design step.
+
 ## Product shell implementation plan — 2026-09-11
 
 > Execute with subagent-driven-development; one implementer at a time, scoped
