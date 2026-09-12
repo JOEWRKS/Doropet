@@ -19,7 +19,8 @@ existing .NET8.0.31 self-contained payload. No character-engine changes.
 
 - Product 도로롱 (Dororong),0.1.0,JOEWRKS; Dororong.exe/internal App DLL unchanged.
 - Default %LocalAppData%/Programs/JOEWRKS/Dororong; HKCU only, no elevation.
-- Stable AppId JOEWRKS.Dororong; same-version reinstall/higher upgrade/lower refusal.
+- Stable installer AppId {928A9BC7-3A87-4C52-9161-1E5D08DB410A}; same-version
+  reinstall/higher upgrade/lower refusal (see identity ruling below).
 - Start menu and uninstall registration; desktop optional unchecked; autostart absent.
 - No force-close, process-name kill, reboot replacement, downloads during installation.
 - Retain user logs and added files; no recursive/wildcard whole-install deletion.
@@ -119,7 +120,8 @@ Produces:
 
 Files: tests/installer/Invoke-InstallerAcceptance.ps1;
 tools/installer/New-InstallerSandbox.ps1; docs/verification/2026-09-12-installer.md;
-README.md. Consume builder output and evidence contract; no app implementation.
+README.md; tests/installer/InstallerAcceptance.Tests.ps1 (scoped test addition).
+Consume builder output and evidence contract; no app implementation.
 - [ ] RED boundary tests reject running acceptance on ordinary host; harness
       requires explicitly isolated sandbox proof/config and output directory.
       Missing isolation is UNVERIFIED/nonzero, never successful acceptance.
@@ -194,8 +196,34 @@ focused builder/native package verification exit0. Candidate05 supersedes04:
 62,756,585 bytes, SHA256
 AEDE2B7D36A10DEADA800832C99DBD134BC1F4DEEEEA39B48D1F51CE166D5D5D.
 Task 1002: complete (commits e0a8b30..b4917ae, review clean after fix round1).
-Task1003 next: isolated acceptance generator, host-refusal tests and delivery
-documentation. Actual guest lifecycle remains UNVERIFIED due environment gate.
+Task1003 in progress via /root/installer_acceptance, BASE013250b: isolated
+acceptance generator, host-refusal tests and delivery documentation. Brief/report
+artifacts/installer/task-1003-{brief,report}.md. Actual guest lifecycle remains
+UNVERIFIED due environment gate.
+Ruling: add a dedicated InstallerAcceptance.Tests.ps1 to Task1003 — persistent
+host-boundary/config tests should not be mixed into executable guest harness or
+documentation. Cost if wrong: one small test-file consolidation; no product effect.
+Ruling: retain the implemented fixed installer GUID instead of this plan's initial
+JOEWRKS.Dororong shorthand — approved design requires stable identity, not that
+literal string, and no installer has been deployed. Documentation/harness and
+reviewed candidate consistently use {928A9BC7-3A87-4C52-9161-1E5D08DB410A}.
+Cost if wrong: rebuild before release, or explicit identity migration after release;
+never silently change this ID between released versions.
+Task1003 implementation dd8f5f7 reviewed: Important PS5.1 empty pipeline .Count
+failure in first-install/uninstall process checks. Fix round1 via same implementer,
+BASEdd8f5f7; normalize collection and add behavioral zero-result regression.
+Task 1003: minor (deferred): generated-handoff host replay omits nonce/uses host
+paths, proving only early path refusal; narrow evidence wording and cover remaining
+non-mutating gate predicates. Final review to triage.
+Final parent regression on unchanged pinned8.0.31 RID/reference bytes: Core241/241,
+App852/852, zero failures/skips (no-build/no-restore); App session43559 exited0
+after2m21s. No active parent test command remains.
+Task 1003: fix round1 complete (dd8f5f7..92ececb): PS5.1 empty-process Count
+regression addressed; scoped re-review clean. Covering non-installing All exit0.
+Task 1003: complete (commits 013250b..92ececb, review clean after fix round1;
+minor boundary coverage deferred). Current opt-in handoff sandbox-20260912-task1003-02/
+acceptance.wsb; old -01 preserved, product candidate05 unchanged. Live guest
+acceptance still UNVERIFIED. Final installer-wide integration review next.
 Preserve four test-only cyclic junctions listed in task-1002-report.md after tool
 cleanup denial; never recursively enumerate/delete the old test directories.
 Environment gate: Windows10Pro, Sandbox feature InstallState2 and executable
