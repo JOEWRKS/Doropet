@@ -165,8 +165,21 @@ toolchain replacement and package recompilation; no purchases/system install.
 Ruling: reuse immutable source074b643 payload rather than rebuild for documentation
 commits — exact tested App/Core bytes retained. Cost if app lifecycle must change:
 fresh full regression/payload generation before packaging.
-Execution: linked worktree confirmed, no superproject. Core baseline241 passed;
-App baseline852 same pinned runtime run pending. No implementation dispatched yet.
+Execution: linked worktree confirmed, no superproject. Core baseline241/241 and
+App baseline852/852 on the unchanged pinned8.0.31 RID bytes passed (no rebuild).
+Task 1001: complete (commits 49fe56c..c7e2623, spec/quality review approved).
+Focused inventory/refusal/toolchain tests exit0; parser errors0. Official signed
+compiler7.1.0 verified via --version (PE ProductVersion is0.0.0.0).
+Use only toolchain-inno-7.1.0-x64-20260912-02; first incomplete output preserved.
+Controller resolved provenance check: official isdl.php x64 link31 points exactly
+to the pinned GitHub is-7_1_0 asset. Source payload ZIP hash remains unchanged.
+Task 1001: minor (deferred): use case-sensitive SHA assertions, ordinal expected
+sorting, and verify every manifest source hash against .source artifacts in tests.
+Task1002 next: policy/builder/non-installing harness; brief in artifacts/installer.
+Environment gate: Windows10Pro, Sandbox feature InstallState2 and executable
+absent; standard VirtualBox/VMware command paths absent. No feature enabled.
+Task1003 live acceptance remains unavailable unless an isolated guest is provided;
+details in artifacts/installer/environment-evidence.md. Continue non-installing work.
 
 ## User-local installer design — 2026-09-12
 
