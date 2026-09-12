@@ -4,6 +4,7 @@ Set-StrictMode -Version Latest
 
 function Require([bool]$Condition, [string]$Reason) { if (-not $Condition) { throw $Reason } }
 function Hash([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash }
+. "$PSScriptRoot\InstallerAcceptanceGate.ps1"
 
 # This complete read-only gate precedes ALL output, fixture, installer and Shell writes.
 # It prevents accidental host execution; it is not attestation against a hostile admin.
@@ -13,32 +14,33 @@ try {
     Require ($ResultPath -eq 'C:\DororongAcceptance\Results') 'narrow guest results mapping required'
     Require ($PSScriptRoot -eq 'C:\DororongAcceptance\Input') 'script must execute from generated input mapping'
     $handoff = Get-Content -LiteralPath $HandoffPath -Raw | ConvertFrom-Json
-    Require ($handoff.schemaVersion -eq 1 -and $Nonce -match '^[a-f0-9]{32}$' -and $Nonce -ceq $handoff.nonce) 'generated handoff nonce required'
-    Require ((Hash "$PSScriptRoot\acceptance.wsb") -eq $handoff.configSha256) 'configuration hash mismatch'
+    $observedConfigHash = Hash "$PSScriptRoot\acceptance.wsb"
     [xml]$config = Get-Content -LiteralPath "$PSScriptRoot\acceptance.wsb" -Raw
-    foreach ($setting in @('Networking', 'ClipboardRedirection', 'AudioInput', 'VideoInput', 'PrinterRedirection', 'VGpu')) {
-        Require ($config.Configuration.$setting -eq 'Disable') "unsafe $setting configuration"
-    }
     $maps = @($config.Configuration.MappedFolders.MappedFolder)
-    Require ($maps.Count -eq 4 -and @($maps | Where-Object ReadOnly -eq 'false').Count -eq 1) 'mapping count/writable scope mismatch'
+    $mappingAvailability = @{}
     foreach ($mapping in $handoff.mappings) {
-        $match = @($maps | Where-Object { $_.SandboxFolder -ceq $mapping.guest -and $_.HostFolder -ceq $mapping.host -and $_.ReadOnly -ceq $mapping.readOnly })
-        Require ($match.Count -eq 1 -and (Test-Path -LiteralPath $mapping.guest -PathType Container)) 'required generated mapping missing'
+        $mappingAvailability[[string]$mapping.guest] = Test-Path -LiteralPath $mapping.guest -PathType Container
     }
     $machineGuid = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Cryptography').MachineGuid
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $computer = Get-CimInstance Win32_ComputerSystem
     $system = Get-CimInstance Win32_ComputerSystemProduct
-    Require ($machineGuid -and $machineGuid -ne $handoff.hostMachineGuid) 'host MachineGuid matches or is unreadable'
-    Require ($identity.User.Value -ne $handoff.hostUserSid) 'host user token matches'
-    Require ($env:COMPUTERNAME -ne $handoff.hostComputerName -and $system.UUID -ne $handoff.hostSystemUuid) 'host computer identity matches'
-    Require ($identity.Name -match '\\WDAGUtilityAccount$' -and $env:USERPROFILE -eq 'C:\Users\WDAGUtilityAccount') 'Sandbox account/profile evidence missing'
-    Require ($computer.Manufacturer -eq 'Microsoft Corporation' -and $computer.Model -eq 'Virtual Machine' -and $computer.HypervisorPresent) 'Microsoft virtual guest evidence missing'
-    Require (-not (Test-Path -LiteralPath $handoff.hostOutputPath)) 'host output path is directly accessible'
-    foreach ($file in $handoff.inputFiles) { Require ((Hash (Join-Path $PSScriptRoot $file.name)) -eq $file.sha256) "input hash mismatch: $($file.name)" }
-    Require ((Hash "$CandidatePath\Dororong-Setup-0.1.0-win-x64.exe") -eq 'AEDE2B7D36A10DEADA800832C99DBD134BC1F4DEEEEA39B48D1F51CE166D5D5D') 'reviewed setup hash mismatch'
-    Require ((Hash 'C:\DororongAcceptance\Toolchain\ISCC.exe') -eq 'D06EBD38F38E3CEE60A3C50CC45BD449D77E0BC6A5CABC607EA9886808E4DE1A') 'compiler hash mismatch'
-    Require (@(Get-ChildItem -LiteralPath $ResultPath -Force).Count -eq 0) 'results mapping must be empty; generate a fresh handoff for each run'
+    $actualInputHashes = @{}
+    foreach ($file in $handoff.inputFiles) { $actualInputHashes[[string]$file.name] = Hash (Join-Path $PSScriptRoot $file.name) }
+    Assert-InstallerAcceptanceGatePredicates `
+        -Handoff $handoff -Nonce $Nonce -Config $config -Mappings $maps `
+        -MappingAvailability $mappingAvailability `
+        -ObservedConfigHash $observedConfigHash `
+        -Identity @{
+            machineGuid=$machineGuid; userSid=$identity.User.Value; computerName=$env:COMPUTERNAME
+            systemUuid=$system.UUID; identityName=$identity.Name; userProfile=$env:USERPROFILE
+            manufacturer=$computer.Manufacturer; model=$computer.Model; hypervisorPresent=$computer.HypervisorPresent
+        } `
+        -HostOutputAccessible (Test-Path -LiteralPath $handoff.hostOutputPath) `
+        -ActualInputHashes $actualInputHashes `
+        -ReviewedSetupHash (Hash "$CandidatePath\Dororong-Setup-0.1.0-win-x64.exe") `
+        -CompilerHash (Hash 'C:\DororongAcceptance\Toolchain\ISCC.exe') `
+        -ResultCount @(Get-ChildItem -LiteralPath $ResultPath -Force).Count
 } catch {
     [Console]::Error.WriteLine('UNVERIFIED: isolation gate refused before mutation: ' + $_.Exception.Message)
     exit 2

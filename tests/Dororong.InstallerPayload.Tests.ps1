@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 
 function Assert-Equal([object]$Expected, [object]$Actual, [string]$Message)
 {
-    if ($Expected -ne $Actual)
+    if ($Expected -cne $Actual)
     { throw "$Message Expected <$Expected>; actual <$Actual>." }
 }
 
@@ -67,6 +67,8 @@ try
     [IO.File]::WriteAllText((Join-Path $nested 'known.txt'), 'abc', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $package 'z-last.txt'), 'z', [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $package 'A-first.txt'), 'a', [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $package 'a-lower.txt'), 'lower', [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $package 'B-upper.txt'), 'upper', [Text.UTF8Encoding]::new($false))
 
     $before = @(Get-TreeState $package)
     $inventory = Get-InstallerPayload -PackagePath $package
@@ -84,9 +86,12 @@ try
         $known[0].Sha256 'The inventory returned the wrong literal SHA-256.'
 
     $relativePaths = @($inventory.Files.RelativePath)
-    $ordinalPaths = @($relativePaths | Sort-Object -CaseSensitive)
+    $ordinalPaths = @($relativePaths)
+    [Array]::Sort($ordinalPaths, [StringComparer]::Ordinal)
     Assert-Equal ($ordinalPaths -join "`n") ($relativePaths -join "`n") `
         'Payload files were not returned in stable ordinal order.'
+    Assert-True ([Array]::IndexOf($relativePaths, 'B-upper.txt') -lt [Array]::IndexOf($relativePaths, 'a-lower.txt')) `
+        'The mixed-case fixture did not discriminate ordinal ordering from culture sorting.'
     Assert-True (-not ($relativePaths -match '\\')) 'A payload relative path used a backslash.'
 
     $preservedInventory = Get-InstallerPayload -PackagePath $candidateRuntime
@@ -175,6 +180,12 @@ try
         Assert-Equal 'Pyrsys B.V.' $manifest.signer.compiler 'The toolchain compiler signer changed.'
         Assert-Equal (Get-FileHash -LiteralPath $compilerPath -Algorithm SHA256).Hash `
             $manifest.hashes.compilerSha256 'The recorded compiler hash does not match the compiler.'
+        Assert-Equal (Get-FileHash -LiteralPath (Join-Path $preparedRoot '.source/innosetup-7.1.0-x64.exe') -Algorithm SHA256).Hash `
+            $manifest.hashes.installerSha256 'The recorded installer hash does not match the retained installer source.'
+        Assert-Equal (Get-FileHash -LiteralPath (Join-Path $preparedRoot '.source/isportable.iss') -Algorithm SHA256).Hash `
+            $manifest.hashes.portableSourceSha256 'The recorded portable-source hash does not match the retained source.'
+        Assert-Equal (Get-FileHash -LiteralPath (Join-Path $preparedRoot '.source/setup.iss') -Algorithm SHA256).Hash `
+            $manifest.hashes.setupSourceSha256 'The recorded setup-source hash does not match the retained source.'
         $reportedVersion = (& $compilerPath '--version' | Out-String).Trim()
         Assert-Equal 0 $LASTEXITCODE 'The prepared compiler version probe failed.'
         Assert-Equal '7.1.0' $reportedVersion 'The prepared compiler reported the wrong engine version.'

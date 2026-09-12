@@ -51,6 +51,7 @@ $resultDir = Join-Path $destination 'results'
 [void](New-Item -ItemType Directory -Path $resultDir)
 $utf8Bom = New-Object System.Text.UTF8Encoding($true)
 [IO.File]::WriteAllText("$inputDir/Invoke-InstallerAcceptance.ps1", [IO.File]::ReadAllText("$repo/tests/installer/Invoke-InstallerAcceptance.ps1"), $utf8Bom)
+[IO.File]::WriteAllText("$inputDir/InstallerAcceptanceGate.ps1", [IO.File]::ReadAllText("$repo/tests/installer/InstallerAcceptanceGate.ps1"), $utf8Bom)
 Copy-Item -LiteralPath "$repo/installer/InstallerPolicy.iss" -Destination "$inputDir/InstallerPolicy.iss"
 Copy-Item -LiteralPath "$candidate/payload.json" -Destination "$inputDir/payload.json"
 # This separately identified package tests shared policy through REAL guest installs.
@@ -137,7 +138,7 @@ $handoff = [ordered]@{
     configSha256=(Hash "$destination/acceptance.wsb")
     installerSha256=$evidence.installerSha256; archiveSha256=$evidence.archiveSha256
     fixtureId='{D9BAFA26-9406-49E2-8C81-C8F41DD7C033}'; fixtureVersions=@('1.0.0', '1.10.0', '1.2.0')
-    inputFiles=@('Invoke-InstallerAcceptance.ps1', 'InstallerPolicy.iss', 'payload.json', 'VersionFixture.iss' | ForEach-Object { @{name=$_; sha256=(Hash "$inputDir/$_")} })
+    inputFiles=@('Invoke-InstallerAcceptance.ps1', 'InstallerAcceptanceGate.ps1', 'InstallerPolicy.iss', 'payload.json', 'VersionFixture.iss' | ForEach-Object { @{name=$_; sha256=(Hash "$inputDir/$_")} })
 }
 [IO.File]::WriteAllText("$inputDir/handoff.json", ($handoff | ConvertTo-Json -Depth 8), $utf8Bom)
 Write-Output "SANDBOX_CONFIG=$destination\acceptance.wsb"

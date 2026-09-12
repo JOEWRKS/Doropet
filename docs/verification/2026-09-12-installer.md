@@ -20,9 +20,13 @@ enabling, account creation or host product installation was performed.
 ## Observed automated evidence
 
 `pwsh -NoProfile -File tests/installer/InstallerAcceptance.Tests.ps1 -Phase All`
-passes ordinary-host refusal, a genuine generated-handoff replay refusal, restricted
-configuration checks, existing-output refusal, and compilation of three distinct
-fixture versions. No fixture executable is run by this test. The host snapshots
+passes ordinary-host refusal, a generated-artifact replay that reaches only the
+initial fixed guest-path guard, separate inert checks of the production gate's
+nonce, configuration/input/setup/compiler hashes, mapping, and identity predicates,
+restricted configuration checks, existing-output refusal, and compilation of three
+distinct fixture versions. The predicate checks use synthetic values and do not
+create guest paths or invoke the mutation section. No fixture executable is run by
+this test. The host snapshots
 compare product directory metadata/immediate children, operation-gate path, logs
 directory metadata/immediate children, Start/desktop link hashes, and HKCU/HKLM
 product registration before/after these non-installing checks.
@@ -30,8 +34,11 @@ product registration before/after these non-installing checks.
 The boundary's RED scaffold exited 0 without performing operations; the test failed
 because host acceptance must return `UNVERIFIED`/exit 2. With the gate implemented,
 the same test passed. Configuration RED similarly detected a no-output generator;
-GREEN validated the resulting XML and refusal side effects. Guest lifecycle tests
-have not been executed, and have no live RED/GREEN claim.
+GREEN validated the resulting XML and refusal side effects. The pure predicate seam
+was first missing (structural RED); after implementation, deliberately removing its
+nonce equality check made the synthetic mismatch regression fail, and restoring the
+guard returned it to GREEN. This is inert predicate evidence, not a successful guest
+gate replay. Guest lifecycle tests have not been executed, and have no live RED/GREEN claim.
 
 The unchanged strict product-package validator passed fresh: self-contained
 Core/Desktop/host 8.0.31, exact tested App/Core RID hash parity, metadata/icon/apphost
@@ -55,6 +62,12 @@ No workspace root, user profile or Downloads directory is mapped. Paths refer to
 this host; regenerate on any different prepared host. Never reuse an output or
 results directory. Generation does not launch or enable Sandbox.
 
+The current prepared handoff is
+`artifacts/installer/sandbox-20260912-task1003-04/acceptance.wsb`. It contains the
+final self-reviewed guest gate and supersedes the intermediate `-03` and prior `-02`;
+all older handoff artifacts remain preserved. It still binds the unchanged candidate
+05 and toolchain 02 hashes above.
+
 After a separate deliberate handoff on a host where Sandbox is already available,
 opening the `.wsb` runs built-in Windows PowerShell 5.1 through its LogonCommand.
 The copied guest script has a UTF-8 BOM, including Korean shortcut paths. It does
@@ -62,8 +75,9 @@ not assume PowerShell 7, downloads or external network availability in the guest
 The exact guest invocation, including fresh nonce, is embedded in the generated XML.
 
 Before **any** result, fixture, installer, registry or shortcut mutation, the script
-requires fixed guest mapping/script paths; handoff nonce; generated configuration
-hash and matching four mapping declarations; disabled channels; hashed inputs,
+requires fixed guest mapping/script paths, then calls the side-effect-free predicate
+seam for the handoff nonce, generated configuration hash and matching four mapping
+declarations, disabled channels, hashed inputs,
 reviewed setup and compiler; empty results; different host/guest MachineGuid, user
 SID, computer name and system UUID; the WDAGUtilityAccount identity/profile; and
 Microsoft virtual-machine/hypervisor evidence. It also refuses directly accessible

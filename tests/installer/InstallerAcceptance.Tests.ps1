@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('ProcessCount', 'Boundary', 'Config', 'All')][string]$Phase = 'All',
+    [ValidateSet('ProcessCount', 'Boundary', 'GatePredicates', 'Config', 'All')][string]$Phase = 'All',
     [string]$CandidatePath = 'artifacts/installer/candidate-20260912-task1002-05',
     [string]$PreparedToolchainPath = 'artifacts/installer/toolchain-inno-7.1.0-x64-20260912-02'
 )
@@ -62,6 +62,64 @@ if ($Phase -in @('Boundary', 'All')) {
     Assert ((HostState) -ceq $before) 'Ordinary-host invocation mutated protected product paths/registration.'
     Write-Output 'BOUNDARY PASS: ordinary host rejected with exit 2; protected host state unchanged.'
 }
+if ($Phase -in @('GatePredicates', 'All')) {
+    $gatePath = "$repo/tests/installer/InstallerAcceptanceGate.ps1"
+    Assert (Test-Path -LiteralPath $gatePath -PathType Leaf) 'The pure acceptance-gate predicate seam is missing.'
+    . $gatePath
+    $guestPathBefore = Test-Path -LiteralPath 'C:\DororongAcceptance'
+    $nonce = '0123456789abcdef0123456789abcdef'
+    $maps = @(
+        [pscustomobject]@{ HostFolder='D:\input'; SandboxFolder='C:\DororongAcceptance\Input'; ReadOnly='true' },
+        [pscustomobject]@{ HostFolder='D:\candidate'; SandboxFolder='C:\DororongAcceptance\Candidate'; ReadOnly='true' },
+        [pscustomobject]@{ HostFolder='D:\toolchain'; SandboxFolder='C:\DororongAcceptance\Toolchain'; ReadOnly='true' },
+        [pscustomobject]@{ HostFolder='D:\results'; SandboxFolder='C:\DororongAcceptance\Results'; ReadOnly='false' }
+    )
+    $mappingXml = ($maps | ForEach-Object { "<MappedFolder><HostFolder>$($_.HostFolder)</HostFolder><SandboxFolder>$($_.SandboxFolder)</SandboxFolder><ReadOnly>$($_.ReadOnly)</ReadOnly></MappedFolder>" }) -join ''
+    [xml]$config = "<Configuration><Networking>Disable</Networking><ClipboardRedirection>Disable</ClipboardRedirection><AudioInput>Disable</AudioInput><VideoInput>Disable</VideoInput><PrinterRedirection>Disable</PrinterRedirection><VGpu>Disable</VGpu><MappedFolders>$mappingXml</MappedFolders></Configuration>"
+    $handoff = [pscustomobject]@{
+        schemaVersion=1; nonce=$nonce; hostMachineGuid='host-machine'; hostUserSid='S-1-5-21-host'
+        hostComputerName='HOST'; hostSystemUuid='host-uuid'; configSha256='CONFIGHASH'
+        mappings=@($maps | ForEach-Object { [pscustomobject]@{ host=$_.HostFolder; guest=$_.SandboxFolder; readOnly=$_.ReadOnly } })
+        inputFiles=@([pscustomobject]@{ name='payload.json'; sha256='AAAAAAAA' })
+    }
+    $available = @{}
+    foreach ($map in $maps) { $available[$map.SandboxFolder] = $true }
+    $identity = @{
+        machineGuid='guest-machine'; userSid='S-1-5-21-guest'; computerName='GUEST'; systemUuid='guest-uuid'
+        identityName='WINDOWS\WDAGUtilityAccount'; userProfile='C:\Users\WDAGUtilityAccount'
+        manufacturer='Microsoft Corporation'; model='Virtual Machine'; hypervisorPresent=$true
+    }
+    $hashes = @{ 'payload.json'='AAAAAAAA' }
+    $common = @{
+        Handoff=$handoff; Nonce=$nonce; Config=$config; Mappings=$maps; MappingAvailability=$available; ObservedConfigHash='CONFIGHASH'
+        Identity=$identity; HostOutputAccessible=$false; ActualInputHashes=$hashes
+        ReviewedSetupHash='AEDE2B7D36A10DEADA800832C99DBD134BC1F4DEEEEA39B48D1F51CE166D5D5D'
+        CompilerHash='D06EBD38F38E3CEE60A3C50CC45BD449D77E0BC6A5CABC607EA9886808E4DE1A'; ResultCount=0
+    }
+    Assert-InstallerAcceptanceGatePredicates @common
+    $cases = @(
+        @{ name='nonce'; pattern='nonce'; mutate={ param($p) $p.Nonce='ffffffffffffffffffffffffffffffff' } },
+        @{ name='configuration hash'; pattern='configuration hash'; mutate={ param($p) $p.ObservedConfigHash='WRONG' } },
+        @{ name='mapping'; pattern='mapping'; mutate={ param($p) $p.Mappings[3].ReadOnly='true' } },
+        @{ name='identity'; pattern='MachineGuid'; mutate={ param($p) $p.Identity.machineGuid='host-machine' } },
+        @{ name='input hash'; pattern='input hash'; mutate={ param($p) $p.ActualInputHashes['payload.json']='BBBBBBBB' } },
+        @{ name='setup hash'; pattern='setup hash'; mutate={ param($p) $p.ReviewedSetupHash='BAD' } },
+        @{ name='compiler hash'; pattern='compiler hash'; mutate={ param($p) $p.CompilerHash='BAD' } }
+    )
+    foreach ($case in $cases) {
+        $copy = @{} + $common
+        $copy.Mappings = @($maps | ForEach-Object { [pscustomobject]@{ HostFolder=$_.HostFolder; SandboxFolder=$_.SandboxFolder; ReadOnly=$_.ReadOnly } })
+        $copy.Identity = @{} + $identity
+        $copy.ActualInputHashes = @{} + $hashes
+        & $case.mutate $copy
+        $refused = $false
+        try { Assert-InstallerAcceptanceGatePredicates @copy } catch { $refused = $_.Exception.Message -match $case.pattern }
+        Assert $refused "Synthetic $($case.name) mismatch did not fail closed with the expected reason."
+    }
+    Assert ((Test-Path -LiteralPath 'C:\DororongAcceptance') -eq $guestPathBefore) 'Pure gate checks created or removed the guest path.'
+    Assert ((HostState) -ceq $before) 'Pure gate predicate checks changed protected host state.'
+    Write-Output 'GATE PREDICATES PASS: nonce, configuration/input/setup/compiler hash, mapping and identity mismatches fail closed; host state unchanged.'
+}
 if ($Phase -in @('Config', 'All')) {
     $outputName = 'sandbox-test-' + [guid]::NewGuid().ToString('N')
     $destination = Join-Path $repo "artifacts/installer/$outputName"
@@ -80,7 +138,7 @@ if ($Phase -in @('Config', 'All')) {
     Assert ($handoff.installerSha256 -eq 'AEDE2B7D36A10DEADA800832C99DBD134BC1F4DEEEEA39B48D1F51CE166D5D5D') 'Handoff must pin the reviewed candidate.'
     Assert ($handoff.configSha256 -eq (Get-FileHash "$destination/acceptance.wsb").Hash) 'Handoff must bind the generated configuration.'
     $result = & powershell.exe -NoProfile -File tests/installer/Invoke-InstallerAcceptance.ps1 -CandidatePath $CandidatePath -HandoffPath "$destination/input/handoff.json" -ResultPath "$destination/results" 2>&1 | Out-String
-    Assert ($LASTEXITCODE -eq 2 -and $result -match 'UNVERIFIED: isolation') 'A genuine generated handoff must still refuse on its host.'
+    Assert ($LASTEXITCODE -eq 2 -and $result -match 'UNVERIFIED: isolation') 'A host-path replay of generated artifacts must fail at the fixed guest-path guard.'
     Assert (@(Get-ChildItem "$destination/results" -Force).Count -eq 0) 'Host refusal must happen before output writes.'
     Assert ((HostState) -ceq $before) 'Generated-handoff host invocation mutated protected state.'
     # Compile the actual generated guest-only fixtures but NEVER execute them.
@@ -98,5 +156,5 @@ if ($Phase -in @('Config', 'All')) {
     try { & tools/installer/New-InstallerSandbox.ps1 -CandidatePath $CandidatePath -PreparedToolchainPath $PreparedToolchainPath -OutputPath $destination } catch { $refused = $true }
     Assert $refused 'Generator must refuse an existing output directory.'
     Assert ((Get-FileHash "$destination/acceptance.wsb").Hash -eq $oldHash) 'Refusal must preserve prior artifacts.'
-    Write-Output "CONFIG PASS: restrictive .wsb, pinned handoff, host replay refusal, no host mutations, existing-output refusal; 3 separate fixture versions COMPILED ONLY. Evidence: $destination"
+    Write-Output "CONFIG PASS: restrictive .wsb, pinned handoff, early fixed-path host replay refusal, no host mutations, existing-output refusal; 3 separate fixture versions COMPILED ONLY. Evidence: $destination"
 }
