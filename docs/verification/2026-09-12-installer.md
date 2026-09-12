@@ -1,9 +1,17 @@
 # Installer candidate and isolated acceptance — 2026-09-12
 
-The local unsigned installer is compiler-built and reviewed. All live installer
+The local unsigned installer is compiler-built and reviewed. Isolated guest
 lifecycle rows remain **UNVERIFIED** because this host has Windows Sandbox disabled,
 no WindowsSandbox.exe and no available existing VM. No Sandbox launch, feature
-enabling, account creation or host product installation was performed.
+enabling or account creation was performed.
+
+A subsequently authorized normal non-elevated host trial exercised installation,
+same-version reinstallation and removal: payload/registration/link/data checks
+passed, but **empty directories remain after reinstall then uninstall**. Fresh
+install/uninstall without reinstall removes the root. This open cleanup issue and
+the safely restored host state are documented in
+[normal host trial](2026-09-12-host-normal-installer.md). Historical non-installing
+test evidence below is unchanged and must not be confused with the newer host run.
 
 ## Immutable deliverable
 

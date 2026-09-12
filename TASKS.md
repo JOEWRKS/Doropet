@@ -2,6 +2,42 @@
 
 ## User-local installer implementation plan — 2026-09-12
 
+Normal host trial complete with one open cleanup issue (2026-09-12): candidate05
+first install/reinstall/uninstall exit0; 467payload+ownership hashes, HKCU identity,
+Start shortcut/default desktop absence and original log preservation verified.
+Non-elevated token and install logs confirm no admin mode/restart. Existing one
+data file backed up and unchanged. No product was auto-launched.
+After reinstall/uninstall,14 empty subdirectories+root remained (no directory
+deletion log entries). Recorded and removed only15 verified empty payload-owned
+directories using nonrecursive deletion, no files. Fresh install/uninstall control
+then removed the root;16 directory-delete log entries including retry. Current
+root/registration/links/process/lock absent; original data preserved. No source fix.
+Open: retain safe directory ownership across reinstall and remove owned empty
+directories without reviving stale-file ownership. UninstallLogMode overwrite is
+implicated by the comparison, not yet proven by a corrective regression.
+Evidence/backup artifacts/installer/host-normal-20260912-221548; durable report
+docs/verification/2026-09-12-host-normal-installer.md. Guest/failure/upgrade/visual/
+signing/rights gates remain open. No BIOS/Sandbox/feature changes or force actions.
+
+Normal host trial authorized (user: ㅇㅇ 그 방법으로 가자): back up original
+product data/registration/shortcuts, then normal first installation, unmodified
+same-version reinstall and normal uninstall on this Windows account. This new
+authorization supersedes the prior no-host-install boundary only for those normal
+scenarios. No damaged files, locked-file injection, forced termination, BIOS/
+Sandbox changes, restart or elevation. Do not weaken/reuse the guest-only gate.
+Preflight: no installed product root, product registration or Start/desktop links;
+no Dororong process. Existing LocalAppData/JOEWRKS/Dororong data must be backed up
+and preserved. Stop on unexpected failure and inspect logs before further action.
+
+Live trial continuation (user: 해보자): read-only prerequisite recheck confirms
+Sandbox feature InstallState2, WindowsSandbox.exe absent, current token not
+elevated. CPU reports VirtualizationFirmwareEnabled=False, SLAT=True and
+VMMonitorModeExtensions=True; HypervisorPresent=False. BIOS virtualization and
+Windows feature setup are required before the prepared isolated test can run.
+No feature changes, host product installation, elevation prompt or restart was
+attempted. Await user direction for BIOS/restart and feature-enabling boundary;
+actual lifecycle acceptance remains UNVERIFIED.
+
 > Execute with subagent-driven-development: sequential implementers, scoped task
 > reviews, one final integration review. TASKS.md is the sole plan/progress ledger.
 
