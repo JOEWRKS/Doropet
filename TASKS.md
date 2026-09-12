@@ -110,7 +110,31 @@ Output under a fresh artifacts/product-shell/candidate-* directory only.
       archive round-trip verification. Record genuine
       remaining live tray/Explorer and installer gates. Commit owned scripts/docs
       only after checks; no push or installation.
-- [ ] Global final integration review and any bounded final fix-wave validation.
+- [x] Global final integration review and bounded final fix-wave validation.
+  Final review of18b6e4a..7de64a9 found three Important issues: cross-writer
+  log cap, FileDescription branding, clean-checkout RID prerequisite/preflight;
+  also carry both deferred minors (identity disposal, sanitizer boundaries).
+  One consolidated fix wave dispatched from BASE7de64a9; requirements/report:
+  artifacts/product-shell/final-fix-{brief,report}.md. Scoped re-review follows.
+  Final fixes committed3fdb7d2; focused8/8 and both publisher refusal gates pass.
+  README exact command correction074b643 follows SDK MSB1001 before test start.
+  Worker/reviewer were interrupted by usage limit; user requested continuation.
+  Controller resumes final verification (no further production edits); replacement
+  /root/product_fix_review_resumed continues the same single scoped re-review
+  against7de64a9..074b643, not another broad review. Core241/241 TRX inspected.
+  Scoped re-review complete: all five findings ADDRESSED, no new breakage or
+  out-of-scope observations. Reviewer independently checked Core TRX and RID PE
+  description/internal names; full final RID/candidate gates remain controller-owned.
+  COMPLETE: controller full self-contained win-x64/.NET8.0.31 App852/852,
+  Core241/241, Release solution0warnings/errors, RuntimeComposition PASS.
+  Candidate candidate-20260912-1751 (source074b643), ZIP7BB45700...:
+  strict metadata/icon/pinned-host/RID-byte parity/archive/native smoke all PASS;
+  ownedPID8908 exited0, duplicate exited0. Tested RID DLL hashes captured before
+  packaging and unchanged afterward; AppA1797AA2... / Core472029E7....
+  Four frozen art hashes unchanged. No product behavior edits, installation or push.
+  Final process inventory contains no Dororong or test probe; oldPID14064 no longer
+  exists after the interruption. Controller never stopped/replaced it; do not claim
+  it remains running. Visible tray/Explorer and installer/live acceptance stay open.
 
 Preflight review:
 | Pair/task | Interface or constraint check | Result |

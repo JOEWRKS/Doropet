@@ -4,6 +4,45 @@ Scope: the approved product-management shell, not installation or public release
 Behavior baseline remains the accepted pounce/head-cheek-only interaction build.
 The implementation plan and progress ledger are in TASKS.md only.
 
+## Final verified candidate
+
+Current deliverable: `artifacts/product-shell/candidate-20260912-1751/`, built
+from source commit074b643 after the consolidated final fixes3fdb7d2.
+`Dororong-win-x64.zip` SHA256:
+`7BB45700A174D98123383B52FB39C913CA2F9EDA924827CBD14D97C136E20BC6`.
+Earlier candidates below are preserved historical checkpoints, not this delivery.
+
+- Full self-contained win-x64 App suite: **852/852**,0failed/0skipped. TRX:
+  `artifacts/product-shell/TestResults/final-fix-app-win-x64-self-contained-8.0.31.trx`.
+  TRX identifies64-bit.NET8.0.31; loaded coreclr path and official NuGet hash
+  were asserted with DORORONG_EXPECTED_CORECLR_PATH/SHA256 environment variables.
+- Current Core Release suite: **241/241**,0failed; TRX
+  `artifacts/product-shell/TestResults/final-current-core-release.trx`.
+- Release solution build:0warnings/0errors. RuntimeComposition All: PASS.
+- Strict package validator: approved FileDescription/product/version/publisher,
+  icon, reconstructed pinned apphost, Core/Desktop/host8.0.31, exact tested RID
+  App/Core bytes and complete ZIP round-trip all PASS.
+- Native isolated-desktop startup/duplicate/WM_CLOSE: PASS. Duplicate exit0;
+  ownedPID8908 exited0. No visible candidate or current-product replacement.
+- Captured immediately after the full App test, and unchanged after packaging:
+  App`A1797AA20FD189FEACF6BE4C57B2B1A0ECF4CB8B52578B7AAAC701B14D7BCE5A`;
+  Core`472029E704AC88E2284E5EBED8EBD90480347D2C21597120B986101FB76B5D40`.
+  Both shipped DLLs exactly match these tested hashes. Four frozen art hashes
+  below were rechecked and unchanged.
+
+Final scoped review: all five findings addressed, no new breakage. Corrections
+cover cross-process/session log transaction locking, user-facing FileDescription,
+pre-output RID prerequisite validation/documentation, identity disposal and method
+sanitizer boundary coverage. The temporary empty lock is deleted on close; no
+fourth diagnostic log is retained. Lock contention is best-effort with10ms budget.
+
+The worker was interrupted by usage limits after code/doc commits; the controller
+resumed final validation without further production changes. The oldPID14064 was
+present during the earlier checks but absent at final inventory after the long
+interruption. It was never stopped or replaced by this work. Final inventory had
+no Dororong or test-probe processes. Installation and live tray acceptance remain
+unverified; this is a portable candidate, not a public-release certification.
+
 ## Implemented identity and lifecycle
 
 - Product: 도로롱 (Dororong), publisher JOEWRKS, version0.1.0.
@@ -76,10 +115,9 @@ App`AEACE912148D29DFF2EC3C9E060803E09600CE714EB635E2592D367C6E751B40`,
 Core`F4104BA071D88D200008DA1C92B501A85F4578D7AEA633C604B7ACFBC48C3C99`.
 Native and archive checks passed again after that packaging correction.
 
-Package test output is intentionally local; no files were installed. Final
-integration review is still pending in this record. FileDescription currently
-remains Dororong.App despite the correct ProductName; final review will evaluate
-the user-facing process-label implication.
+Package test output is intentionally local; no files were installed. At the
+candidate161048 checkpoint, review was pending and FileDescription remained
+Dororong.App. Both were resolved by the final candidate recorded above.
 The bundled .NET8 patch is pinned to8.0.31, verified against
 [Microsoft's release page](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
 and the official NuGet runtime/desktop/host package indexes. This does not
