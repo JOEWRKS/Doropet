@@ -4,6 +4,20 @@ namespace Dororong.App.Tests.Runtime;
 
 public sealed class MouseActivationRecoveryTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Context_menu_right_release_activates_owner_before_Wpf_opens_menu_without_consuming_click(bool primaryDown)
+    {
+        var requests = 0;
+        var handled = WindowActivationGuard.TryHandleMessage(0x205, out var result,
+            primaryDown, () => requests++);
+
+        Assert.Equal(1, requests);
+        Assert.False(handled);
+        Assert.Equal(IntPtr.Zero, result);
+    }
+
     [Fact]
     public void Unavailable_left_press_requests_explicit_activation_and_still_reaches_the_presenter()
     {

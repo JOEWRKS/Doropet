@@ -49,6 +49,14 @@ internal sealed class WindowActivationGuard : IDisposable
         if (message == NativeMethods.WmLButtonDown && !primaryButtonDown)
             activateForPress?.Invoke();
 
+        // WPF opens the character context menu on right-up. A no-activate
+        // owner otherwise stays outside the foreground input queue, so clicking
+        // another app cannot dismiss its menu. Activate before WPF processes
+        // this release; keep hover/ordinary dragging non-activating and let the
+        // original message reach WPF to preserve menu commands and capture.
+        if (message == NativeMethods.WmRButtonUp)
+            activateForPress?.Invoke();
+
         if (message == NativeMethods.WmMouseActivate)
         {
             result = new IntPtr(NativeMethods.MaNoActivate);

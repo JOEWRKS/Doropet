@@ -80,6 +80,7 @@ internal static class NativeMethods
     internal const long WsExTopmost = 0x00000008L;
     internal const int WmMouseActivate = 0x0021;
     internal const int WmLButtonDown = 0x0201;
+    internal const int WmRButtonUp = 0x0205;
     internal const int MaNoActivate = 3;
     internal const int VkLButton = 0x01;
     internal const uint SwpNoSize = 0x0001;

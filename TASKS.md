@@ -1,5 +1,29 @@
 # Plan
 
+## Character context-menu outside-click dismissal — 2026-09-13
+
+User confirms relaunch visuals, reports character context menu remains open when
+clicking other apps/desktop. Tray is not affected. Debugging/TDD scope: preserve
+sitting/Exit and ordinary no-activation behavior; activate only the delivered
+right-release menu-opening boundary so WPF receives normal outside dismissal.
+- [x] RED regression at native message/activation boundary: two new cases failed
+  Expected1/Actual0 before fix; existing six passed.
+- [x] Minimal fix; focused27/27 and self-contained8.0.31 win-x64 App854/854 pass.
+  Read-only scoped review confirms WPF right-release/hook ordering; no findings.
+- [x] Publish separate current-source candidate and validate package; retain
+  reviewed installer/payload unchanged. User normally exited old app; launched
+  candidate PID35480 with Started event.
+- [ ] User outside-click/reopen confirmation; installer promotion after live pass.
+
+First full test invocation aborted before tests due missing shared8.0.31;
+self-contained rerun completed854/854 in2m18s. User normally exited PID14528;
+fresh process inventory empty. Portable candidate-20260913-contextmenu-01 published;
+ZIP29B2110323AE5DBF10C40EF1E39AF0456690B8A9541AD7BBBC40E2C4F93BAD7F.
+Strict package/reference/runtime/icon/archive checks and private-desktop smoke
+passed (PID2024 normal WM_CLOSE exit0, duplicate exit0). AppDLL7C75E9721A34C8E9C73358DA3F046B8B491429587FEFBEB588EF5E3EF9002171.
+No installer pin changes or installed-directory mutation before live check.
+
+
 ## Installed first-run / tray acceptance — 2026-09-13
 
 User approved the next check: install the reviewed directory02 candidate, launch
