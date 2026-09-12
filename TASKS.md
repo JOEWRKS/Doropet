@@ -1,5 +1,173 @@
 # Plan
 
+## User-local installer implementation plan — 2026-09-12
+
+> Execute with subagent-driven-development: sequential implementers, scoped task
+> reviews, one final integration review. TASKS.md is the sole plan/progress ledger.
+
+**Goal:** Build a validated local Inno Setup installer candidate with non-admin
+installation, safe upgrade/refusal and owned-file-only uninstall behavior.
+**Architecture:** Verified immutable portable payload -> inventory and pinned
+compiler -> generated explicit Inno file table plus handwritten lifecycle policy
+-> installer artifact and isolated acceptance harness. No custom updater/service.
+**Tech Stack:** PowerShell7, Inno Setup7.1.0 x64 portable compiler, Windows APIs,
+existing .NET8.0.31 self-contained payload. No character-engine changes.
+**Spec:** docs/superpowers/specs/2026-09-12-user-installer-design.md, user approved.
+**Base:** eece06b; source payload074b643; candidate-20260912-1751 preserved.
+
+### Installer global constraints
+
+- Product 도로롱 (Dororong),0.1.0,JOEWRKS; Dororong.exe/internal App DLL unchanged.
+- Default %LocalAppData%/Programs/JOEWRKS/Dororong; HKCU only, no elevation.
+- Stable AppId JOEWRKS.Dororong; same-version reinstall/higher upgrade/lower refusal.
+- Start menu and uninstall registration; desktop optional unchecked; autostart absent.
+- No force-close, process-name kill, reboot replacement, downloads during installation.
+- Retain user logs and added files; no recursive/wildcard whole-install deletion.
+- No host product install/registry/shortcut mutation in this implementation turn.
+  Prepare/run isolated tests only when an actual isolated environment is available;
+  missing live evidence stays UNVERIFIED, never PASS. No public release/signing/push.
+- No rebuilding payload or modifying App/Core/art without explicit gate escalation.
+- Sequential builds/tests; preserve unrelated tests/Dororong.App.Tests/TestResults.
+- Artifacts/briefs/reports under artifacts/installer/, not a second progress ledger.
+
+### Task 1001: Pinned toolchain and safe payload inventory
+
+Files: tools/installer/InstallerPayload.psm1; tools/installer/Prepare-InnoSetup.ps1;
+tests/Dororong.InstallerPayload.Tests.ps1. Report task-1001-report.md in artifacts/installer.
+Produces functions:
+```powershell
+Get-InstallerPayload -PackagePath <directory>
+# object: Version ('0.1.0'), FileVersion ('0.1.0.0'), Root (absolute),
+# Files array of { RelativePath (forward slash), Length (Int64), Sha256 (uppercase) }
+Assert-InstallerOutputPath -OutputPath <fresh artifacts/installer/candidate-*>
+# returns resolved absolute root; refuses existing, non-direct child, reparse ancestors
+# Prepare-InnoSetup.ps1: -OutputPath <fresh artifacts/installer/toolchain-*>
+# outputs TOOLCHAIN_PATH, COMPILER_PATH and toolchain.json (source/version/hashes/signer)
+```
+- [ ] RED executable PowerShell tests: tiny real temp file inventory has literal
+      known SHA256; traversal/reparse/ambiguous or unsafe Inno filename refusal;
+      input never modified; existing-output sentinel retained. Tests run exports,
+      not grep source. Metadata test reads actual preserved candidate PE.
+```powershell
+$inventory = Get-InstallerPayload -PackagePath $candidateRuntime
+if ($inventory.Version -ne '0.1.0') { throw 'Wrong product version' }
+if (@($inventory.Files).Count -eq 0) { throw 'Empty payload accepted' }
+# Seed a controlled existing output with sentinel; call Assert-InstallerOutputPath
+# and assert failure, unchanged sentinel hash and no added files.
+```
+- [ ] GREEN strict canonical path and per-component reparse rejection, stable
+      ordinal inventory, relative-name validation/escaping contract; require
+      Dororong.exe product metadata and internal DLL/deps/runtimeconfig presence.
+      This inventory is not a substitute for the existing strict package validator.
+- [ ] Obtain fixed official Inno Setup7.1.0 x64 from the release linked by
+      https://jrsoftware.org/isdl.php. Verify Authenticode Valid/Pyrsys B.V. before
+      execution, record download SHA256 and verify compiler version/signature.
+      Official tag is-7_1_0/setup.iss + isportable.iss confirm /PORTABLE=1 disables
+      uninstall registration, file associations and shortcuts. Use /CURRENTUSER,
+      /PORTABLE=1 /VERYSILENT /SUPPRESSMSGBOXES /SP- /NORESTART /NOICONS,
+      explicit fresh worktree /DIR; Start-Process Hidden. No winget/system install.
+      Reuse only proven matching tools; no delete/overwrite existing toolchain.
+- [ ] Run focused tests and actual compiler version probe; self-review/commit
+      owned files only. Record RED/GREEN commands/output and trust provenance.
+
+### Task 1002: Installer policy, compilation and refusal tests
+
+Files: installer/Dororong.iss; installer/InstallerPolicy.iss;
+tools/Build-Installer.ps1; tests/Dororong.InstallerBuild.Tests.ps1;
+tests/installer/PolicyHarness.iss. Consume Task1001 exported contracts.
+Produces:
+```powershell
+& tools/Build-Installer.ps1 -PackagePath <verified runtime> -ArchivePath <matching zip> -CompilerPath <pinned ISCC.exe> -OutputPath <fresh artifacts/installer/candidate-*>
+# outputs INSTALLER_PATH; writes payload.json, payload-files.iss and build-evidence.json
+# final name Dororong-Setup-0.1.0-win-x64.exe; no version override in product builder
+```
+- [ ] RED builder refuses missing/mutated input, foreign compiler and existing
+      output without creating artifacts. Characterize actual compiled policy via
+      a separate no-install harness which includes the SAME InstallerPolicy.iss;
+      numeric version comparison0.1.10 >0.1.2, equal allow, lower reject, malformed
+      installed version fail closed. Harness aborts before file/registry/icon work.
+- [ ] GREEN builder invokes tests/Dororong.ProductPackage.Tests.ps1 in a child
+      process and requires exit0 before creating output. Inventory all files,
+      generate explicit quoted [Files] entries, stage exact bytes, compare hashes
+      before/after compile. No wildcard compile of mutable original payload.
+      Fail build on compiler error; record source/hash/version/ISCC provenance.
+- [ ] Inno [Setup] uses PrivilegesRequired=lowest, stable AppId, x64-compatible
+      architecture, fixed default user-local root enforced against /DIR overrides,
+      no previous arbitrary directory reuse, exact version/publisher/icon,
+      CloseApplications=no, RestartApplications=no, no restartreplace flags.
+      Korean and English wizard when official translation available. No fake license.
+      [Icons] user-start-menu entry; desktop [Tasks] unchecked; [Run] optional
+      postinstall/skipifsilent. No autostart/service/HKLM entries.
+- [ ] Numeric previous installed version read from own registered product/PE;
+      refuse downgrade or unreadable conflicting identity before writes. Same and
+      higher allowed. Setup/uninstall share a per-user operation gate across
+      sessions (exclusive file handle outside payload with close-time cleanup);
+      errors fail closed. Before writes/removal inspect target-owned files for
+      in-use/sharing conflicts across sessions, not only Local instance mutex.
+      Known locked files => nonzero refusal; do not kill. Recheck at installation
+      transition; concurrent launch/I/O failure never reported as success.
+      Avoid claiming atomic/power-loss rollback; surface repair need on failure.
+- [ ] Uninstall owns only explicit installed files/registration/shortcuts. No
+      [UninstallDelete] broad root deletion and no user-log deletion. Obsolete
+      owned-file cleanup only from validated relative ownership manifest. Reject
+      malicious/reparse paths; never delete user-added files outside manifest.
+- [ ] Compile actual product candidate; metadata/signature-state and inventory
+      parity checks; policy harness tests run without host install. Self-review
+      and commit owned files. No actual host installer execution beyond harness.
+
+### Task 1003: Isolated acceptance harness and delivery evidence
+
+Files: tests/installer/Invoke-InstallerAcceptance.ps1;
+tools/installer/New-InstallerSandbox.ps1; docs/verification/2026-09-12-installer.md;
+README.md. Consume builder output and evidence contract; no app implementation.
+- [ ] RED boundary tests reject running acceptance on ordinary host; harness
+      requires explicitly isolated sandbox proof/config and output directory.
+      Missing isolation is UNVERIFIED/nonzero, never successful acceptance.
+```powershell
+# In ordinary host, invocation must fail BEFORE any install/registry/shortcut writes.
+& tests/installer/Invoke-InstallerAcceptance.ps1 -CandidatePath $candidateRoot
+if ($LASTEXITCODE -eq 0) { throw 'Host accepted as isolated test environment' }
+```
+- [ ] GREEN generate opt-in .wsb + guest script with networking disabled,
+      read-only mapped payload/tool inputs and one narrow writable result mapping.
+      Do not enable Windows features or launch/install on host without handoff.
+      Guest tests install/reinstall/higher test-fixture upgrade/lower refusal,
+      running-file lock refusal, failure/cancel and uninstall. Use real registry,
+      shortcuts, file hashes and process outcomes; literal expected ownership.
+      Preserve log/user-extra sentinels and verify no unexpected target deletion.
+      Test upgrades use separate clearly labeled fixture ID/version, not product
+      version overrides or modified distributed payload. Results identify exactly
+      which package/config each test exercised; no fixture-to-product PASS leap.
+- [ ] If existing Sandbox/VM is safely available, run within approved isolated
+      scope and read results. Otherwise leave runtime installer acceptance open
+      and deliver ready-to-run harness, compiler-built candidate and honest gates.
+- [ ] Run all new non-installing script tests, strict candidate package validation,
+      asset/payload hash preservation; update README build/install/remove/support
+      instructions and evidence, no public-release claim. Commit owned files.
+- [ ] Final integration review and single consolidated fix wave if needed.
+
+Preflight coverage:
+|Pair/task|Interface/consistency check|Result|
+|---|---|---|
+|1001→1002|Inventory+fresh output and compiler trust feed builder|Explicit named fields; full package validator remains separate|
+|1002→1003|Installer/evidence feed guest acceptance|No host install; fixtures clearly separate from product|
+|1001→1003|Toolchain reused read-only in guest input|No global tool installation|
+|1001|Real file/refusal tests match read-only inventory/preparation scope|Consistent|
+|1002|Compiler success vs install behavior gates|Separate shared-policy harness and actual guest lifecycle|
+|1003|Unavailable isolation cannot produce PASS|Spec permits unverified live handoff|
+
+Ruling: retain TASKS.md as sole plan/ledger with artifacts/installer briefs/reports —
+AGENTS.md outranks default extra plan/progress files. Cost if wrong: bookkeeping
+must be reorganized; no product effect.
+Ruling: use official Inno Setup7.1.0 x64 portable compiler in worktree — verified
+release and tagged portable-mode source permit no host registration. Cost if wrong:
+toolchain replacement and package recompilation; no purchases/system install.
+Ruling: reuse immutable source074b643 payload rather than rebuild for documentation
+commits — exact tested App/Core bytes retained. Cost if app lifecycle must change:
+fresh full regression/payload generation before packaging.
+Execution: linked worktree confirmed, no superproject. Core baseline241 passed;
+App baseline852 same pinned runtime run pending. No implementation dispatched yet.
+
 ## User-local installer design — 2026-09-12
 
 User approved continuing production-readiness work after the verified product shell.
@@ -9,9 +177,9 @@ New installation subsystem: architectural brainstorming path; no installer code 
       verify official non-admin/run-state semantics. Recommend Inno Setup.
 - [x] Draft installation/update/uninstall ownership and validation policy in
       docs/superpowers/specs/2026-09-12-user-installer-design.md; self-review.
-- [ ] User review of written design, including non-forced running-app handling,
+- [x] User review of written design, including non-forced running-app handling,
       default per-user path, numeric downgrade refusal and retained user logs/files.
-- [ ] After approval: implementation plan in this ledger, then TDD/package work.
+- [x] After approval: implementation plan in this ledger, then TDD/package work.
 Current baselinee49aedb; approved portable candidate source074b643 remains intact.
 No compiler installation/download, host product installation, registry/shortcut
 mutation, app behavior edits, signing, purchases or push in this design step.
