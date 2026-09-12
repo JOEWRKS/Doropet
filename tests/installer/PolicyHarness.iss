@@ -67,7 +67,24 @@ begin
   Check(FileExists(Root + '\user-added.txt'), 'user file preserved');
   Paths[0] := '..\user-added.txt';
   Check(not RemoveOwnedFiles(Root, Paths, Reason), 'malicious removal rejected');
-  Log('POLICY PASS: 26 checks; returning False before installation');
+  Paths[0] := 'preserved-payload.txt';
+  Check(not RemoveProductFiles(Root, Root + '\programs-locked', Root + '\desktop-clear',
+    'owned.lnk', Paths, False, Reason), 'locked start-menu shortcut refuses removal');
+  Check(FileExists(Root + '\preserved-payload.txt'), 'start-menu refusal preserves payload');
+  Check(FileExists(Root + '\programs-locked\owned.lnk'), 'locked start-menu shortcut preserved');
+  Check(not RemoveProductFiles(Root, Root + '\programs-clear', Root + '\desktop-locked',
+    'owned.lnk', Paths, True, Reason), 'locked owned desktop shortcut refuses removal');
+  Check(FileExists(Root + '\preserved-payload.txt'), 'desktop refusal preserves payload');
+  Check(FileExists(Root + '\programs-clear\owned.lnk'), 'desktop refusal preserves start-menu shortcut');
+  Check(RemoveProductFiles(Root, Root + '\programs-clear', Root + '\desktop-locked',
+    'owned.lnk', Paths, False, Reason), 'unowned desktop shortcut excluded');
+  Check(FileExists(Root + '\desktop-locked\owned.lnk'), 'unowned desktop shortcut preserved');
+  Check(not FileExists(Root + '\preserved-payload.txt'), 'unlocked payload removed');
+  Paths[0] := 'second-payload.txt';
+  Check(RemoveProductFiles(Root, Root + '\programs-clear', Root + '\desktop-clear',
+    'owned.lnk', Paths, True, Reason), 'owned unlocked shortcut and payload removal');
+  Check(not FileExists(Root + '\desktop-clear\owned.lnk'), 'owned desktop shortcut removed');
+  Log('POLICY PASS: 37 checks; returning False before installation');
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

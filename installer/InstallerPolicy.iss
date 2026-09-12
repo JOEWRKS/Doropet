@@ -158,3 +158,49 @@ begin
   end;
   Result := True;
 end;
+
+function PreflightOwnedShortcuts(ProgramsRoot, DesktopRoot, ShortcutName: String;
+  DesktopOwned: Boolean; var Reason: String): Boolean;
+var Shortcuts: TArrayOfString;
+begin
+  Result := False;
+  SetArrayLength(Shortcuts, 1); Shortcuts[0] := ShortcutName;
+  if not PreflightOwnedFiles(ProgramsRoot, Shortcuts, Reason) then Exit;
+  if DesktopOwned then
+    if not PreflightOwnedFiles(DesktopRoot, Shortcuts, Reason) then Exit;
+  Result := True;
+end;
+
+function PreflightProductFiles(PayloadRoot, ProgramsRoot, DesktopRoot, ShortcutName: String;
+  Paths: TArrayOfString; DesktopOwned: Boolean; var Reason: String): Boolean;
+begin
+  Result := False;
+  if not PreflightOwnedFiles(PayloadRoot, Paths, Reason) then Exit;
+  if not PreflightOwnedShortcuts(ProgramsRoot, DesktopRoot, ShortcutName, DesktopOwned, Reason) then Exit;
+  Result := True;
+end;
+
+function RemoveOwnedShortcuts(ProgramsRoot, DesktopRoot, ShortcutName: String;
+  DesktopOwned: Boolean; var Reason: String): Boolean;
+var Shortcuts: TArrayOfString;
+begin
+  Result := False;
+  if not PreflightOwnedShortcuts(ProgramsRoot, DesktopRoot, ShortcutName, DesktopOwned, Reason) then Exit;
+  SetArrayLength(Shortcuts, 1); Shortcuts[0] := ShortcutName;
+  if not RemoveOwnedFiles(ProgramsRoot, Shortcuts, Reason) then Exit;
+  if DesktopOwned then
+    if not RemoveOwnedFiles(DesktopRoot, Shortcuts, Reason) then Exit;
+  Result := True;
+end;
+
+function RemoveProductFiles(PayloadRoot, ProgramsRoot, DesktopRoot, ShortcutName: String;
+  Paths: TArrayOfString; DesktopOwned: Boolean; var Reason: String): Boolean;
+begin
+  Result := False;
+  { All three locations must pass before the first removal. Actual shortcut
+    deletion errors propagate before any payload deletion, rather than being
+    left for Inno's non-fatal uninstall-log processing. }
+  if not PreflightProductFiles(PayloadRoot, ProgramsRoot, DesktopRoot, ShortcutName, Paths, DesktopOwned, Reason) then Exit;
+  if not RemoveOwnedShortcuts(ProgramsRoot, DesktopRoot, ShortcutName, DesktopOwned, Reason) then Exit;
+  Result := RemoveOwnedFiles(PayloadRoot, Paths, Reason);
+end;

@@ -63,10 +63,12 @@ Filename: "{app}\Dororong.exe"; Description: "{cm:LaunchProgram,도로롱}"; Fla
 const
   RegistrationKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#ProductId}_is1';
   OwnershipFile = 'dororong-owned-files.txt';
+  ShortcutFile = '도로롱.lnk';
 var
   OperationGate: THandle;
   Incoming, IncomingHashes, Previous: TArrayOfString;
   InstallStarted, InstallVerified: Boolean;
+  DesktopPreviouslyOwned, DesktopWillBeOwned: Boolean;
 
 function FixedRoot: String;
 begin
@@ -138,13 +140,40 @@ begin
   Reason := ''; Result := True;
 end;
 
+function ReadShortcutOwnership(var Reason: String): Boolean;
+var Value: String;
+begin
+  Result := False;
+  DesktopPreviouslyOwned := False;
+  if RegKeyExists(HKCU64, RegistrationKey) then begin
+    { GetPreviousData is supported by both Setup and Uninstall in pinned Inno 7.1. }
+    Value := GetPreviousData('DesktopIconOwned', '');
+    if (Value <> '0') and (Value <> '1') then begin
+      Reason := 'Shortcut ownership is unreadable. Repair Dororong before continuing.'; Exit;
+    end;
+    DesktopPreviouslyOwned := Value = '1';
+  end;
+  Result := True;
+end;
+
 function AllPreflight(var Reason: String): Boolean;
 begin
   Result := False;
   if not NoReparseComponents(FixedRoot) then begin Reason := 'Installation path is unsafe or inaccessible.'; Exit; end;
   if not ExistingIdentity(Reason) then Exit;
+  if not ReadShortcutOwnership(Reason) then Exit;
   if not PreflightOwnedFiles(FixedRoot, Previous, Reason) then Exit;
   if not PreflightOwnedFiles(FixedRoot, Incoming, Reason) then Exit;
+  if not PreflightOwnedShortcuts(ExpandConstant('{userprograms}'), ExpandConstant('{userdesktop}'),
+    ShortcutFile, DesktopPreviouslyOwned or DesktopWillBeOwned, Reason) then Exit;
+  if not RegKeyExists(HKCU64, RegistrationKey) and
+    FileExists(ExpandConstant('{userprograms}\') + ShortcutFile) then begin
+    Reason := 'An unowned file occupies the Dororong Start menu shortcut path.'; Exit;
+  end;
+  if DesktopWillBeOwned and not DesktopPreviouslyOwned and
+    FileExists(ExpandConstant('{userdesktop}\') + ShortcutFile) then begin
+    Reason := 'An unowned file occupies the Dororong desktop shortcut path.'; Exit;
+  end;
   Result := True;
 end;
 
@@ -178,6 +207,7 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
+  DesktopWillBeOwned := WizardIsTaskSelected('desktopicon');
   if not SamePath(WizardDirValue, FixedRoot) then begin Result := 'Installation directory override refused.'; Exit; end;
   AllPreflight(Result);
 end;
@@ -189,16 +219,20 @@ end;
 
 procedure RegisterPreviousData(PreviousDataKey: Integer);
 begin
-  if WizardIsTaskSelected('desktopicon') then
-    SetPreviousData(PreviousDataKey, 'DesktopIconOwned', '1')
-  else
-    SetPreviousData(PreviousDataKey, 'DesktopIconOwned', '0');
+  if WizardIsTaskSelected('desktopicon') then begin
+    if not SetPreviousData(PreviousDataKey, 'DesktopIconOwned', '1') then
+      RaiseException('Cannot record desktop shortcut ownership. Repair or reinstall is required.');
+  end else begin
+    if not SetPreviousData(PreviousDataKey, 'DesktopIconOwned', '0') then
+      RaiseException('Cannot record desktop shortcut ownership. Repair or reinstall is required.');
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var Reason, Path: String; Obsolete: TArrayOfString; I, N: Integer;
 begin
   if CurStep = ssInstall then begin
+    DesktopWillBeOwned := WizardIsTaskSelected('desktopicon');
     if not SamePath(WizardDirValue, FixedRoot) then RaiseException('Installation directory override refused.');
     if not AllPreflight(Reason) then RaiseException(Reason);
     SetArrayLength(Obsolete, 0);
@@ -207,14 +241,14 @@ begin
         N := GetArrayLength(Obsolete); SetArrayLength(Obsolete, N + 1); Obsolete[N] := Previous[I];
       end;
     InstallStarted := True;
-    if not RemoveOwnedFiles(FixedRoot, Obsolete, Reason) then RaiseException(Reason);
-    { Keep the replaced uninstall log's shortcut ownership aligned with the
-      selected tasks. Only remove a shortcut recorded by our previous setup. }
-    if (GetPreviousData('DesktopIconOwned', '0') = '1') and
-      not WizardIsTaskSelected('desktopicon') then begin
-      SetArrayLength(Obsolete, 1); Obsolete[0] := '도로롱.lnk';
-      if not RemoveOwnedFiles(ExpandConstant('{userdesktop}'), Obsolete, Reason) then RaiseException(Reason);
+    { Remove only previously owned shortcuts before payload mutation. Inno will
+      recreate selected links; postinstall checks cannot mistake an old link for
+      a successfully created link. A deselected desktop link stays removed. }
+    if RegKeyExists(HKCU64, RegistrationKey) then begin
+      if not RemoveOwnedShortcuts(ExpandConstant('{userprograms}'), ExpandConstant('{userdesktop}'),
+        ShortcutFile, DesktopPreviouslyOwned, Reason) then RaiseException(Reason);
     end;
+    if not RemoveOwnedFiles(FixedRoot, Obsolete, Reason) then RaiseException(Reason);
   end;
   if CurStep = ssPostInstall then begin
     InstallVerified := False;
@@ -222,6 +256,14 @@ begin
       Path := AddBackslash(FixedRoot) + Incoming[I];
       if not NoReparseComponents(Path) or not FileExists(Path) then RaiseException('Installed payload incomplete. Repair or reinstall is required.');
       if CompareText(GetSHA256OfFile(Path), IncomingHashes[I]) <> 0 then RaiseException('Installed payload verification failed. Repair or reinstall is required.');
+    end;
+    Path := ExpandConstant('{userprograms}\') + ShortcutFile;
+    if not NoReparseComponents(Path) or not FileExists(Path) then
+      RaiseException('Start menu shortcut creation failed. Repair or reinstall is required.');
+    if DesktopWillBeOwned then begin
+      Path := ExpandConstant('{userdesktop}\') + ShortcutFile;
+      if not NoReparseComponents(Path) or not FileExists(Path) then
+        RaiseException('Desktop shortcut creation failed. Repair or reinstall is required.');
     end;
     InstallVerified := True;
   end;
@@ -247,7 +289,10 @@ begin
   if not SamePath(ExpandConstant('{app}'), FixedRoot) then begin Refuse('Uninstall directory mismatch.'); Exit; end;
   if not BeginOperation(Reason) then begin Refuse(Reason); Exit; end;
   if not ReadOwnership(Previous) then begin Refuse('Ownership manifest unreadable. Repair Dororong before uninstalling.'); Exit; end;
-  if not PreflightOwnedFiles(FixedRoot, Previous, Reason) then begin Refuse(Reason); Exit; end;
+  if not RegKeyExists(HKCU64, RegistrationKey) then begin Refuse('Product registration unreadable. Repair Dororong before uninstalling.'); Exit; end;
+  if not ReadShortcutOwnership(Reason) then begin Refuse(Reason); Exit; end;
+  if not PreflightProductFiles(FixedRoot, ExpandConstant('{userprograms}'), ExpandConstant('{userdesktop}'),
+    ShortcutFile, Previous, DesktopPreviouslyOwned, Reason) then begin Refuse(Reason); Exit; end;
   Result := True;
 end;
 
@@ -255,9 +300,10 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var Reason: String;
 begin
   if CurUninstallStep = usUninstall then begin
-    { Removal here makes actual I/O refusal fatal before Inno processes its log.
-      Inno still owns registration, explicit shortcuts and uninstall metadata. }
-    if not RemoveOwnedFiles(FixedRoot, Previous, Reason) then RaiseException(Reason);
+    { Recheck all locations before checked shortcut-then-payload removal. A
+      failure here is fatal; Inno later processes registration and its metadata. }
+    if not RemoveProductFiles(FixedRoot, ExpandConstant('{userprograms}'), ExpandConstant('{userdesktop}'),
+      ShortcutFile, Previous, DesktopPreviouslyOwned, Reason) then RaiseException(Reason);
   end;
 end;
 

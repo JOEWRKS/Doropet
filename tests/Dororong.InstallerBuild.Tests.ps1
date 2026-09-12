@@ -54,15 +54,28 @@ if ($Phase -in 'Policy','All') {
     [IO.File]::WriteAllText((Join-Path $fixture 'owned.txt'), 'owned')
     [IO.File]::WriteAllText((Join-Path $fixture 'obsolete.txt'), 'obsolete')
     [IO.File]::WriteAllText((Join-Path $fixture 'user-added.txt'), 'preserve')
+    [IO.File]::WriteAllText((Join-Path $fixture 'preserved-payload.txt'), 'preserve until all owned shortcuts pass')
+    [IO.File]::WriteAllText((Join-Path $fixture 'second-payload.txt'), 'owned')
+    foreach ($shortcutFolder in @('programs-locked','programs-clear','desktop-locked','desktop-clear')) {
+        $fixtureFolder = Join-Path $fixture $shortcutFolder
+        New-Item -ItemType Directory -Path $fixtureFolder | Out-Null
+        # Bytes with a .lnk extension exercise Windows file sharing, not Shell
+        # shortcut creation; these fixtures stay inside the task artifact root.
+        [IO.File]::WriteAllText((Join-Path $fixtureFolder 'owned.lnk'), 'task-owned shortcut fixture')
+    }
     $junction = Join-Path $fixture 'linked'
     $junctionTarget = Join-Path $testRoot 'junction-target'
     New-Item -ItemType Directory -Path $junctionTarget | Out-Null
     New-Item -ItemType Junction -Path $junction -Target $junctionTarget | Out-Null
     $locked = [IO.File]::Open((Join-Path $fixture 'owned.txt'), 'Open', 'Read', 'None')
+    $lockedStartMenu = [IO.File]::Open((Join-Path $fixture 'programs-locked/owned.lnk'), 'Open', 'Read', 'ReadWrite')
+    $lockedDesktop = [IO.File]::Open((Join-Path $fixture 'desktop-locked/owned.lnk'), 'Open', 'Read', 'ReadWrite')
     try {
         $process = Start-Process -FilePath (Join-Path $testRoot 'PolicyHarness.exe') -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART', ('/LOG="' + (Join-Path $testRoot 'harness.log') + '"')) -PassThru -Wait -WindowStyle Hidden
     } finally {
         $locked.Dispose()
+        $lockedStartMenu.Dispose()
+        $lockedDesktop.Dispose()
         # Remove only the test-owned junction itself, never its target/tree.
         if ((Get-Item -LiteralPath $junction -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
             Remove-Item -LiteralPath $junction -Force
@@ -70,11 +83,11 @@ if ($Phase -in 'Policy','All') {
     }
     Check ($process.ExitCode -ne 0) 'Harness did not abort setup.'
     $log = Get-Content (Join-Path $testRoot 'harness.log') -Raw
-    Check ($log.Contains('POLICY PASS: 26 checks; returning False before installation')) 'Compiled policy assertions failed.'
+    Check ($log.Contains('POLICY PASS: 37 checks; returning False before installation')) 'Compiled policy assertions failed.'
     Check (-not $log.Contains('UNSAFE_INSTALL_TRANSITION')) 'Harness entered installation.'
     Check (-not (Test-Path (Join-Path $testRoot 'must-never-install'))) 'Harness wrote installation payload.'
     Check (-not (Test-Path (Join-Path $fixture 'operation.lock'))) 'Gate did not clean up on close.'
-    Write-Output "POLICY PASS: compiled shared policy, 26 checks, abort exit $($process.ExitCode); evidence $testRoot"
+    Write-Output "POLICY PASS: compiled shared policy, 37 checks, abort exit $($process.ExitCode); evidence $testRoot"
 }
 if ($Phase -in 'Build','All') {
     if (-not $CandidatePath) { $CandidatePath = Join-Path $artifacts ('candidate-' + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
