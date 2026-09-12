@@ -113,7 +113,7 @@ function CheckInstalled([bool]$Desktop) {
         Require ((Test-Path -LiteralPath $desktopLink) -eq $Desktop) 'Desktop task selection mismatch'
         if ($Desktop) { Require ($shell.CreateShortcut($desktopLink).TargetPath -eq "$root\Dororong.exe") 'Desktop shortcut target mismatch' }
     } finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell) }
-    Require ((ProductProcesses).Count -eq 0) 'Silent installation launched a product process'
+    Require (@(ProductProcesses).Count -eq 0) 'Silent installation launched a product process'
 }
 function RunProcess([string]$Name, [string]$Executable, [string[]]$Arguments, [bool]$Success) {
     $argsWithLog = $Arguments + @('/LOG="' + "$ResultPath\$Name.log" + '"')
@@ -233,7 +233,7 @@ try {
         Require (-not (Test-Path -LiteralPath $startLink) -and -not (Test-Path -LiteralPath $desktopLink)) 'Owned shortcut remains'
         Require ($null -eq (RegistrySnapshot CurrentUser $registration)) 'Uninstall registration remains'
         Require ((Hash $extra) -eq $extraHash -and (Hash $logSentinel) -eq $logHash -and (Hash $outside) -eq $outsideHash) 'Uninstall removed/changed user data'
-        Require ((ProductProcesses).Count -eq 0) 'Product process remains'
+        Require (@(ProductProcesses).Count -eq 0) 'Product process remains'
         Require (($machineBefore | ConvertTo-Json -Depth 8 -Compress) -ceq ((RegistrySnapshot LocalMachine $registration) | ConvertTo-Json -Depth 8 -Compress)) 'Machine product registration changed'
     }
 

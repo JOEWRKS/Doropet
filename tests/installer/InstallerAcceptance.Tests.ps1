@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Boundary', 'Config', 'All')][string]$Phase = 'All',
+    [ValidateSet('ProcessCount', 'Boundary', 'Config', 'All')][string]$Phase = 'All',
     [string]$CandidatePath = 'artifacts/installer/candidate-20260912-task1002-05',
     [string]$PreparedToolchainPath = 'artifacts/installer/toolchain-inno-7.1.0-x64-20260912-02'
 )
@@ -31,6 +31,31 @@ function HostState {
     $state | ConvertTo-Json -Depth 8 -Compress
 }
 $before = HostState
+if ($Phase -in @('ProcessCount', 'All')) {
+    # Execute the real read-only query and both actual consumer expressions in
+    # guest-version PowerShell. A zero-result query must stay a countable array.
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile("$repo/tests/installer/Invoke-InstallerAcceptance.ps1", [ref]$tokens, [ref]$parseErrors)
+    Assert ($parseErrors.Count -eq 0) 'Acceptance script must parse.'
+    $query = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ProductProcesses' }, $true)
+    $counts = @($ast.FindAll({ param($node) $node -is [Management.Automation.Language.MemberExpressionAst] -and $node.Member.Extent.Text -eq 'Count' -and $node.Expression.Extent.Text -match 'ProductProcesses' }, $true))
+    Assert ($null -ne $query -and $counts.Count -eq 2) 'Both product-process count consumers must be covered.'
+    $driver = @'
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$root = 'C:\DororongAcceptance-NoInstalledProduct-' + [guid]::NewGuid().ToString('N')
+'@ + "`r`n" + $query.Extent.Text + "`r`n"
+    foreach ($count in $counts) {
+        $driver += '$observed = ' + $count.Extent.Text + "; if (`$observed -ne 0) { throw 'Expected zero product processes' }`r`n"
+    }
+    $driver += "Write-Output 'PS51 ZERO-PROCESS PASS: both consumers returned zero'"
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($driver))
+    $result = & powershell.exe -NoProfile -EncodedCommand $encoded 2>&1 | Out-String
+    Assert ($LASTEXITCODE -eq 0 -and $result -match 'PS51 ZERO-PROCESS PASS') "Zero-result process consumers failed in Windows PowerShell: $result"
+    Assert ((HostState) -ceq $before) 'Read-only process-count regression changed protected host state.'
+    Write-Output 'PROCESS COUNT PASS: both actual consumers handle zero results in Windows PowerShell 5.1; host state unchanged.'
+}
 if ($Phase -in @('Boundary', 'All')) {
     $output = & powershell.exe -NoProfile -File tests/installer/Invoke-InstallerAcceptance.ps1 -CandidatePath $CandidatePath 2>&1 | Out-String
     Assert ($LASTEXITCODE -eq 2 -and $output -match 'UNVERIFIED: isolation') 'Host boundary must refuse with UNVERIFIED/exit 2 before work.'
