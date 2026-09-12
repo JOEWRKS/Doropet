@@ -2,7 +2,7 @@
 
 Dororong is a Windows desktop companion with walking, sitting, head/cheek interactions, window-edge perching and short mouse-triggered pounces.
 
-**Status:** validated portable product candidate, not a finished installer or public release. The packaged executable is **Dororong.exe**; source builds retain the internal **Dororong.App.exe** apphost. Dororong uses a tool window, so absence from the taskbar does not mean it is stopped; use its tray menu or Task Manager's **Details** tab.
+**Status:** validated portable product candidate and compiler-built unsigned installer candidate. Live installer lifecycle acceptance remains **UNVERIFIED**; this is not a public release. The packaged executable is **Dororong.exe**; source builds retain the internal **Dororong.App.exe** apphost. Dororong uses a tool window, so absence from the taskbar does not mean it is stopped; use its tray menu or Task Manager's **Details** tab.
 
 ## Requirements
 
@@ -31,6 +31,26 @@ Run test/build commands sequentially to avoid locked WPF test assemblies. Keep t
 
 This is a portable candidate, not an installer. To replace it, use **종료** from the tray or character menu, extract a newer archive into a separate folder, and retain the old folder for rollback. There is no automatic update or auto-start registration.
 
+## Installer candidate, removal, and support
+
+The separate local installer is `artifacts/installer/candidate-20260912-task1002-05/Dororong-Setup-0.1.0-win-x64.exe`, SHA256 `AEDE2B7D36A10DEADA800832C99DBD134BC1F4DEEEEA39B48D1F51CE166D5D5D`. It consumes the unchanged validated portable payload. It is unsigned; signing, rights review and isolated live lifecycle acceptance remain release gates. [Installer verification and isolated handoff](docs/verification/2026-09-12-installer.md) records the exact evidence and limitations.
+
+For an explicitly chosen installation, exit Dororong through its tray menu, then run the installer. Its fixed per-user location is `%LOCALAPPDATA%\Programs\JOEWRKS\Dororong`; it requires no administrator elevation or shared .NET runtime installation. A Start menu shortcut is created. Desktop shortcut and launch-after-install are opt-in; silent installation does not launch the pet. Same-version repair is allowed, lower versions are refused, and files or owned shortcuts in use must be released before retrying. The installer does not import or remove portable copies.
+
+Remove it through Windows **Apps & features → 도로롱 (Dororong) → Uninstall**, after exiting the pet. The intended ownership contract removes installed payload, owned shortcuts and product registration while preserving user-added files and `%LOCALAPPDATA%\JOEWRKS\Dororong\logs`. The live removal tests remain open. If installation reports failure, keep its log and repair/reinstall before using the app; no power-loss rollback guarantee is made.
+
+For support, include the candidate SHA256, Windows version, exact error/exit code, an installer log captured with `/LOG="C:\your-chosen-folder\dororong-setup.log"`, and relevant diagnostics from the tray's log-folder command. Review logs before sharing. No automatic upload, update, service or autostart is configured.
+
+To reproduce the candidate build, use the validated frozen payload and prepared pinned compiler with a **new** output directory. Documentation or harness changes do not require rebuilding:
+
+```powershell
+pwsh -NoProfile -File tools/Build-Installer.ps1 -PackagePath artifacts/product-shell/candidate-20260912-1751/runtime -ArchivePath artifacts/product-shell/candidate-20260912-1751/Dororong-win-x64.zip -CompilerPath artifacts/installer/toolchain-inno-7.1.0-x64-20260912-02/ISCC.exe -OutputPath artifacts/installer/candidate-NEW-UNIQUE-NAME
+pwsh -NoProfile -File tests/installer/InstallerAcceptance.Tests.ps1 -Phase All
+pwsh -NoProfile -File tools/installer/New-InstallerSandbox.ps1 -CandidatePath artifacts/installer/candidate-20260912-task1002-05 -PreparedToolchainPath artifacts/installer/toolchain-inno-7.1.0-x64-20260912-02 -OutputPath artifacts/installer/sandbox-NEW-UNIQUE-NAME
+```
+
+The last command only generates an opt-in `.wsb`; it does not launch Sandbox, enable features or install the product. The acceptance script rejects ordinary-host invocation with `UNVERIFIED` and exit 2. Open the generated `.wsb` only after a separate deliberate handoff on an already available Sandbox host. Review `results/summary.json` and per-case evidence afterward; fixture-version PASS does not establish real-product upgrade acceptance, and the Sandbox account may be administrative.
+
 ## Interactions
 
 - Left-click Dororong's visible body for a short click reaction.
@@ -48,7 +68,7 @@ Transparent parts of Dororong's window are intended to pass pointer input throug
 ## Release boundaries
 
 - App startup/fatal cleanup, platform/input, product identity, duplicate-instance, tray, diagnostic-log and self-contained package regression tests exist.
-- Installation, upgrade/uninstall registration, code signing and public delivery remain release gaps. A validated portable ZIP does not satisfy them.
+- An unsigned per-user installer and opt-in isolated acceptance harness exist. Live installation/repair/removal, real-product upgrades, standard-user acceptance, code signing and public delivery remain release gaps. A validated portable ZIP or compiled fixture does not satisfy them.
 - Native window/taskbar support and coordinate mapping exist, but game startup, Windows Search overlays and mixed-DPI monitor transitions require separate live acceptance. Automated checks do not establish all Windows configurations.
 - No repository-wide license or distribution-permission record is provided; public distribution requires an explicit rights/provenance review.
 
