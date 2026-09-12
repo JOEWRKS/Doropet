@@ -19,6 +19,12 @@ enabling, account creation or host product installation was performed.
 
 ## Observed automated evidence
 
+Final installer-wide review and its single scoped fix re-review found no remaining
+implementation findings. Core 241/241 and App 852/852 regressions passed on unchanged
+tested binaries; compiled shared-policy checks 37/37 and the strengthened payload/
+non-installing acceptance suites passed. These do not establish live installer
+acceptance. Current opt-in handoff: `artifacts/installer/sandbox-20260912-task1003-04/acceptance.wsb`.
+
 `pwsh -NoProfile -File tests/installer/InstallerAcceptance.Tests.ps1 -Phase All`
 passes ordinary-host refusal, a generated-artifact replay that reaches only the
 initial fixed guest-path guard, separate inert checks of the production gate's

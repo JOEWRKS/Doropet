@@ -45,7 +45,7 @@ Assert-InstallerOutputPath -OutputPath <fresh artifacts/installer/candidate-*>
 # Prepare-InnoSetup.ps1: -OutputPath <fresh artifacts/installer/toolchain-*>
 # outputs TOOLCHAIN_PATH, COMPILER_PATH and toolchain.json (source/version/hashes/signer)
 ```
-- [ ] RED executable PowerShell tests: tiny real temp file inventory has literal
+- [x] RED executable PowerShell tests: tiny real temp file inventory has literal
       known SHA256; traversal/reparse/ambiguous or unsafe Inno filename refusal;
       input never modified; existing-output sentinel retained. Tests run exports,
       not grep source. Metadata test reads actual preserved candidate PE.
@@ -56,11 +56,11 @@ if (@($inventory.Files).Count -eq 0) { throw 'Empty payload accepted' }
 # Seed a controlled existing output with sentinel; call Assert-InstallerOutputPath
 # and assert failure, unchanged sentinel hash and no added files.
 ```
-- [ ] GREEN strict canonical path and per-component reparse rejection, stable
+- [x] GREEN strict canonical path and per-component reparse rejection, stable
       ordinal inventory, relative-name validation/escaping contract; require
       Dororong.exe product metadata and internal DLL/deps/runtimeconfig presence.
       This inventory is not a substitute for the existing strict package validator.
-- [ ] Obtain fixed official Inno Setup7.1.0 x64 from the release linked by
+- [x] Obtain fixed official Inno Setup7.1.0 x64 from the release linked by
       https://jrsoftware.org/isdl.php. Verify Authenticode Valid/Pyrsys B.V. before
       execution, record download SHA256 and verify compiler version/signature.
       Official tag is-7_1_0/setup.iss + isportable.iss confirm /PORTABLE=1 disables
@@ -68,7 +68,7 @@ if (@($inventory.Files).Count -eq 0) { throw 'Empty payload accepted' }
       /PORTABLE=1 /VERYSILENT /SUPPRESSMSGBOXES /SP- /NORESTART /NOICONS,
       explicit fresh worktree /DIR; Start-Process Hidden. No winget/system install.
       Reuse only proven matching tools; no delete/overwrite existing toolchain.
-- [ ] Run focused tests and actual compiler version probe; self-review/commit
+- [x] Run focused tests and actual compiler version probe; self-review/commit
       owned files only. Record RED/GREEN commands/output and trust provenance.
 
 ### Task 1002: Installer policy, compilation and refusal tests
@@ -82,24 +82,24 @@ Produces:
 # outputs INSTALLER_PATH; writes payload.json, payload-files.iss and build-evidence.json
 # final name Dororong-Setup-0.1.0-win-x64.exe; no version override in product builder
 ```
-- [ ] RED builder refuses missing/mutated input, foreign compiler and existing
+- [x] RED builder refuses missing/mutated input, foreign compiler and existing
       output without creating artifacts. Characterize actual compiled policy via
       a separate no-install harness which includes the SAME InstallerPolicy.iss;
       numeric version comparison0.1.10 >0.1.2, equal allow, lower reject, malformed
       installed version fail closed. Harness aborts before file/registry/icon work.
-- [ ] GREEN builder invokes tests/Dororong.ProductPackage.Tests.ps1 in a child
+- [x] GREEN builder invokes tests/Dororong.ProductPackage.Tests.ps1 in a child
       process and requires exit0 before creating output. Inventory all files,
       generate explicit quoted [Files] entries, stage exact bytes, compare hashes
       before/after compile. No wildcard compile of mutable original payload.
       Fail build on compiler error; record source/hash/version/ISCC provenance.
-- [ ] Inno [Setup] uses PrivilegesRequired=lowest, stable AppId, x64-compatible
+- [x] Inno [Setup] uses PrivilegesRequired=lowest, stable AppId, x64-compatible
       architecture, fixed default user-local root enforced against /DIR overrides,
       no previous arbitrary directory reuse, exact version/publisher/icon,
       CloseApplications=no, RestartApplications=no, no restartreplace flags.
       Korean and English wizard when official translation available. No fake license.
       [Icons] user-start-menu entry; desktop [Tasks] unchecked; [Run] optional
       postinstall/skipifsilent. No autostart/service/HKLM entries.
-- [ ] Numeric previous installed version read from own registered product/PE;
+- [x] Numeric previous installed version read from own registered product/PE;
       refuse downgrade or unreadable conflicting identity before writes. Same and
       higher allowed. Setup/uninstall share a per-user operation gate across
       sessions (exclusive file handle outside payload with close-time cleanup);
@@ -108,11 +108,11 @@ Produces:
       Known locked files => nonzero refusal; do not kill. Recheck at installation
       transition; concurrent launch/I/O failure never reported as success.
       Avoid claiming atomic/power-loss rollback; surface repair need on failure.
-- [ ] Uninstall owns only explicit installed files/registration/shortcuts. No
+- [x] Uninstall owns only explicit installed files/registration/shortcuts. No
       [UninstallDelete] broad root deletion and no user-log deletion. Obsolete
       owned-file cleanup only from validated relative ownership manifest. Reject
       malicious/reparse paths; never delete user-added files outside manifest.
-- [ ] Compile actual product candidate; metadata/signature-state and inventory
+- [x] Compile actual product candidate; metadata/signature-state and inventory
       parity checks; policy harness tests run without host install. Self-review
       and commit owned files. No actual host installer execution beyond harness.
 
@@ -122,7 +122,7 @@ Files: tests/installer/Invoke-InstallerAcceptance.ps1;
 tools/installer/New-InstallerSandbox.ps1; docs/verification/2026-09-12-installer.md;
 README.md; tests/installer/InstallerAcceptance.Tests.ps1 (scoped test addition).
 Consume builder output and evidence contract; no app implementation.
-- [ ] RED boundary tests reject running acceptance on ordinary host; harness
+- [x] RED boundary tests reject running acceptance on ordinary host; harness
       requires explicitly isolated sandbox proof/config and output directory.
       Missing isolation is UNVERIFIED/nonzero, never successful acceptance.
 ```powershell
@@ -130,7 +130,7 @@ Consume builder output and evidence contract; no app implementation.
 & tests/installer/Invoke-InstallerAcceptance.ps1 -CandidatePath $candidateRoot
 if ($LASTEXITCODE -eq 0) { throw 'Host accepted as isolated test environment' }
 ```
-- [ ] GREEN generate opt-in .wsb + guest script with networking disabled,
+- [x] GREEN generate opt-in .wsb + guest script with networking disabled,
       read-only mapped payload/tool inputs and one narrow writable result mapping.
       Do not enable Windows features or launch/install on host without handoff.
       Guest tests install/reinstall/higher test-fixture upgrade/lower refusal,
@@ -140,13 +140,13 @@ if ($LASTEXITCODE -eq 0) { throw 'Host accepted as isolated test environment' }
       Test upgrades use separate clearly labeled fixture ID/version, not product
       version overrides or modified distributed payload. Results identify exactly
       which package/config each test exercised; no fixture-to-product PASS leap.
-- [ ] If existing Sandbox/VM is safely available, run within approved isolated
+- [x] If existing Sandbox/VM is safely available, run within approved isolated
       scope and read results. Otherwise leave runtime installer acceptance open
       and deliver ready-to-run harness, compiler-built candidate and honest gates.
-- [ ] Run all new non-installing script tests, strict candidate package validation,
+- [x] Run all new non-installing script tests, strict candidate package validation,
       asset/payload hash preservation; update README build/install/remove/support
       instructions and evidence, no public-release claim. Commit owned files.
-- [ ] Final integration review and single consolidated fix wave if needed.
+- [x] Final integration review and single consolidated fix wave if needed.
 
 Preflight coverage:
 |Pair/task|Interface/consistency check|Result|
@@ -224,6 +224,27 @@ Task 1003: complete (commits 013250b..92ececb, review clean after fix round1;
 minor boundary coverage deferred). Current opt-in handoff sandbox-20260912-task1003-02/
 acceptance.wsb; old -01 preserved, product candidate05 unchanged. Live guest
 acceptance still UNVERIFIED. Final installer-wide integration review next.
+Final integration review eece06b..0f6d83c: no Critical/Important implementation
+findings; local integration approved with four Minor follow-ups (the deferred
+Task1001 assertion trio and Task1003 early-refusal coverage/wording). One final
+consolidated fix wave will address those, followed by one scoped re-review.
+Parent fresh final script verification: Refusal exit0, Policy37checks exit0,
+AcceptanceAll exit0 (process count/boundary/config and three fixture compiles only).
+Final consolidated fix 7efc49e addressed all four Minor findings. Single scoped
+re-review confirms all addressed/no new breakage; no findings remain parked.
+Parent reran strengthened payload and AcceptanceAll suites at7efc49e: exit0;
+host state unchanged. Candidate05/source hashes and latest handoff04 config plus
+all five inputs match; results remain empty. No App/Core/art/installer changes
+in the final test/gate-only fix, so verified payload and installer are unchanged.
+Installer implementation: complete locally; commits retained, no push/merge.
+Deliver candidate-20260912-task1002-05/Dororong-Setup-0.1.0-win-x64.exe and
+sandbox-20260912-task1003-04/acceptance.wsb under artifacts/installer.
+Live acceptance: UNVERIFIED (Sandbox unavailable, not enabled/launched). Real
+install/repair/upgrade/uninstall, non-admin/session scenarios and release signing/
+rights remain separate gates; no public-ready claim. Checkboxes above certify
+implementation and the permitted unavailable-environment handoff, not live PASS.
+Preserve worktree, local artifacts/evidence and unrelated TestResults. No cleanup
+of denied old junctions, no host product install or external publication occurred.
 Preserve four test-only cyclic junctions listed in task-1002-report.md after tool
 cleanup denial; never recursively enumerate/delete the old test directories.
 Environment gate: Windows10Pro, Sandbox feature InstallState2 and executable
