@@ -18,7 +18,8 @@ internal sealed class PerchReadinessPresentation
         _image = null; _source = null; _drawn = null;
     }
 
-    internal void Apply(Image image, bool ready, bool hanging, TimeSpan delta, Point? pinnedSource = null)
+    internal void Apply(Image image, bool ready, bool hanging, TimeSpan delta, Point? pinnedSource = null,
+        Func<double,BitmapSource?>? renderFrame = null)
     {
         Restore();
         if (!ready || image.Visibility != Visibility.Visible || image.Source is not BitmapSource source)
@@ -29,6 +30,11 @@ internal sealed class PerchReadinessPresentation
         var milliseconds = double.IsFinite(delta.TotalMilliseconds) ? Math.Clamp(delta.TotalMilliseconds, 0, 250) : 0;
         _elapsed = (_elapsed + milliseconds) % 250;
         if (source.PixelWidth != source.PixelHeight || source.PixelWidth is not (96 or 160)) return;
+        if(renderFrame?.Invoke(_elapsed/250) is { } custom)
+        {
+            _source=source;_image=image;_drawn=custom;image.Source=custom;
+            return;
+        }
         var pixels = ForelegFlutterFrame.Render(PremultipliedFrame.From(source), hanging, _elapsed / 250, pinnedSource);
         _source = source; _image = image;
         _drawn = BitmapSource.Create(source.PixelWidth, source.PixelHeight, 96, 96, PixelFormats.Pbgra32,

@@ -46,6 +46,8 @@ public static class PlatformGeometry
                 foreach (var occluder in scene.Windows)
                 {
                     if (occluder.ZOrder >= candidate.ZOrder || !CanOcclude(occluder) ||
+                        (candidate.Taskbar && occluder.IsTransientMenu &&
+                         candidate.Key.ProcessId != 0 && candidate.Key.ProcessId == occluder.Key.ProcessId) ||
                         !IsValidRectangle(occluder.Bounds) ||
                         occluder.Bounds.Y > top || occluder.Bounds.Bottom <= top)
                     {

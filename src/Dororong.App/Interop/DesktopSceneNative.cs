@@ -354,8 +354,8 @@ internal sealed class DesktopSceneNative(IDesktopMetadataReader reader) : IDeskt
             // Hover previews, tooltips and their separate decorative shadow
             // HWNDs can cross an existing surface edge. Classify SysShadow
             // independently of whether its tooltip is also enumerated.
-            // They are neither perches nor holes in perches. Keep actual menus,
-            // unknown application classes and real taskbars on the normal path.
+            // They are neither perches nor holes in perches. Menus retain their
+            // identity so geometry can preserve only their own shell's taskbar.
             var hoverOverlay = window.ClassName is "TaskListThumbnailWnd" or "TaskListOverlayWnd" or "tooltips_class32" or "SysShadow";
             var support = window.CanSupport && !hoverOverlay;
             if (window.Taskbar)
@@ -371,7 +371,8 @@ internal sealed class DesktopSceneNative(IDesktopMetadataReader reader) : IDeskt
             }
             next[window.Handle] = identity;
             windows.Add(new(new(window.Handle,window.ProcessId,identity.Generation),bounds,windows.Count,
-                window.Visible,window.Minimized,window.Cloaked,window.Excluded,support,window.CanOcclude && !hoverOverlay,window.Taskbar,window.HorizontalTaskbar));
+                window.Visible,window.Minimized,window.Cloaked,window.Excluded,support,window.CanOcclude && !hoverOverlay,window.Taskbar,window.HorizontalTaskbar)
+                { IsTransientMenu=window.ClassName=="#32768" });
         }
         identities = next; // Only successful absence retires an observed identity.
         return new(++revision,now,Array.AsReadOnly(metadata.Monitors.ToArray()),windows.AsReadOnly());

@@ -30,6 +30,9 @@ internal sealed class EdgePerchPresentation
     private double _restoreElapsed;
     private readonly PerchExpressionMotion _motion = new();
     private readonly CheekPullPresentation _cheek;
+    private PerchPawSnapshot? _paw;
+    internal void RenderLocalPaw(PerchPawSnapshot? paw)=>_paw=paw;
+    internal bool? HitTestPaw(PointD point) => IsAttached ? PerchPawRenderer.HitTest(PerchFrame, _paw, point) : null;
     internal FacingDirection Facing { get; private set; } = FacingDirection.Right;
     internal bool IsAttached { get; private set; }
     internal bool IsLocalCheekActive => _cheek.Capture is not null;
@@ -157,7 +160,8 @@ internal sealed class EdgePerchPresentation
             SetFacing(facing);
             _canonical.Visibility = Visibility.Hidden;
             Image.Visibility = IsLocalCheekActive ? Visibility.Hidden : Visibility.Visible;
-            Image.Source=IsLocalCheekActive ? PerchFrame : _motion.Eye switch {1=>PerchExpressionFrames.Squint,2=>PerchExpressionFrames.Closed,_=>PerchFrame};
+            Image.Source=!IsLocalCheekActive && _motion.EyesClosed ? PerchExpressionFrames.Closed : PerchFrame;
+            if(_paw is not null)Image.Source=PerchPawRenderer.Render((BitmapSource)Image.Source,_paw);
             Image.Opacity = 1;
             Image.Clip = null;
             if (_ownsCanonicalVisibility) _canonical.Clip = _canonicalClip;
@@ -171,6 +175,7 @@ internal sealed class EdgePerchPresentation
         if (_active)
         {
             IsAttached=false;
+            _paw=null;
             _cheek.Restore();
             _active = false; _restoring = true; _restoreElapsed = 0;
         }
@@ -193,6 +198,7 @@ internal sealed class EdgePerchPresentation
 
     internal void Restore()
     {
+        _paw=null;
         _cheek.Restore();
         IsAttached=false;
         _motion.Reset();

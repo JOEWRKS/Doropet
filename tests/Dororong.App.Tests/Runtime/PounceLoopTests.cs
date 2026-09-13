@@ -14,6 +14,30 @@ namespace Dororong.App.Tests.Runtime;
 
 public sealed class PounceLoopTests
 {
+    [Theory]
+    [InlineData(-1)] [InlineData(1)]
+    public void Outer_tracking_turns_body_without_walking_or_crouching_on_support(int direction) => Controls.CheekProductTests.Sta(() =>
+    {
+        using var h=new Harness(BehaviorTuning.Default with
+        {
+            IdleMin=TimeSpan.FromSeconds(2), IdleMax=TimeSpan.FromSeconds(2), IdleToWalkProbability=1
+        });
+        h.Start(); var origin=h.Position;
+        foreach(var side in new[]{direction,-direction})
+        {
+            h.Pointer=new(true,origin+new PointD(72+side*250,81));
+            h.Ticks(35);
+            Assert.Equal(side>0?FacingDirection.Right:FacingDirection.Left,h.Snapshot.Facing);
+            Assert.Equal(156,h.Presenter.HuntingFrame);
+            Assert.Equal(PouncePhase.Watch,h.Presenter.Pounce.Phase);
+            Assert.Equal(origin,h.Position);
+            Assert.Equal(560,h.WorldSole,4);
+        }
+        h.Pointer=PointerSample.Unavailable;
+        h.Ticks(35);
+        Assert.NotEqual(origin.X,h.Position.X); // Same brain really resumes walking outside tracking.
+    });
+
     [Fact]
     public void Quick_body_click_between_ticks_also_releases_airborne_support_without_snap() => Controls.CheekProductTests.Sta(() =>
     {

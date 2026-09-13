@@ -81,6 +81,8 @@ internal sealed class HuntGaze
     private double _eyeY;
     private double _headX;
     private double _headY;
+    internal bool IsAtRest => Math.Abs(_eyeX)<.005 && Math.Abs(_eyeY)<.005 &&
+        Math.Abs(_headX)<.005 && Math.Abs(_headY)<.005;
 
     public HuntGazePose Advance(double seconds, PointD? target, bool flip, bool active)
     {
@@ -89,11 +91,12 @@ internal sealed class HuntGaze
         var x = valid ? Clamp(target!.Value.X / 110) * (flip ? -1 : 1) : 0;
         var y = valid ? Clamp(target!.Value.Y / 85) : 0;
         var eye = 1 - Math.Exp(-seconds / 0.075);
-        var head = 1 - Math.Exp(-seconds / 0.23);
+        var head = 1 - Math.Exp(-seconds / (active ? 0.23 : 0.12));
         _eyeX += (x - _eyeX) * eye;
         _eyeY += (y - _eyeY) * eye;
         _headX += (x - _headX) * head;
         _headY += (y - _headY) * head;
+        if (!active && IsAtRest) Reset();
         return new HuntGazePose(
             0.85 * _eyeX,
             0.65 * _eyeY,

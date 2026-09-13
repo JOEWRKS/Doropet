@@ -40,7 +40,7 @@ internal static class LayeredPullFrames
         {
             var pixels = new byte[96 * 96 * 4];
             gzip.ReadExactly(pixels);
-            frames[i] = new(Make(pixels), pixels, 384);
+            frames[i] = PremultipliedFrame.From(AuthoredHeadContour.Pull(Make(pixels), i/112d));
         }
         if (gzip.ReadByte() != -1) throw new InvalidDataException("Unexpected layered bank length.");
         for (var i = 1; i < 112; i++)

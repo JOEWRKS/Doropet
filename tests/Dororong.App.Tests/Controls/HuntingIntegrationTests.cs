@@ -17,6 +17,9 @@ public sealed class HuntingIntegrationTests
     {
         var p=new DororongPresenter();
         var tick=TimeSpan.FromMilliseconds(tickMs);
+        p.RenderDesktop(Standing,DirectInteractionSnapshot.None,TimeSpan.Zero);
+        var ordinary=new byte[96*96*4];
+        new FormatConvertedBitmap((BitmapSource)((Image)p.FindName("DororongImage")).Source,PixelFormats.Pbgra32,null,0).CopyPixels(ordinary,384,0);
         for(var i=0;i<=steps;i++)
         {
             p.UpdateHunting(Standing,DirectInteractionSnapshot.None,new(true,new(156,177)),tick,false);
@@ -24,6 +27,10 @@ public sealed class HuntingIntegrationTests
         }
         // Frame17 visibly begins lowering; frame42 is fully crouched, zero sway.
         var expected=new byte[96*96*4];new HuntRenderer().Render(expectedFrame,default).CopyPixels(expected,384,0);
+        // At32ms the new120ms source bridge is60.563% complete. The authored
+        // lowering frame still starts next tick; by250ms it is fully presented.
+        if(expectedFrame==17)
+            for(var i=0;i<expected.Length;i++)expected[i]=(byte)Math.Round(ordinary[i]+(expected[i]-ordinary[i])*.6056296296296296);
         var actual=new byte[expected.Length];
         ((BitmapSource)((Image)p.FindName("DororongImage")).Source).CopyPixels(actual,384,0);
         Assert.Equal(expected,actual);
@@ -52,11 +59,15 @@ public sealed class HuntingIntegrationTests
     public void Tiny_motion_across_entry_boundary_does_not_release_hunt() => EdgePerchPresentationTests.Sta(() =>
     {
         var p=new DororongPresenter();
-        Assert.True(p.UpdateHunting(Standing,DirectInteractionSnapshot.None,new(true,new(248,181)),Tick,false));
+        Assert.True(p.UpdateHunting(Standing,DirectInteractionSnapshot.None,new(true,new(287,181)),Tick,false));
         for(var i=0;i<50;i++)
-            Assert.True(p.UpdateHunting(Standing,DirectInteractionSnapshot.None,new(true,new(253,181)),Tick,false));
-        for(var i=0;i<35;i++)p.UpdateHunting(Standing,DirectInteractionSnapshot.None,new(true,new(400,181)),Tick,false);
-        Assert.False(p.UpdateHunting(Standing,DirectInteractionSnapshot.None,new(true,new(400,181)),Tick,false));
+        {
+            Assert.True(p.UpdateHunting(Standing,DirectInteractionSnapshot.None,new(true,new(293,181)),Tick,false));
+            p.RenderDesktop(Standing,DirectInteractionSnapshot.None,Tick);
+            Assert.InRange(p.HuntingFrame,15,99); // Still preparing, not upright outer-zone tracking.
+        }
+        for(var i=0;i<35;i++)p.UpdateHunting(Standing,DirectInteractionSnapshot.None,new(true,new(600,181)),Tick,false);
+        Assert.False(p.UpdateHunting(Standing,DirectInteractionSnapshot.None,new(true,new(600,181)),Tick,false));
     });
     [Fact]
     public void Lowered_visible_cheek_is_not_mistaken_for_a_front_paw() => EdgePerchPresentationTests.Sta(() =>
@@ -87,7 +98,7 @@ public sealed class HuntingIntegrationTests
     private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(100);
 
     [Fact]
-    public void Nearby_mouse_activates_and_missing_pointer_eases_out() => EdgePerchPresentationTests.Sta(() =>
+    public void Nearby_mouse_activates_and_missing_pointer_cancels_immediately() => EdgePerchPresentationTests.Sta(() =>
     {
         var p=new DororongPresenter();
         Assert.False(p.UpdateHunting(Standing,DirectInteractionSnapshot.None,new(true,new(700,500)),Tick,false));
@@ -96,12 +107,12 @@ public sealed class HuntingIntegrationTests
             Assert.True(p.UpdateHunting(Standing,DirectInteractionSnapshot.None,Near,Tick,false));
             p.RenderDesktop(Standing,DirectInteractionSnapshot.None,Tick);
         }
-        Assert.IsNotType<BitmapImage>(((Image)p.FindName("DororongImage")).Source);
-        Assert.True(p.UpdateHunting(Standing,DirectInteractionSnapshot.None,PointerSample.Unavailable,Tick,false));
+        Assert.False(UprightRumpSource.Contains(((Image)p.FindName("DororongImage")).Source));
+        Assert.False(p.UpdateHunting(Standing,DirectInteractionSnapshot.None,PointerSample.Unavailable,Tick,false));
         for(var i=0;i<30;i++)p.UpdateHunting(Standing,DirectInteractionSnapshot.None,PointerSample.Unavailable,Tick,false);
         Assert.False(p.UpdateHunting(Standing,DirectInteractionSnapshot.None,PointerSample.Unavailable,Tick,false));
         p.RenderDesktop(Standing,DirectInteractionSnapshot.None,Tick);
-        Assert.IsType<BitmapImage>(((Image)p.FindName("DororongImage")).Source);
+        Assert.Same(UprightRumpSource.Standing(false),((Image)p.FindName("DororongImage")).Source);
     });
 
     [Fact]

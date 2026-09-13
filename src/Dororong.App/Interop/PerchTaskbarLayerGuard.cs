@@ -5,7 +5,7 @@ namespace Dororong.App.Interop;
 
 internal static class PerchTaskbarLayerGuard
 {
-    // Called only after an active perch is rendered. TOPMOST is a band, not an
+    // Called after an eligible held preview or active perch is rendered. TOPMOST is a band, not an
     // ordering guarantee against the shell's own topmost taskbar.
     internal static void EnsureAboveOverlappingTaskbar(nint pet)
     {
@@ -42,7 +42,7 @@ internal static class PerchTaskbarLayerGuard
         catch (Win32Exception)
         {
             // Shell HWNDs may disappear during this bounded metadata read.
-            // An active perch can recheck on its next tick.
+            // An eligible preview or active perch can recheck on its next tick.
         }
     }
 }

@@ -29,12 +29,12 @@ public sealed class ManualSittingTests
                 DirectInteractionSnapshot.None, TimeSpan.FromMilliseconds(20));
             if (ms < 1000) continue; // Complete pose entry before inspecting full-frame banks.
             var closed = mode == 0
-                ? image.Source is BitmapImage bitmap && bitmap.UriSource.OriginalString.EndsWith("dororong-closed-eyes.png")
+                ? ReferenceEquals(image.Source,UprightRumpSource.Standing(true))
                 : ReferenceEquals(image.Source, mode == 2 ? LocomotionFrames.Sit(1, true) : LocomotionFrames.Walk(1, 0, true));
             if (!closed)
             {
                 if (mode == 0)
-                    Assert.EndsWith("dororong-canonical.png", Assert.IsType<BitmapImage>(image.Source).UriSource.OriginalString);
+                    Assert.Same(UprightRumpSource.Standing(false),image.Source);
                 else
                     Assert.Same(mode == 2 ? LocomotionFrames.Sit(1) : LocomotionFrames.Walk(1, 0), image.Source);
             }

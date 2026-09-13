@@ -126,7 +126,7 @@ internal sealed class SuppliedBodyDragFrames
         var corrected = RemoveExteriorWhiteMatte(output);
         var result = BitmapSource.Create(96, 96, 96, 96, PixelFormats.Pbgra32, null, corrected, 384);
         result.Freeze();
-        return result;
+        return anatomicalKey is >= 1 and <= 8 ? AuthoredHeadContour.Pull(result, (anatomicalKey-1)/7d) : result;
     }
 
     private static byte[] RemoveExteriorWhiteMatte(byte[] original)

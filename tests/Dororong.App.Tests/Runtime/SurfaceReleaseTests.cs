@@ -85,7 +85,10 @@ public partial class PetLoopPlatformTests
         h.Down = false; h.Tick();
         Assert.Null(h.Direct.HeadLanding);
         Assert.Equal(PlatformPhase.Falling, h.LastPose?.Phase);
-        Assert.Equal(released.Y + .2304, h.Position.Y, 6);
+        // A local cheek no longer suspends gravity before release; preserve its
+        // accumulated falling velocity instead of restarting a carry drop.
+        if(target==6)Assert.True(h.Position.Y>released.Y+.2304);
+        else Assert.Equal(released.Y + .2304, h.Position.Y, 6);
         Assert.Equal(0, h.LastPose?.Squash);
         var previousPhase = PlatformPhase.Falling; var landings = 0; var peak = 0d;
         for (var i = 0; i < 100; i++)

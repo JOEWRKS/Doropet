@@ -39,7 +39,7 @@ internal sealed class HuntEyes
             var a=_rgba[i+3];_pbgra[i+3]=a;
             for(var c=0;c<3;c++)_pbgra[i+c]=(byte)((_rgba[i+2-c]*a+127)/255);
         }
-        if(cheekPull>0) ApplyCheek(source,cheekPull,eyePull,hairPull);
+        if(cheekPull!=0) ApplyCheek(source,cheekPull,eyePull,hairPull);
         _bitmap.WritePixels(new Int32Rect(0,0,384,384),_pbgra,1536,0);return _bitmap;
     }
 

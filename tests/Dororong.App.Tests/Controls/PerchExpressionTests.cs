@@ -12,18 +12,36 @@ namespace Dororong.App.Tests.Controls;
 
 public class PerchExpressionTests
 {
+    [Theory]
+    [InlineData(FacingDirection.Left)]
+    [InlineData(FacingDirection.Right)]
+    public void Perched_blink_uses_only_open_and_closed_with_ordinary_timing(FacingDirection facing) => CheekProductTests.Sta(() =>
+    {
+        var p = Create(facing);
+        // Observe two complete cycles, including the old half-closed intervals.
+        // A squint route or the previous short cycle must fail this check.
+        for (var milliseconds = 1; milliseconds <= 10000; milliseconds++)
+        {
+            p.ApplyEdgePerch(EdgePerchPhase.Attached, facing, TimeSpan.FromMilliseconds(1), false);
+            var closed = milliseconds is >= 2000 and < 2360 or >= 7000 and < 7360;
+            Assert.Same(closed ? PerchExpressionFrames.Closed : PerchExpressionFrames.Open, p.EdgePerchImage.Source);
+        }
+    });
+
     [Fact]
     public void Registered_blink_copies_only_the_authored_changed_pixels_and_keeps_every_opaque_source_pixel() => CheekProductTests.Sta(() =>
     {
         var original=Pixels(PerchExpressionFrames.Open);
         var canonical=Pixels(new BitmapImage(new Uri("pack://application:,,,/Dororong.App;component/Assets/dororong-canonical.png")));
         var registered=PerchExpressionFrames.RegisteredOpen();
-        Assert.Equal(2849,Enumerable.Range(0,100*100).Count(i=>original[i*4+3]!=0));
-        Assert.Equal(2849,Enumerable.Range(0,96*96).Count(i=>registered[i*4+3]!=0));
+        // Registration must preserve the cleaned runtime frame, not resurrect
+        // the raw source's removed matte pixels or discard repaired chest texels.
+        Assert.Equal(Enumerable.Range(0,100*100).Count(i=>original[i*4+3]!=0),
+            Enumerable.Range(0,96*96).Count(i=>registered[i*4+3]!=0));
         for(var y=0;y<100;y++)for(var x=0;x<100;x++)
             if(original[(y*100+x)*4+3]!=0)
                 Assert.Equal(original.AsSpan((y*100+x)*4,4).ToArray(),registered.AsSpan(((y+6)*96+x-8)*4,4).ToArray());
-        foreach(var (name,frame,count) in new[]{("dororong-blink-squint.png",PerchExpressionFrames.Squint,101),("dororong-closed-eyes.png",PerchExpressionFrames.Closed,157)})
+        foreach(var (name,frame,count) in new[]{("dororong-closed-eyes.png",PerchExpressionFrames.Closed,157)})
         {
             var authored=Pixels(new BitmapImage(new Uri($"pack://application:,,,/Dororong.App;component/Assets/{name}")));
             var actual=Pixels(frame);var changed=0;
@@ -71,7 +89,7 @@ public class PerchExpressionTests
                 var edge=new System.Windows.Shapes.Line {X1=0,X2=144,Y1=118,Y2=118,Stroke=System.Windows.Media.Brushes.SlateGray,StrokeThickness=.5};tile.Children.Add(edge);
             }
             Capture("contact 0ms");
-            foreach(var (delta,label) in new[]{(80,"80ms"),(100,"180ms"),(140,"320ms"),(2080,"squint"),(70,"closed"),(90,"squint"),(70,"open")})
+            foreach(var (delta,label) in new[]{(80,"80ms"),(100,"180ms"),(140,"320ms"),(1679,"open 1999ms"),(1,"closed 2000ms"),(359,"closed 2359ms"),(1,"open 2360ms")})
             {p.ApplyEdgePerch(EdgePerchPhase.Attached,facing,TimeSpan.FromMilliseconds(delta),false);Capture(label);}
             var press=Assert.IsType<DirectInteractionPressEventArgs>(p.CreateDirectPress(p.EdgePerchImage,new(24,52)));
             var controller=new DirectInteractionController();controller.BeginCheekPull(press.CheekCapture!,press.WindowLocalPosition);controller.SetPressContext(facing,true);

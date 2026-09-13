@@ -231,8 +231,12 @@
       }
       // Exact standing endpoint uses the same authored bitmap path as the
       // reference panel, rather than re-filtering five stationary layers.
-      if(!bodyOnly&&!p.blink&&p.sit===0&&p.bob===0&&p.roll===0&&p.legs.every((l,i)=>l.tip.every((v,k)=>v===rig.rest[i].tip[k]))){
-        ctx.drawImage(input,32,32,192,192);return surface;
+      if(!bodyOnly&&p.sit===0&&p.bob===0&&p.roll===0&&p.legs.every((l,i)=>l.tip.every((v,k)=>v===rig.rest[i].tip[k]))){
+        ctx.drawImage(input,32,32,192,192);
+        // A standing blink changes only the eyes. Rebuilding stationaryBody
+        // here exposed old upper-rump seam donors for the closed-eye interval.
+        if(p.blink&&closed){ctx.save();ctx.beginPath();ctx.rect(72,114,58,42);ctx.clip();ctx.drawImage(closed,32,32,192,192);ctx.restore();}
+        return surface;
       }
       if(p.walk>0&&p.sit===0){
         // Reuse the transparent authored hindpaw, not a new vector outline or

@@ -153,7 +153,9 @@ public partial class DororongPresenter : UserControl
         transform.Children.Add(new ScaleTransform(scale, scale));
         transform.Children.Add(new TranslateTransform((image.ActualWidth - source.PixelWidth * scale) / 2,
             (image.ActualHeight - source.PixelHeight * scale) / 2));
-        transform.Children.Add(image.TransformToAncestor(this));
+        transform.Children.Add(ReferenceEquals(image, _cheekPullPresentation?.VisibleImage)
+            ? _cheekPullPresentation!.PhysicsTransform(this)
+            : image.TransformToAncestor(this));
         var contact = _platformContact.Measure(source, transform);
         return double.IsFinite(contact.SoleY) ? (contact, _platformContact.VisibleBounds) : null;
     }
@@ -220,7 +222,7 @@ public partial class DororongPresenter : UserControl
 
     private bool CanUseCheek => CanUseBodyMap &&
         (ReferenceEquals(DororongImage.Source, CanonicalFrame) || ReferenceEquals(DororongImage.Source, BlinkSquintFrame) ||
-         ReferenceEquals(DororongImage.Source, ClosedEyesFrame) || LocomotionFrames.Contains(DororongImage.Source) ||
+         ReferenceEquals(DororongImage.Source, ClosedEyesFrame) || LocomotionFrames.Contains(DororongImage.Source) || UprightRumpSource.Contains(DororongImage.Source) ||
          (_huntingImage is not null && ReferenceEquals(DororongImage.Source, _huntingImage)));
 
     internal bool TryCreateCheekPullCapture(PointD sourcePosition, out CheekPullCapture? capture)
@@ -280,7 +282,8 @@ public partial class DororongPresenter : UserControl
             }
         }
         _perchReadiness.Apply(image, directInteraction.IsPerchReady,
-            directInteraction.Target == DirectInteractionTarget.Body, elapsed, pinnedSource);
+            directInteraction.Target == DirectInteractionTarget.Body, elapsed, pinnedSource,
+            ReferenceEquals(image,_cheekPullPresentation?.VisibleImage) ? _cheekPullPresentation.RenderReadiness : null);
     }
 
     private void RenderPose(PetSnapshot snapshot, DirectInteractionSnapshot directInteraction, TimeSpan elapsed)
@@ -363,9 +366,10 @@ public partial class DororongPresenter : UserControl
         // live transform. Retire that ownership before a body/cheek overlay can
         // hide the canonical image; the later idempotent runtime restore must
         // not resurrect canonical underneath the new direct presentation.
-        if (directInteraction.Target != DirectInteractionTarget.None && !directInteraction.IsAttachedCheek) _edgePerch.Restore();
+        if (directInteraction.Target != DirectInteractionTarget.None && !directInteraction.IsAttachedCheek && directInteraction.PawPull is null) _edgePerch.Restore();
+        _edgePerch.RenderLocalPaw(directInteraction.PawPull);
         _edgePerch.RenderLocalCheek(directInteraction.IsAttachedCheek ? directInteraction.CheekPull : null,directInteraction.Phase,elapsed);
-        if(directInteraction.IsAttachedCheek) return;
+        if(directInteraction.IsAttachedCheek || directInteraction.PawPull is not null) return;
         // Body/cheek captures were taken at press; head capture above must still
         // see the actual displayed platform pose. Only now retire this layer,
         // including before either overlay's early return.
@@ -520,6 +524,8 @@ public partial class DororongPresenter : UserControl
                 DororongImage.Source = _locomotion.Sit > 0
                     ? LocomotionFrames.Sit(_locomotion.Sit,closed)
                     : LocomotionFrames.Walk(_locomotion.Walk,_locomotion.Distance,closed);
+            else
+                DororongImage.Source = UprightRumpSource.Standing(closed);
             BodyScaleTransform.ScaleX = snapshot.Facing == FacingDirection.Left ? -1 : 1;
             BodyScaleTransform.ScaleY = 1;
             BodyTranslateTransform.Y = 0;
@@ -1039,6 +1045,8 @@ public partial class DororongPresenter : UserControl
         // input may start an arm/belly/rump pull or fall back to head carry.
         if (target == DirectInteractionTarget.FiveRegionBody)
             target = DirectInteractionTarget.ClickOnly;
+        if (perchHit && _edgePerch.HitTestPaw(sourcePosition) is { } rightPaw)
+            target = rightPaw ? DirectInteractionTarget.PerchRightPaw : DirectInteractionTarget.PerchLeftPaw;
         if (splat && !InteractionHitMap.IsUpperHead(new(sourcePosition.X - 32, sourcePosition.Y - 32)))
             target = DirectInteractionTarget.ClickOnly;
         if (target == DirectInteractionTarget.Body && perchHit &&

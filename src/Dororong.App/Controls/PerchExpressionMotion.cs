@@ -13,12 +13,12 @@ internal sealed class PerchExpressionMotion
             return _entry<320 ? 1.015-.015*Smooth((_entry-180)/140) : 1;
         }
     }
-    internal int Eye => _blink is >=2400 and <2470 or >=2560 and <2630 ? 1 : _blink is >=2470 and <2560 ? 2 : 0;
+    internal bool EyesClosed => _blink is >=2000 and <2360;
     internal void Advance(TimeSpan delta)
     {
         var ms=double.IsFinite(delta.TotalMilliseconds)?Math.Max(0,delta.TotalMilliseconds):0;
         _entry=Math.Min(320,_entry+ms);
-        _blink=(_blink+ms%3600)%3600;
+        _blink=(_blink+ms%5000)%5000;
     }
     internal void OpenEyes()=>_blink=0;
     internal void Reset(){_entry=0;_blink=0;}

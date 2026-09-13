@@ -1,5 +1,756 @@
 # Plan
 
+## Main checkpoint and bilingual README — 2026-09-14
+
+- [x] User explicitly selected main integration and push. Code is open under
+  MIT; README distinguishes non-commercial fan-project intent from MIT code
+  permissions and excludes character/derived art from the code license.
+- [x] Concise Korean/English features, usage, structure and credits written;
+  detailed build/package instructions moved to docs/BUILD.md. Original fan
+  artist/asset distribution permissions remain unverified; no official affiliation.
+- [x] FullApp1072/Core241 and Node preview11 PASS; standing blink generator
+  and 641-frame preservation validators PASS. Diff check and generated-output
+  exclusion checks PASS;139source/docs files staged, no oversized or credential
+  filename candidates. Main is clean and an ancestor of this approved branch.
+- [ ] Commit current product work, fast-forward main, verify merged checkout,
+  then push without force. Preserve working tree and local backups.
+
+## Idle black rump spur reproduced — 2026-09-14
+
+- [x] User requested inspection, not another deployment. Diagnostic-only
+  tools/SkinComparison/IdleAudit.cs records fresh idle and settled post-walk
+  idle at16ms intervals for5s each (626presenter frames), with real4s breathing
+  phase and shared ordinary blink clock. No tracking/direct input supplied.
+- [x] Reproduced: post-walk idle selects LocomotionFrames.Walk(0,0,true)
+  during blink. Its upper-rump pixel71,47 Pbgra50,47,58,207 is a dark protrusion;
+  fresh open/closed sources have0,0,0,0 there, post-walk open has1,1,1,21.
+  At local1360ms the closed source appears, at1728ms open resumes (640ms
+  preparatory walk/settle advanced the shared clock). Static comparison visibly
+  shows the spur; this is distinct from the previously removed74,70/74,71specks.
+- [x] Root path: PreviewLocomotion/render.js exact standing fast path excludes
+  p.blink, so closed standing renders stationaryBody (uncleaned seam donors)
+  while open standing uses the original. Prior donor cleanup affects parts[3]
+  used by walking, not stationaryBody used by closed standing. That generated
+  closed rest bank remains embedded and _locomotionStarted retains its route.
+- [x] User approved bounded correction: closed standing must use the same clean
+  standing body as open, changing eyes only; repair generating path and verify
+  source/body parity plus a full post-walk idle blink cycle before new delivery.
+  No production source/assets/installed product changed in this diagnosis.
+  Evidence artifacts/repro/idle-rump-audit-20260914-v2/source-comparison.png
+  and sheet.png. Initial audit used3.2s breathing; v2 corrects to actual4s.
+- [x] RED: generator eye-only parity fails outside eyes; embedded frame parity
+  and both-facing post-walk idle tests all fail (3). Preserve pre-change bank.
+- [x] Share exact standing bitmap path for open/closed; overlay authored eyes
+  only. Regenerate bank; verify only closed-standing frame321 changes, while
+  641other frames remain byte-identical. No original art PNG changes.
+  Generator GREEN, bank parity GREEN (only321 changed,224eye texels), focused58
+  PASS, Core241 PASS. WPF5s audit626frames rerun: blink no longer changes rump.
+  Scoped reviewer approved; no blockers. Actual pet was already closed.
+- [x] Actual5s idle render proof and scoped review complete. FullApp1072 PASS,
+  Core241 PASS; installer payload/refusal/build PASS; diff check PASS.
+  Candidate20260914-idle-blink-01 installed after verifying pet already closed.
+  Backed up470installed files,1data file, registration and Start link.
+  Install exit0;467payload hashes match; original data unchanged before launch.
+  Installed PID54124 running; duplicate53896 exit0; original data prefix intact.
+  Evidence docs/verification/2026-09-14-idle-blink-rump.md. No public release or
+  commit/push. Live user visual acceptance remains separate from renderer proof.
+
+## Rump mismatch / intermittent idle fringe follow-up — 2026-09-13
+
+- [x] Diagnosis: tracking still replaces the authored rear with a separate
+  Bezier in HuntRenderer. Previous width registration did not make the contour
+  identical; negative head roll also changes its top anchor and apex height.
+- [x] Added diagnostic-only SkinComparison `breathing` mode. Inspected eight
+  actual-presenter idle phases before/after settled walking; evidence:
+  artifacts/repro/rump-repeat-20260913/breathing-settled.png.
+  Canonical source retains low-alpha exterior pixels at74,70 and74,71
+  (alpha26/30), while locomotion rest clears them. These light fringe samples
+  do NOT establish the reported transient black spur; exact black artifact
+  remains unreproduced. Initial breathing.png had an unsettled walking row;
+  use breathing-settled.png for comparison.
+- [x] User approved: use one cleaned authored upright rump
+  for idle/walk/tracking, independent of head roll; scope rotating neck join
+  separately and verify breathing/blink transitions for residual ink.
+  Prior turn made no production modification or installed-package replacement.
+- [x] RED: add actual renderer rear-pixel correspondence tests across neutral
+  and tilted gaze, including post-pounce frame156. Add presenter idle/blink
+  exterior-fringe regression, comparing authored connected contour separately.
+- [x] GREEN: isolate a shared cleaned upright rump source; replace the upright
+  rear curve without moving it with the head. Preserve approved crouch and
+  departing gait; blend near upright/crouch boundary to avoid a new snap.
+  RED7 then focused174/Core241 PASS. Expanded source preservation caught and
+  fixed BGRA round-trip rounding; only74,70 and74,71 change in standing art.
+  Reviewed exact two-pixel fixture updates and ordinary-frame identity checks.
+- [x] Verify native/enlarged gaze and breathing/blink proofs, focused tests,
+  independent review, full App/Core suites. Keep raw art files unchanged.
+  FinalApp1069/Core241 PASS; focused174 plus endpoint55 PASS. Native static
+  proof24transition poses and8breathing phases inspected. Exact black spur
+  remains unreproduced, not claimed fixed; measured two-speck cleanup verified.
+- [x] Prepare fresh candidate; normal tray exit and passing gates before
+  installed replacement, verify payload and launch. No commit/push.
+  candidate-20260914-upright-rump-01; backup470installation files+1data file,
+  registration/Startlink; installer exit0;467payload verified, original data
+  unchanged. Installed PID7276 launched; duplicate47264 exit0.
+  Evidence docs/verification/2026-09-14-upright-rump.md.
+- [ ] User live acceptance of matched rump and transient-spur observation.
+
+## Tracking exit hides resumed gait — 2026-09-13
+
+- [x] Diagnosed with real presenter proof: tools/TrackingProof `unused walk-exit`.
+  UpdateHunting releases autonomous hold immediately, while ApplyHunting retains
+  the entire upright hunt raster until gaze rests and source bridge finishes.
+  At16/160/320/480ms body delta0.4/4/8/12DIP, leg-region pixel delta from standing0;
+  walking source appears by800ms. Position delta supplied by diagnostic harness;
+  PetLoop separately confirms holdHunt directly controls autonomous suspension.
+- [x] User approved fix. Recovering head now overlays live lower gait rather
+  than standing feet; minimum first authored gait level avoids post-crouch
+  frame0 rounding. Outer exit RED2, preparation exit RED2; focused49 PASS.
+- [x] Presenter proof first16ms moving-foot difference95138 vs standing (was0),
+  continuing through head recovery; artifacts/repro/tracking-gait-20260913/exit.png.
+- [x] Review found captured readiness hindleg reset; RED1/GREEN1, focused50 PASS.
+  Re-review clear; frozen walking pose survives readiness. Core241 PASS.
+- [x] App1058/core241 PASS; package/native smoke/installer gates PASS.
+  Backup470files+data/registration, install exit0,467payload verified.
+  Installed PID42444 launched; duplicate53944 exit0, original data retained.
+- [ ] User live acceptance; docs/verification/2026-09-13-tracking-gait.md.
+
+## Idle / walking / tracking silhouette diagnosis — 2026-09-13
+
+- [x] Compared current built renderers at native96, neutral head/gaze and equal
+  display scale. Canonical/locomotion rest width72, tracking neutral width74
+  (alpha>=128 bounds x4..75 vs x4..77), equal height63. HuntRenderer's separately
+  authored rear join changes the silhouette even at amount0.
+- [x] All head sources derive from canonical; tracking resamples a split head,
+  rotation has no scale. Idle breathing adds up to2.4% width/1.2% height, while
+  tracking resets it. Walking adds limb deformation, fourth paw, bob/roll.
+  Proof: artifacts/repro/skin-comparison-20260913/neutral.png.
+- [x] User approved implementation. Neutral rear curve aligned to original
+  width72 and row edges within1native pixel; crouch amount1 remains unchanged.
+  Tracking inherits ordinary breathing scale (RED5/GREEN5; focused44 PASS).
+- [x] Pose proof and focused50 PASS. Review caught jump transform replacing
+  breathing; endpoint RED2/GREEN2 now guards scale+pivot continuity. Re-review clear.
+- [x] Final app1053/core241 PASS; candidate shared-skin-02 package/native/installer
+  gates PASS. Backup470files+data/registration, install exit0,467payload verified.
+  Installed PID35520 launched, duplicate20992 exit0, original data retained.
+- [ ] User visual acceptance. Evidence: docs/verification/2026-09-13-shared-skin.md.
+
+## Attached paw shoulder seam — 2026-09-13
+
+- [x] Reproduced dark horizontal join over black background. Bilinear sampling
+  discarded fixed source row63, reducing stretched row64 opacity (RED2).
+- [x] Preserve shoulder interpolation apron; focused38, app1046/core241 PASS.
+  Both paws/open+closed, head/opposite-paw preservation and black proof checked;
+  scoped review clear. Package/native smoke/installer gates PASS.
+- [x] Backup470files+data/registration; install exit0 and467payload hashes verified.
+  Installed PID40096 launched; duplicate19532 exit0, original data retained.
+- [ ] User live acceptance. Evidence: docs/verification/2026-09-13-perch-paw-seam.md.
+
+## Smooth mouse-tracking handoff — 2026-09-13
+
+User requests smooth tracking entry/exit, retaining prompt proximity response.
+Cause: presenter hides gaze on departure and stops advancing its retained state;
+later entry can reuse stale gaze. Preserve immediate preparation cancellation,
+tracking radius, pounce/cooldown, head/cheek/paw input and source artwork.
+- [x] Real-presenter gaze RED3/GREEN3 plus source-handoff RED2/GREEN2.
+  Focused60 PASS; active lag/radius/dwell unchanged, inactive gaze relaxes before
+  a neutral-only source bridge. Entry120ms / final source bridge160ms.
+- [x] Entry/exit WPF strips inspected; scoped re-review clear. Candidate01 was
+  not installed (source pop remained); final candidate02 is being verified.
+- [x] Final app1044/core241 PASS; package/native smoke/installer gates PASS.
+  Original470files+data/registration backed up; installer exit0.
+- [x] Installed467payload hashes/registration/Start link/data verified;
+  PID49456 launched, duplicate47108 exit0, original data retained.
+- [ ] User live acceptance. Evidence:
+  docs/verification/2026-09-13-tracking-transition.md.
+
+## Attached forepaw interaction — 2026-09-13
+
+Approved: drag only the selected attached forepaw, without moving the pet or
+losing its support. A short tap waves only that paw, then restores. Preserve
+head/cheek interactions and all repaired artwork; ground body drag stays disabled.
+- [x] Initial real-presenter drag regression RED4, local routing/controller and
+  renderer implemented; focused16 PASS including existing perched cheek behavior.
+- [x] Focused40 PASS; regrab interruption/hit mismatch RED10/GREEN10. Enlarged
+  WPF render inspected, scoped re-review no Critical/Important findings.
+- [x] Final app1038/core241 PASS; package/native smoke/installer gates PASS.
+  Verified backup470files+data/registration; installer exit0.
+- [x] Installed467payload hashes/data/registration/Start shortcut verified;
+  installed PID48092 launched, duplicate36328 exit0, original data prefix retained.
+  Evidence:
+  docs/verification/2026-09-13-perch-paw.md (includes minor repeated-tap polish).
+- [ ] User live acceptance; no commit/push or public release.
+
+## Taskbar context menu support — 2026-09-13
+
+User approved preserving taskbar support/grip while its context menu is open;
+ordinary window occlusion and real taskbar disappearance must remain effective.
+- [x] Existing behavior reproduced: menu clips taskbar surface and drops support.
+  New RED3: repeated right-side menu, entering grip and attached grip.
+- [x] Scope exception to transient menu and taskbar with matching nonzero PID;
+  preserve ordinary windows, unrelated menus and missing-taskbar behavior.
+- [x] Focused40, core241 and full app1012 PASS; review clear, package/native
+  smoke/installer gates PASS. Backup470files+data; installer exit0,467installed
+  hashes verified. Installed PID42104 launched; duplicate26888 exit0, data retained.
+  Evidence docs/verification/2026-09-13-taskbar-menu-support.md.
+- [ ] User live acceptance; no artwork, animation, preview or commit/push changes.
+
+## Cheek-hop fine timing — 2026-09-13
+
+User approved a small launch adjustment80ms to65ms only. Keep280ms hop,
+max8/4DIP, displaced landing, face440ms and original artwork.
+- [x] Controller RED2 catches missing movement at75ms under old80ms delay.
+- [x] Focused146/full1006 PASS; review no actionable findings; package/native
+  smoke/installer gates PASS. Backup470files+data; installer exit0 and467hashes
+  verified. Installed PID47840 launched, duplicate29472 exit0; data retained.
+  Evidence docs/verification/2026-09-13-cheek-65ms.md.
+- [ ] User live acceptance; no commit/push or preview changes.
+
+## Earlier cheek-hop overlap — 2026-09-13
+
+User approved launch at80ms, just before the first cheek rest crossing, rather
+than waiting for all face oscillation to settle. Preserve280ms hop, max8/4DIP,
+displaced landing, fixed held position and all repaired outlines.
+- [x] Controller regression RED2: no hop at90ms while cheek is nearly home.
+- [x] Earlier overlap80..360ms, face settles440ms. RED2/GREEN2, focused146 and
+  full1006/1006 PASS; read-only review clear. Package/native smoke/build PASS.
+- [x] Normal tray exit confirmed; backup470files+data/registration; installer
+  exit0,467payload hashes verified. Installed PID22792 launched, duplicate5944
+  exit0; original data retained. Evidence docs/verification/2026-09-13-cheek-early-hop.md.
+- [ ] User live acceptance. No commit/push, public release, artwork/preview change.
+
+## Outline repair and displaced cheek-hop landing — 2026-09-13
+
+User approved repairing broken outlines, starting recoil at complete cheek rest,
+and landing behind rather than returning. Retain8DIP backward/4DIP lift maximum,
+smaller weak pull; stationary hold, no new eye expression or art style.
+- [x] Movement RED3/GREEN3: captured cheek returns through440ms, then280ms hop.
+  Controller remains active through720ms; cumulative X is applied to real position,
+  Y uses existing platform supported-hop seam; exact endpoint consumed on retirement.
+  Attached grip remains attached with face recovery only.
+- [x] Review RED2 double-render and RED4 ceiling drift reproduced; final render
+  snapshot strips visual offsets, legacy Y uses retained baseline. Re-review clear.
+- [x] Outline cause reproduced: raised front join mask cuts at fixed row; lowered
+  head's white backing overlays paw ink. Eight actual pixel regressions RED.
+- [x] Focused192 and final full1006/1006 PASS; native frame comparison and review
+  complete. First-frame neck discontinuity also reproduced and fixed (delta523).
+  Final candidate cheek-landing-02 passes package/native smoke and installer gates.
+- [x] Normal installed-host update: backed up470files plus data/registration;
+  installer exit0,467payload hashes verified, original data preserved. Installed
+  PID31428 launched; duplicate47840 exit0. Evidence:
+  docs/verification/2026-09-13-cheek-landing-outline.md.
+- [ ] User live acceptance. No force termination, commit/push, new artwork or
+  preview changes.
+
+## Delayed cheek-release hop — 2026-09-13
+
+User approved recoil starting at80–90% cheek return and a stronger backward/up
+hop (max8/4 DIPs); light pull smaller, hunt pose supported, no held cheek carry.
+- [x] Existing code starts immediately with only2DIPs horizontal kick; RED7
+  reproduces early-start and insufficient movement. Implement75ms delay (83%
+  return), X2/8DIPs peak225ms, Y1/4DIPs peak195ms; settle375ms within440ms release.
+- [x] Focused176/176, full RID989/989 PASS; scoped review no actionable findings.
+  Package/installer validation PASS after normal user exit (initial smoke was
+  blocked by still-running installed owner's shared single-instance mutex).
+- [x] Backed up470files+data/registration; installer exit0,467installed hashes and
+  original data verified; installed PID25328 launched, duplicate49940 exit0.
+  Evidence docs/verification/2026-09-13-delayed-cheek-hop.md.
+- [ ] Live acceptance. Preserve artwork, expressions, browser preview and actual
+  window/support position. No force-close, commit/push or public release.
+
+## Native cheek spring including hunt sway — 2026-09-13
+
+User approved native release recoil, including cheek capture from the hunting
+butt-wiggle pose. Keep local stretch/no carry, existing art and eye expression.
+- [x] Native release timing RED7/GREEN7; signed hunt compression no longer discarded.
+  440 ms damped spring crosses rest twice; light/max visual kick .6/2 DIPs.
+- [x] Review found visual recoil leaking into platform geometry; RED5 reproduces
+  both initial geometry and appended platform-transform cases. Fix excludes the
+  transformed kick from contact/bounds rather than moving the physical window.
+- [x] Final focused174/174 and full RID987/987 PASS, zero skipped; scoped
+  re-review no remaining critical/important findings. Candidate native-cheek-spring-01
+  package/native smoke and installer payload/refusal/build PASS.
+- [x] User-confirmed tray exit,470file+data/registration backup; installer exit0,
+  467installed hashes and original settings verified. Installed PID13228 started;
+  duplicate47616 exit0, no new failure diagnostic. Evidence:
+  docs/verification/2026-09-13-native-cheek-spring.md.
+- [ ] Live Windows/user acceptance (not inferred from automated rendering).
+  No preview/art rewrite, force termination, commit/push or public release.
+
+## Stationary cheek pull only — 2026-09-13
+
+User rejects cheek carry after another live distortion screenshot. Remove whole
+character follow and carry/perch readiness from cheek dragging; only local stretch.
+Head dragging, seated/attached cheek semantics and previewv7 remain unchanged.
+- [x] Trace: ordinary captured cheek entered BeginCheekCarry; its session moves
+  window and becomes whole-carry, enabling perch cue. New mirror/taskbar tests RED3/3.
+- [x] Route ordinary captured cheek to existing BeginCheekPull; queued/current
+  cheek stays local so platform support/falling remains physical rather than held.
+- [x] Focused34/34 GREEN; independent scoped review no actionable findings.
+  candidate-20260913-stationary-cheek-01 strict package/native smoke and installer
+  payload/refusal/build PASS. User confirmed normal tray exit; empty inventory.
+- [x] Full RID App980/980 PASS, zero skipped. Verified470file/data/registry backup,
+  normal installer exit0,467installed hashes/settings preserved. Installed52112
+  Started19:03:47KST; duplicate50052 exit0; no new failure diagnostic.
+- [ ] User live acceptance. No force-close, commit/push or public release.
+  Evidence docs/verification/2026-09-13-stationary-cheek.md.
+
+## Cheek carry/readiness corruption and downward neck gap — 2026-09-13
+
+User reported four screenshots, then approved both fixes and light/max preview recoil.
+- [x] Offscreen RenderingRegressionProbe reproduces canonical flutter masks cutting
+  rotated/lowered captured head:106opaque head pixels changed upright-20deg,
+  139crouched-20deg across16flutter phases; before/after proof images exported.
+- [x] Downward neck(54,60) final alpha255 ->22; rotatedhead0/body4/joins0 explains
+  exposed desktop background. Diagnosis phase left native program unmodified.
+- [x] Approved product fixes: pose-aware body-only foreleg composition, body ink
+  before head, interior white neck backing; drag/perch logic unchanged.
+- [x] RED head3cases/neck4cases reproduced; initial focused GREEN14/14.
+  Review found no blocking issue;27pose neck proof has no enclosed holes or
+  outer silhouette growth. Final RID App979/979, focused17/17 (light/closed included),
+  Core241/241 PASS.27poses×16phases:0fullyopaque pulledhead pixels changed.
+- [x] candidate-20260913-cheek-neck-01 strict package/installer/native smoke PASS.
+  Normal tray exit confirmed;470files/data/registration backed up; same-version
+  install exit0.467installed payload hashes verified; data unchanged before launch.
+  Installed11268 started18:38:35KST, duplicate29056 exit0; no diagnostic failures.
+- [ ] User live visual acceptance; no commit/push/public release.
+Evidence docs/verification/2026-09-13-cheek-perch-neck-diagnosis.md and
+artifacts/repro/cheek-perch-neck-20260913-diagnosis. Completion evidence:
+docs/verification/2026-09-13-cheek-neck-fix.md. Previewv7 remains separate.
+
+## Cheek light/max release preview v7 — 2026-09-13
+
+- [x] Preserve v6 banks/contour/length/open eyes. Release-only offset .6nativepx
+  at25% pull,2px atmax, mirrored and bounded under repeated regrabs.
+- [x] Added light/max buttons, reloaded existing2801tab. Node11/11 GREEN;
+  independent review no blocker; tightened max-bound assertion after review.
+- [ ] User visual acceptance. Preview remains separate from product bugfix build.
+
+## Cheek rhythmic reaction preview v6 — 2026-09-13
+
+User approved torso squash/head follow/recoil but explicitly excluded eye closing.
+Keep v5 length/contour and existing440ms/two-recoil curve. Preview only.
+- [x] Reaction markers RED on no-op, GREEN: rigid head(-2,+1) at full pull,
+  torso24px height compresses1px; first negative lobe leans opposite~1.6px.
+- [x] Eye/head full-pull rigid texels, exact0rest,121pose fixedfeet/clearpadding,
+  prior contour/attachment tests and six Node input/motion checks PASS.
+- [x] Generated preview-06 baselinev5 vsreactionv6; hold observed in existing tab.
+- [x] Browser release observed; scoped review no blocking findings, Node6/6.
+  Fractional recoil has normal bilinear softness; visual acceptance remains pending.
+  v6old bank matches v5new SHA; installed App SHA unchanged.
+- [ ] User visual acceptance before native integration.
+Server18992 at2801; previous01..05 retained. No eye expression/new image assets,
+product build/install/restart, commit or push.
+
+## Cheek shorter reach preview v5 — 2026-09-13
+
+User likes contour but requests half of the added length removed. Interpreted as
+v2 1.4 -> v4 2.8 -> v5 2.1 maximum exterior scale; not halving the whole character.
+- [x] Tip fixture RED before change; GREEN with gain1.1 shared by fill and outline.
+  Actual tip agreement, fixed ink width, skin,81root/eye/attachment and121signed
+  preservation checks pass. Six Node input/motion tests pass; easing unchanged.
+- [x] New preview-05 banks compare long v4 and shortened v5, both with clean ink.
+- [x] Browser maximum hold verified. Scoped review no important findings; v5old
+  bank is byte-identical to v4new baseline. Server1788; no native product changes.
+- [ ] User visual acceptance; native product remains untouched.
+Same2801 URL; prior01..04 artifacts retained. No product build/install/restart.
+
+## Cheek contour preview v4 — 2026-09-13
+
+User approved separating the stretched cheek's fill and outline to avoid smeared
+ink, preserving v3 length and two-recoil snap. Preview only, no native integration.
+- [x] Actual tip-width regression RED on v3, GREEN with localized analytic contour
+  reconstruction using canonical skin/ink donors and constant-width distance ink.
+- [x] Whole-eye/root81poses, padding/body/ribbon121poses, rest/negative composition
+  checks pass; six Node input/motion tests pass. Maximum tip retains ink and fill.
+- [x] Same-length v3/v4 comparison generated and shown at existing2801 URL.
+- [x] Review caught lower hair attachment row64 being erased.81pose byte-exact
+  attachment regression RED then GREEN after preserving it. White/dark hold checked.
+- [x] Scoped re-review independently confirmed81pose attachment identity and no
+  remaining important findings. Installed App SHA unchanged.
+- [ ] User visual acceptance before product integration.
+Server19888 serves preview-04 banks; preview-01/02/03 retained.
+No canonical asset edits, product build/install/restart, commit or push.
+
+## Cheek length preview v3 — 2026-09-13
+
+User approved doubling v2 maximum exterior reach, with fixed root width and the
+same snap/two-recoil timing. Preview only; no native integration or installation.
+- [x] Synthetic tip reach and browser bank-crop tests RED, then GREEN with positive
+  scale1.4 ->2.8,32px padding/160px frames and dimension-aware drawBank.
+- [x] Six Node tests and C#81positive/121signed-pose preservation checks PASS.
+- [x] V3 maximum hold visible in existing browser; no clipped tip or vertical bulge.
+- [x] Mirrored hold/release verified; scoped review found no important issue and
+  independently passed six Node tests. Installed App SHA remains unchanged.
+- [ ] User visual acceptance before native integration.
+Server48524 serves http://127.0.0.1:2801/ from preview-03; previous banks retained.
+No installed product modifications, restart, commit or push.
+
+## Cheek snap preview v2 — 2026-09-13
+
+User retained length1.4x, rejected vertical bulge/slow return, and approved a quick
+snap followed by two diminishing rebounds. Preview only; native product untouched.
+- [x] Test-first timing/regrab/no-inflation RED, then horizontal-only sampling and
+  custom snap GREEN. First rest crossing92ms; recoil peaks160/345ms; rest440ms.
+- [x] Five Node tests and C#81positive/121signed-pose checks pass, protecting cheek
+  root, whole eye, body/ribbon, padding and negative hair/cheek composition.
+- [x] Scoped review found no remaining important issue; independent Node5/5 PASS
+  and generated comparison inspected. V2 browser maximum hold verified.
+- [ ] User visual acceptance before native integration.
+Preview http://127.0.0.1:2801/ ; server34912; generated preview-02 banks.
+Prior preview-01 artifacts retained. No product build/install/restart/commit.
+
+## Cheek spring enlargement preview — 2026-09-13
+
+Historical v1, superseded by v2 above: length1.4x, width1.3x, spring.65/400ms.
+- [x] Isolated tools/CheekSpringPreview links current canonical cheek renderers;
+  no product source, assets, installer or installed process modifications.
+- [x] Test-first old envelope/release RED, then padded128px renderer and signed
+  damped spring GREEN.121signed poses checked for crop/body/ribbon preservation.
+- [x] Review found partial eye deformation; added81pose eye-preservation RED
+  then restricted widening to exterior x<16. Negative lobe follows both eyes
+  and top/side hair. Regrab continuity RED100% then GREEN displayed~27%.
+- [x] Browser old/new comparison, hold/release and physical pointer drag verified.
+- [x] Negative hair/cheek overlap composition RED then GREEN using padded stage.
+  Final scoped review: no remaining important issue. White/dark/mirror checked;
+  four Node tests and all C# preview checks pass. Deliverable browser tab retained.
+- [x] User feedback received: retain length, revise shape and return feel in v2.
+Historical server4328 stopped; same URL now serves v2. See preview README.
+Generated banks: artifacts/repro/cheek-spring-20260913-preview-01.
+
+## Wider pointer tracking / preparation zones — 2026-09-13
+
+User approved outer tracking distance2x and preparation distance1.5x (ㄱㄱㄱ).
+- [x] Presenter ellipse radii155/100 ->310/200 DIP; inner77.5/50 ->116.25/75.
+  Preserve20% exit hysteresis,1.5s dwell, immediate cancellation and3s cooldown.
+- [x] Test-first RED16/24 on unchanged production; focused48/48 PASS after
+  two-line change. New boundary/dwell cases plus updated outer tracking,
+  cancellation, hysteresis and supported-loop fixtures.
+- [x] Full App962/962 PASS (3m23s), scoped review no findings. Portable strict
+  package/native smoke PASS and installer payload/refusal/Build PASS (467files).
+- [x] candidate-20260913-pointer-range-01 installed after verified470file/data/
+  registration/shortcut backup. Installer40864 exit0; installed467file hashes,
+  ownership/Start link/registration and original data PASS. Installed49932 started
+  16:34:54KST; duplicate49692 exit0, no new diagnostic faults.
+- [ ] User live acceptance of expanded tracking/preparation distances.
+Evidence: docs/verification/2026-09-13-pointer-range-expansion.md and
+artifacts/installer/host-update-20260913-pointer-range-01.
+User requested normal tray exit and confirmed (ㅇㅇ). Preserve prior fixes/art.
+No commit/push, public release or signing requested.
+
+## Taskbar visible-cue / release mismatch diagnosis — 2026-09-13
+
+User reports flutter-ready feedback but intermittent failed taskbar attachment;
+suspects readiness/release range mismatch, exact trigger unknown. Diagnosis only.
+- [x] Traced shared SelectCandidate: same formula, but readiness before render
+  and release after freshly measured silhouette use different held-sole geometry.
+- [x] Real WPF/loop tests with cursor inside800x600 (Y599 maximum): slow approach
+  sweep PASS; fresh lateral swing sweep reproduces40/120 displayed-ready releases
+  failing without any pointer/scene change (both facings, hold1..20ticks).
+- [x] Evidence docs/verification/2026-09-13-perch-cue-release-diagnosis.md and TRX.
+- [x] User approved geometry-consistent readiness/release handoff (ㄱㄱ).
+- [x] Reconfirmed RED on unchanged production build before implementation.
+- [x] Explicit advertised-cue geometry token; consume next frame, revalidate current
+  winning surface/monitor/facing, retain input gates. Position matching only allows
+  existing one-physical-pixel readback envelope; acquisition keeps continuous origin.
+- [x] Initial focused22/22 and full App944/944/Core241/241 PASS. Review identified
+  readback seam; quantized sweep RED2/3 (unrounded control PASS). Corrected handoff
+  with physical-pixel/scale tolerance; expanded focused19/19 PASS (360swing cases,
+  all120per mode must advertise). Reviewer: no remaining findings.
+- [x] Final App950/950 PASS (3m7s), Core241/241. Frozen perch-handoff-01 portable
+  strict package/native smoke PASS; App/Core match tested RID references. No art,
+  hunt/tracking or global entry-band changes. Evidence in perch-handoff.md.
+- [x] Installer refusal/payload/Build gates PASS,467file inventory and native smoke.
+  New candidate perch-handoff-01, prior artifacts retained. Normal host backup470
+  installed files/data/registry/Start link; installer48640 exit0. Installed hashes,
+  ownership, shortcut and unchanged prelaunch data PASS. Installed49392 started
+ 16:12:44KST; duplicate48224 exit0, original log prefix retained, no new faults.
+- [ ] User live acceptance of immediate release while taskbar forelegs flutter.
+User normally exited installed49400 (ㅇㅇ), Stopped16:02:58KST and empty inventory.
+Evidence: docs/verification/2026-09-13-perch-handoff.md and
+artifacts/installer/host-update-20260913-perch-handoff-01. No force stop/commit/push.
+
+## Two-zone pointer tracking and immediate preparation cancel — 2026-09-13
+
+Approved: outer tracking ellipse twice the preparation radii, upright eyes/head/
+facing only; leaving preparation cancels wiggle and dwell immediately. Reentry
+starts fresh. Preserve airborne motion and the existing three-second cooldown.
+- [x] Inspect existing presenter/session/loop; bounded design approved (ㄱㄱㄱ).
+- [x] Eleven new regressions failed on the old implementation for expected reasons.
+- [x] Presenter two-zone hold/gaze and immediate session reset implemented;
+  full App930/930 PASS (2m33s). Two obsolete delayed-recovery sleep expectations
+  adjusted to immediate cancellation; sleep policy unchanged.
+- [x] Review follow-up focused73/73 PASS: short-idle walking suppression/resume
+  and preparation-frame assertion protecting existing20% hysteresis. Reviewer
+  confirmed both improvements and four literal payload-pin refreshes; no findings.
+- [x] Frozen pointer-zones-01 portable and installer built; strict package/native
+  smoke, installer refusal/payload/Build gates PASS. Previous candidates preserved.
+- [x] Actual installed product updated with prior470files/data/registration/link
+  backed up. Installer21408 exit0;467 installed payload hashes/ownership/link/data
+  PASS; installed8632 running, duplicate48364 exit0. No force termination/reboot.
+- [ ] User visual acceptance of outer tracking and immediate preparation exit.
+Evidence: docs/verification/2026-09-13-pointer-zones.md; full and focused TRX files.
+Preserve existing art, installer work and uncommitted changes.
+
+## Latest installer normal host update — 2026-09-13
+
+User approved actual installed-product update and launch verification (ㄱㄱ).
+- [x] User normal tray exit confirmed; no product process. Full byte-verified
+  backup470 installed files,1 data file, HKCU registration and Start link.
+  Initial diagnostic JSON serialization included PowerShell provider metadata;
+  Ctrl+C canceled only that helper before installation. Resumed from identical
+  backups with plain registry values; backup PASS, no payload or data mutation.
+- [x] Run exact reviewed ribbon-match-01 installer as current non-admin user;
+  verify467 installed payload hashes, ownership, registration, shortcut and data.
+- [x] Installer45236 exit0; log confirms HKCU/non-admin/no reboot, data unchanged
+  before launch, no installer auto-launch. Start link/ownership manifest verified.
+- [x] Installed47392 started at14:08:13KST; duplicate24900 exit0, only installed
+  process remains. Original data prefix retained; no new failure diagnostics.
+- [ ] User visual confirmation of the newly launched installed product.
+No uninstall, fault injection, force termination, feature/art changes, signing or
+public release. CloseMainWindow on verified portable12136 returnedFalse; no kill.
+User tray exit requested while preparation continues.
+Evidence/backup: artifacts/installer/host-update-20260913-ribbon-01.
+Normal same-version host update accepted by automated checks; fresh guest,
+cross-version upgrades, failure-injection, signing and rights remain separate.
+
+## Accepted artwork → current installer candidate — 2026-09-13
+
+User: “아주 좋아 다음”. Ribbon live acceptance is complete. Resume the pending
+installer promotion with the exact approved ribbon-match-01 portable payload.
+Existing linked worktree verified on feature/dororong-m1-expression-animation;
+HEAD45e9d40. Prior uncommitted product fixes and all artifacts must be preserved.
+
+### Task 1101: Refresh approved installer payload and build evidence
+
+- [x] Replace the old frozen archive pin with the newly verified/accepted archive;
+  point installer build/payload tests to its immutable runtime. Keep strict hash,
+  signature, package validation, output refusal and lifecycle policies unchanged.
+- [x] Focused Refusal/Payload tests PASS; old builder first refused the new ZIP
+  before output creation, then four pin/path literals changed across three files.
+- [x] Normal exit29496 at04:45:01KST verified; fresh installer ribbon-match-01
+  PhaseBuild PASS. Strict native smoke owned18156 normalWM_CLOSE exit0, duplicate0.
+- [x] Scoped pin/config spec+quality review PASS, no severity findings.
+- [x] All467 staged files match the immutable accepted payload. Installer SHA256
+  C87A42CE206380690041C37FFE06ACABB5968C303C88006019701FD95E3E83D2; unsigned.
+- [x] README/current evidence updated; old candidates and installed App hash
+  A1797AA20FD189FEACF6BE4C57B2B1A0ECF4CB8B52578B7AAAC701B14D7BCE5A preserved.
+- [x] Same accepted portable runtime relaunched12136 at04:47:56KST after fresh
+  empty inventory; exact path and Started event verified.
+Task1101 complete: config review and candidate checks PASS; no commit.
+Next boundary: normal installation/reinstall verification of this latest candidate;
+historical directory02 lifecycle/guest evidence is not new-candidate acceptance.
+No new character features or art changes, App/Core rebuild, installed-directory
+mutation, failure injection, elevation, force-close, guest launch, signing,
+commit, push or public release in this bounded candidate-preparation step.
+
+|Interface|Consistency check|Result|
+|---|---|---|
+|Builder pin → build/payload tests|Same immutable archive/runtime must feed all|Refresh as one small batch|
+|Builder → existing installed product|Compilation need not install or replace it|Preserve installed copy; native smoke only|
+|Candidate → guest acceptance|Guest currently pins old installer|Do not relabel old guest evidence as new candidate PASS|
+
+Ruling: use the existing SDD task/review split only for the small packaging-pin
+batch; preserve TASKS.md as sole ledger and retain artifacts/installer evidence.
+No commits or scratch cleanup in this step; historical worktree is user-owned.
+Cost if wrong: reorganize local evidence, no product behavior effect.
+
+## Ribbon pixel matching: hanging + perch — 2026-09-13
+
+User accepts the shared chin/hair repair and requests matching the broken ribbon
+in hanging/perched poses to the ordinary pose (third attached crop).
+- [x] Registered comparison: hanging (67,50) is PBGRA7/9/9/A55 vs ordinary
+  209/208/209/A255; perch outer tail (68,51) is absent. Broken/missing cutout edge.
+- [x] New real-pixel regressions RED3; separate double-alpha regression RED1.
+  AuthoredRibbonContour copies only hand-isolated ribbon spans. Upper loops replace
+  RGBA; tail edge removes reference white backing while retaining the posed torso.
+  Shared path covers perch,8keys,113dense frames. Source images/bank untouched.
+- [x] Ribbon + supplied32/32 pass; all113 PBGRA/interior checks and key-boundary
+  continuity pass. Scoped read-only code review: no actionable findings.
+  White/black registered final-flat.png comparison inspected.
+- [x] Full App919/919 passed2m19s, then fresh ribbon-match-01 package/native
+  smoke PASS (owned10068 normalWM_CLOSE exit0, duplicate0), exact RID parity.
+- [x] User normal tray exit25112 verified04:33:40KST. Fresh empty inventory
+  before normal launch29496 at04:35:57KST; exact path/Started event verified.
+- [x] User live visual acceptance: “아주 좋아 다음”.
+No motion changes, source-image rewrite, installer promotion, commit or push.
+
+## Shared lower-head repair: hanging + perch — 2026-09-13
+
+User explicitly approves fixing BOTH dangling hollow hair and perched double chin;
+new screenshot7ea34e0e confirms the remaining chin location.
+- [x] Prior09 patch stopped at sourceY59, leaving chin rows60/61 unchanged:
+  atX38 observed B78/188 vs canonical181/255. New literal regressions RED2.
+  Authored08/dense08 hair has white255 where canonical tip is162/122; RED2.
+- [x] AuthoredHeadContour gives one bounded lower-head repair to source09,
+  all8 prepared drag keys and all113 dense frames. Head translations measured
+  against canonical pink texture; interpolate offsets and mask coverage for
+  subpixel continuity. No source resources or motion timing/geometry changed.
+- [x] Preserve BGRA/PBGRA separately after existing preservation controls caught
+  a1-level round-trip RGB change outside the repair. Those controls now pass.
+  Existing raw preview hashes still checked; exact pixel parity outside the
+  bounded correction replaces invalid whole-frame equality for intentional art edits.
+- [x] Focused180/180 passed. Added all8key/bank hair and both-side key continuity
+  checks17/17 passed. Scoped read-only review: no findings. WPF comparison inspected.
+- [x] Sequential full App912/912 passed2m18s, followed by fresh shared-head-contour-01
+  package/native smoke PASS (owned40880 normalWM_CLOSE exit0; duplicate0), exact RID parity.
+- [x] Empty inventory before normal launch25112 at04:14:34KST; exact path verified.
+- [x] User visual acceptance: “수정 잘 됨”; new ribbon report is separate scope.
+Product was already stopped; no force-stop, installer promotion, commit or push.
+Evidence: `docs/verification/2026-09-13-shared-head-contour.md`.
+
+## Live rejection: dangling hair / Codex hang — 2026-09-13
+
+User reports the hollow hair contour remains while dangling and Codex became
+unresponsive. Do not mark the previous visual trial accepted.
+- [x] Read-only trace: BodyDragHold selects SuppliedBodyDragFrames.Sample(1)
+  (authored08); fractional drag/release uses the separate113-frame LayeredPullFrames
+  bank. The last lower-head correction only affects PerchExpressionFrames/source09.
+  Thus the dangling path did not consume that correction. Next repair must cover
+  the actual authored/dense/held presentation path, not another09-only patch.
+- [x] Windows Application Hang1002 at03:52:57KST identifies Codex ChatGPT.exe;
+  WER1001 reports MoAppHang, reasonUnknown. No causal attribution to Dororong.
+  Detailed WER report access denied; do not change permissions or inspect dumps.
+- [x] Fresh pet/testhost process inventory empty at03:56:54KST. No restart,
+  expensive test/build/package run or production change in this diagnostic turn.
+- [x] User approved corrected repair scope (ㄱㄱ); tracked above.
+
+## Perched blink parity / residual contour — 2026-09-13
+
+User rejects outline-01's visual result (아직) and requests removal of perched
+half-blink frames, matching ordinary blink timing. Do not count prior trial as accepted.
+- [x] Found separate old 3600ms perched clock with squint frames; changed to
+  open/closed only, 5000ms cycle and closed2000..2360ms, matching ordinary timing.
+  Actual WPF two-cycle/two-facing regression RED2 then GREEN; squint generation
+  and selection removed from perch (ordinary authored resources preserved).
+- [x] Repeated Render+Apply fixture reproduces the screenshot's lower head from
+  source09 itself. Canonical comparison shows different lower-chin/hair-tip ink.
+  Replace only bounded lower-chin/right-hair patches from registered canonical
+  art, flattened once onto white chest. No whole-head overlap or source overwrite.
+  Three authored-contour fixtures RED3 then GREEN; hole expectations now allow
+  real hair colour rather than enforcing incorrect white. Focused117/117 passed.
+- [x] Scoped independent review: no findings. Native/enlarged WPF inspection.
+- [x] Final enlargement caught one additional old hair-tip texel(47,64).
+  Literal regression RED1/3passed; extend lower hair mask from x48 to47.
+  Focused118/118 and follow-up review passed; previous full892/892 passed.
+  Rebuild final candidate02 and rerun full suite for this final pixel change.
+- [x] Final full App893/893 passed3m16s. Strict candidate02 package/runtime/native
+  smoke passed (owned34800 normalWM_CLOSE exit0; duplicate0), exact RID parity.
+- [x] User normal exit30328 verified (Stopped03:35:52KST and empty inventory).
+- [x] Empty inventory before normal launch of candidate02 as11816 at03:42:43KST.
+- [ ] User live visual acceptance for contour/blink.
+No installer promotion/commit/push.
+Evidence: `artifacts/repro/perch-residual-20260913/` and
+`docs/verification/2026-09-13-perch-outline.md`.
+
+## Perch outline / flutter masking diagnosis — 2026-09-13
+
+User confirms stutter fixed, reports front-paw occlusion during flutter and doubled
+chin/paw/hair contours when perched. User approved fixes (ㄱㄱㄱ).
+- [x] Trace readiness raster composition and separate edge-perch presentation.
+- [x] Exact running stutter-01 DLL probe exports raw09, raw08, four flutter phases
+  and standalone attached WPF on black/white backgrounds. Raw09 already contains
+  fringe/stray coverage and the hair-tip discontinuity; not solely double WPF layers.
+- [x] ForelegFlutterFrame's final coordinate-only HeadForeground restoration
+  copies transparent source texels over moving-paw output, including x<33/y52..54;
+  destination rows<52 are excluded before that. A rectangular protection region
+  can therefore visibly truncate a raised paw. No runtime fix attempted yet.
+- [x] Foreground coverage fix: remove the base head copy, draw paws, composite
+  actual premultiplied head coverage once. Transparent head-space no longer erases
+  paws; pin remains exact. Four-phase real-pixel regression RED4/4 then focused32/32.
+  Scoped read-only reviewer found no issues; black/white WPF proof inspected.
+- [x] Full self-contained App876/876 passed (2m29s); executable replacement not yet performed.
+- [x] User approved direct original-pixel/alpha cleanup (ㅇㅇㅇ). Built-in imagegen
+  candidate remains rejected and unreferenced; original files/resources preserved.
+  CleanOpen repairs only missing texels in the small lower-hair/chest patch and
+  lower-contour white matte in a frozen runtime copy. 117 changed texels:7filled,
+  61cleared,0opaque-source texels changed. Black/white comparison inspected.
+- [x] Pixel regressions RED9failed/1passed then GREEN; nearly-opaque-white negative
+  control caught an overbroad matte removal, RED1 then fixed. Focused112/112;
+  scoped independent review no findings. Blink/cheek registration shares cleanup.
+- [x] Final full App887/887 passed2m48s; strict package/native smoke passed
+  (owned32240 normalWM_CLOSE exit0, duplicate0, tested RID App/Core parity).
+- [x] Fresh empty process inventory; candidate-outline-01 launched30328 at
+  03:20:33KST; exact executable path and Started event verified.
+- [ ] User visual acceptance for both changes (live trial remains separate).
+Ignored diagnostic: `artifacts/repro/perch-outline-20260913/` (exact candidate DLLs).
+User normally exited15784; empty inventory and Stopped event03:16:59KST verified.
+No installer promotion/commit/push.
+Evidence: `docs/verification/2026-09-13-perch-outline.md`.
+
+## Repeated taskbar cue stutter — 2026-09-13
+
+User confirms visible preview but repeated initial flutter stalls on every taskbar
+visit, not ordinary windows. Deterministic live-candidate WPF probe reproduces
+readiness resets without native z-order writes: a clamped swing can yield entry
+distance20.000000000000057/114 rather than20. Apply1e-6DIP numeric tolerance only
+to the bottom-taskbar held-geometry entry comparison; preserve nominal range,
+screen clamp, native guard, attachment registration and artwork.
+- [x] Corrected real-loop regression RED4/4 at ticks6/8; GREEN focused24/24.
+  Both facings/fling directions retain readiness throughout160 frames and release.
+- [x] Scoped independent read-only review: no findings. Core241/241 passed.
+- [x] Full App872/872 (2m44s), strict fresh package/native smoke passed
+  (owned34084 and duplicate normal exit0); final tested RID hash parity.
+- [x] Normal user exit34600 verified; fresh candidate-stutter-01 launched15784
+  at02:34:26KST with exact path and Started event verified.
+- [x] User confirms repeated-taskbar stutter fixed (ㅇㅋ 수정됨).
+  New art/mask defects tracked separately above.
+Installer promotion and commit/push remain deferred. Evidence:
+`docs/verification/2026-09-13-perch-stutter.md`.
+
+## Perch preview taskbar visibility — 2026-09-13
+
+User reports candidate45648's held eligibility cue is behind taskbar. Confirmed
+loop layer maintenance only covered Entering/Attached, not IsPerchReady. Extend
+the same post-render native guard to ready previews; do not alter native flags,
+range, artwork, geometry or focus. No new always-on z-order enforcement.
+- [x] RED: real-loop ready cue exists but layer callback Expected1/Actual0.
+- [x] GREEN focused86/86; includes native primary/secondary taskbar repair,
+  retained foreground/geometry/styles, no-churn and nonoverlap/ordinary controls.
+- [x] Scoped read-only review: no findings; requires live cue visibility check.
+- [x] Full App868/868 passed2m42s; fresh candidate built, Core unchanged.
+- [x] Strict package PASS (owned16424 normalWM_CLOSE exit0, duplicate0).
+  Fresh empty process inventory; candidate launched as34600.
+- [x] User confirms cue now comes forward; reports repeated initial flutter stutter.
+  Attachment/range acceptance is not inferred; follow-up above.
+
+User normally exited45648 (ㅇㅇㅇ); fresh pet process inventory empty.
+Candidate target: artifacts/product-shell/candidate-20260913-perch-preview-layer-01.
+Prior range correction remains intact. No installer promotion, commit or push.
+
+## Taskbar perch-range inconsistency diagnosis — 2026-09-13
+
+User reports intermittent/narrower taskbar perch eligibility. Root-cause-first
+diagnosis only; no tolerance, source behavior, artwork, running process or installer
+changes. Installer promotion is deferred while this issue is assessed.
+- [x] Trace shared readiness/release selector, transformed grip, carry gate,
+  desktop occlusion and physical-screen drag clamp.
+- [x] Current candidate DLL deterministic WPF probe:18 grab/facing/angle poses.
+  Fixed gripY94 vs pose-dependent soleY120.69..135.05 makes the nominal20DIP
+  band only7DIP upright,0..13.31DIP with sampled tilt, on1080/40px taskbar geometry.
+  Core selector rejects both unreachable poses and accepts the unclamped control.
+- [x] Independent metadata snapshot: both taskbars1040..1080, full-width support,
+  no intersecting occluders after normal80ms initialization. This is not a capture
+  of the user's failed release and does not exclude intermittent external causes.
+- [x] User approved correction (ㄱㄱ). Move the20DIP band into reachable space
+  only for bottom-touching taskbars; retain ordinary edges, full-body clamp and
+  original image09 attachment registration. RED5/8 then GREEN8/8.
+- [x] Expanded focused App165/165 and Core241/241 pass, including real WPF tilt,
+  both-facing loop readiness/release and translated/scaled monitor cases.
+- [x] Independent review found fractional-DPI bottom equality sensitivity;
+  integer-pixel150% regression RED1failed/1passed,1e-6DIP roundoff-only correction,
+  focused167/167; re-review no findings.
+- [x] Final self-contained8.0.31 App867/867, Core241/241; fresh candidate published
+  candidate-20260913-perch-range-01, exact App/Core RID parity.
+- [x] Strict package smoke passed (owned8688/duplicate/WM_CLOSE exit0).
+  Launched exact candidate45648 at02:10:51KST, path and Started verified.
+- [ ] User live taskbar readiness/release trial; installer promotion remains pending.
+
+Evidence: artifacts/repro/perch-range-20260913/Probe.csproj,Program.cs,result.jsonl;
+report docs/verification/2026-09-13-perch-range-diagnosis.md. User normally exited
+portable PID35480 for replacement; fresh process inventory empty. No live-fix
+acceptance claimed. Installer promotion remains deferred.
+Fix/handoff report: docs/verification/2026-09-13-perch-range-fix.md.
+
 ## Character context-menu outside-click dismissal — 2026-09-13
 
 User confirms relaunch visuals, reports character context menu remains open when

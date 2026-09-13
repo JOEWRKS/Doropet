@@ -258,8 +258,15 @@ public sealed class DororongPresenterInteractionDescriptorTests
         });
     }
 
-    private static void AssertFrame(System.Windows.Controls.Image image, string fileName) =>
-        Assert.EndsWith(fileName, image.Source.ToString(), StringComparison.OrdinalIgnoreCase);
+    private static void AssertFrame(System.Windows.Controls.Image image, string fileName)
+    {
+        if(UprightRumpSource.Contains(image.Source))
+        {
+            Assert.Contains(fileName,new[]{"dororong-canonical.png","dororong-closed-eyes.png"});
+            Assert.Same(UprightRumpSource.Standing(fileName=="dororong-closed-eyes.png"),image.Source);
+        }
+        else Assert.EndsWith(fileName, image.Source.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
 
     private static PetSnapshot Snapshot(PetState state, FacingDirection facing, double phase) =>
         new(state, new PointD(100, 100), facing, phase, false, null);

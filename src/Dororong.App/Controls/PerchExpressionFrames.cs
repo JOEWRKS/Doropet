@@ -7,9 +7,49 @@ namespace Dororong.App.Controls;
 // 100x100; cheek's approved raster field is expressed in canonical 96px space.
 internal static class PerchExpressionFrames
 {
-    internal static readonly BitmapSource Open = Load("dororong-edge-perch-09.png");
-    internal static readonly BitmapSource Squint = Compose("dororong-blink-squint.png");
+    internal static readonly BitmapSource Open = CleanOpen();
     internal static readonly BitmapSource Closed = Compose("dororong-closed-eyes.png");
+
+    private static BitmapSource CleanOpen()
+    {
+        var source = Read(Load("dororong-edge-perch-09.png"));
+        var result = (byte[])source.Clone();
+        // The partially transparent lower contour still contains white matte.
+        // Recover its ink colour and coverage instead of blurring/thickening the
+        // stroke. A white background retains the same luminance, while a black
+        // background no longer reveals a pale second contour. Upper head and
+        // accessory pixels are deliberately outside this bounded repair.
+        for (var y = 57; y < 100; y++) for (var x = 0; x < 100; x++)
+        {
+            var at = (y * 100 + x) * 4;
+            var alpha = source[at + 3];
+            if (alpha == 0 || alpha == 255) continue;
+            var light = (source[at] + source[at + 1] + source[at + 2]) / 3d;
+            if (light > 235)
+            {
+                if (alpha < 128) Array.Clear(result, at, 4);
+                continue; // Nearly opaque white is body, not exterior matte.
+            }
+            var donor = -1; var distance = int.MaxValue;
+            for (var dy = -2; dy <= 2; dy++) for (var dx = -2; dx <= 2; dx++)
+            {
+                var nx = x + dx; var ny = y + dy;
+                if (nx < 0 || nx >= 100 || ny < 57 || ny >= 100) continue;
+                var i = (ny * 100 + nx) * 4;
+                var value = (source[i] + source[i + 1] + source[i + 2]) / 3d;
+                var d = dx * dx + dy * dy;
+                if (source[i + 3] != 255 || value >= 160 || value >= light || d >= distance) continue;
+                donor = i; distance = d;
+            }
+            if (donor < 0) continue;
+            var ink = (source[donor] + source[donor + 1] + source[donor + 2]) / 3d;
+            result[at + 3] = (byte)Math.Clamp(Math.Round(alpha * (255 - light) / (255 - ink)), 0, 255);
+            for (var c = 0; c < 3; c++) result[at + c] = source[donor + c];
+        }
+        var frame = BitmapSource.Create(100, 100, 96, 96, PixelFormats.Bgra32, null, result, 400);
+        frame.Freeze();
+        return AuthoredHeadContour.Repair(frame, 8, -6);
+    }
 
     internal static byte[] RegisteredOpen()
     {

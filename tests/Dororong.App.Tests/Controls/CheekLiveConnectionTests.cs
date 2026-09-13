@@ -44,20 +44,21 @@ public sealed class CheekLiveConnectionTests
         p.Render(new(PetState.Idle,new(100,100),FacingDirection.Right,.71,false,null),max,TimeSpan.FromMilliseconds(10000));CheekProductTests.Layout(p);
         var overlay=Overlay(p);
         Assert.Equal(Visibility.Hidden,image.Visibility);
-        Assert.Equal(ApprovedCheekConnectionTests.Read("max-native.png"),Pixels(overlay));
+        Assert.Equal(ApprovedCheekConnectionTests.Read("max-native.png",!rotated),Pixels(overlay));
         var positions=new[]{a,b,c};var probes=new[]{new Point(0,0),new Point(1,0),new Point(0,1)};
         for(var i=0;i<3;i++){var actual=overlay.TranslatePoint(probes[i],p);Assert.Equal(positions[i].X,actual.X,8);Assert.Equal(positions[i].Y,actual.Y,8);}
         var released=controller.Advance(TimeSpan.Zero,PointerSample.Unavailable,false,PetState.Idle,PetState.Idle);
         p.Render(new(PetState.Idle,new(100,100),FacingDirection.Right,0,false,null),released);
-        Assert.Equal(ApprovedCheekConnectionTests.Read("max-native.png"),Pixels(Overlay(p)));
+        Assert.Equal(ApprovedCheekConnectionTests.Read("max-native.png",!rotated),Pixels(Overlay(p)));
         var half=controller.Advance(TimeSpan.FromMilliseconds(110),PointerSample.Unavailable,false,PetState.Idle,PetState.Idle);
         p.Render(new(PetState.Idle,new(100,100),FacingDirection.Right,0,false,null),half,TimeSpan.FromMilliseconds(110));
-        Assert.Equal(ApprovedCheekConnectionTests.Read("half-native.png"),Pixels(Overlay(p)));
-        var done=controller.Advance(TimeSpan.FromMilliseconds(110),PointerSample.Unavailable,false,PetState.Idle,PetState.Idle);
+        Assert.InRange(half.CheekPull!.PullDips,-3,-2);
+        Assert.False(ApprovedCheekConnectionTests.Read("max-native.png").SequenceEqual(Pixels(Overlay(p))));
+        var done=controller.Advance(TimeSpan.FromMilliseconds(610),PointerSample.Unavailable,false,PetState.Idle,PetState.Idle);
         p.Render(new(PetState.Idle,new(100,100),FacingDirection.Right,0,false,null),done);CheekProductTests.Layout(p);
         Assert.Equal(DirectInteractionSnapshot.None,done);Assert.Equal(Visibility.Visible,image.Visibility);
         Assert.Empty(((Canvas)p.Content).Children.OfType<Image>());
-        Assert.Equal(CheekProductTests.Read("canonical.png"),Pixels(image));
+        Assert.Equal(UprightRumpTests.CleanFixture(CheekProductTests.Read("canonical.png")),Pixels(image));
         Assert.Equal(mirror?-1:1,((ScaleTransform)p.FindName("BodyScaleTransform")).ScaleX);
     });
 
@@ -86,7 +87,7 @@ public sealed class CheekLiveConnectionTests
         controller.Begin(DirectInteractionTarget.Body,new(10,10),0);Assert.Equal(held,controller.Current);
         controller.Cancel();p.Render(new(PetState.Idle,new(100,100),FacingDirection.Right,0,false,null),controller.Current);
         Assert.Equal(Visibility.Visible,image.Visibility);Assert.Empty(((Canvas)p.Content).Children.OfType<Image>());
-        Assert.Equal(CheekProductTests.Read("canonical.png"),Pixels(image));
+        Assert.Equal(UprightRumpTests.CleanFixture(CheekProductTests.Read("canonical.png")),Pixels(image));
     });
 
     [Fact]

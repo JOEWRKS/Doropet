@@ -22,6 +22,63 @@ internal sealed class DirectInteractionController
     private readonly HeadSwingSession _headSwing = new();
     private PointD _headLandingOrigin;
     private double _headLandingDistance;
+    private bool _pawDragged;
+    private bool _pawTap;
+    private PointD _pawReleasedOffset;
+    private PointD _pawPressOffset;
+    private double _pawPressAngle;
+
+    internal void BeginPerchPaw(DirectInteractionTarget target,PointD position,PerchPawSnapshot? previous=null)
+    {
+        if(Current.Target!=DirectInteractionTarget.None || !HeadPullDistance.IsFinite(position) ||
+            target is not (DirectInteractionTarget.PerchLeftPaw or DirectInteractionTarget.PerchRightPaw))return;
+        var right=target==DirectInteractionTarget.PerchRightPaw;
+        var capture=previous is not null && previous.Right==right ? previous : new PerchPawSnapshot(right,default);
+        _pawPressOffset=capture.Offset;_pawPressAngle=capture.Angle;
+        _phaseElapsedMilliseconds=0;_pawDragged=capture.Offset!=default;_pawTap=false;
+        Current=new(target,DirectInteractionPhase.PawHold,position,position,0,0,true)
+            {PawPull=capture};
+    }
+
+    private DirectInteractionSnapshot AdvancePaw(TimeSpan delta,PointerSample pointer,bool down)
+    {
+        var ms=double.IsFinite(delta.TotalMilliseconds)?Math.Max(0,delta.TotalMilliseconds):0;
+        if(Current.Phase==DirectInteractionPhase.PawRelease)
+        {
+            _phaseElapsedMilliseconds+=ms;
+            var duration=_pawTap?600d:220d;
+            var progress=Math.Clamp(_phaseElapsedMilliseconds/duration,0,1);
+            if(progress>=1){Cancel();return Current;}
+            var amount=1-progress*progress*(3-2*progress);
+            Current=Current with {ReleaseProgress=progress,PawPull=Current.PawPull! with {
+                Offset=_pawTap?default:new(_pawReleasedOffset.X*amount,_pawReleasedOffset.Y*amount),
+                Angle=_pawTap?22*Math.Sin(progress*6*Math.PI)*Math.Sin(progress*Math.PI):_pawPressAngle*amount}};
+            return Current;
+        }
+        _phaseElapsedMilliseconds+=ms;
+        if(!down)
+        {
+            _pawTap=!_pawDragged&&_phaseElapsedMilliseconds<=350;
+            _pawReleasedOffset=Current.PawPull!.Offset;
+            if(!_pawTap&&!_pawDragged){Cancel();return Current;}
+            _phaseElapsedMilliseconds=0;
+            Current=Current with {Phase=DirectInteractionPhase.PawRelease,RequiresCapture=false};
+            return Current;
+        }
+        if(!pointer.IsAvailable||!HeadPullDistance.IsFinite(pointer.Position))return Current;
+        var difference=pointer.Position-Current.PressOrigin;
+        var length=Math.Sqrt(difference.X*difference.X+difference.Y*difference.Y);
+        if(!double.IsFinite(length))return Current;
+        _pawDragged|=length>=4;
+        var sign=Current.PressFacing==FacingDirection.Left?-1:1;
+        var offset=_pawPressOffset+new PointD(difference.X*sign,difference.Y);
+        var total=Math.Sqrt(offset.X*offset.X+offset.Y*offset.Y);
+        if(!double.IsFinite(total))return Current;
+        var limit=total>18?18/total:1;
+        Current=Current with {PointerPosition=pointer.Position,PawPull=Current.PawPull! with {
+            Offset=_pawDragged?new(offset.X*limit,offset.Y*limit):_pawPressOffset}};
+        return Current;
+    }
 
     internal DirectInteractionSnapshot Current { get; private set; } = DirectInteractionSnapshot.None;
     internal void SetPressContext(FacingDirection? facing, bool attachedCheek, bool startsHanging = false) =>
@@ -166,6 +223,7 @@ internal sealed class DirectInteractionController
         }
 
         if (Current.Target == DirectInteractionTarget.FiveRegionBody || HasCheekCarry) return Current;
+        if (Current.PawPull is not null) return AdvancePaw(delta,pointer,primaryButtonDown);
 
         // A body click owns button release, never a carry or deformation session.
         if (Current.Target == DirectInteractionTarget.ClickOnly)
@@ -258,16 +316,22 @@ internal sealed class DirectInteractionController
         if (!down && Current.Phase != DirectInteractionPhase.CheekRelease)
         {
             _phaseElapsedMilliseconds = 0; _releaseCheekPullDips = cheek.PullDips;
-            Current = Current with { Phase = DirectInteractionPhase.CheekRelease, ReleaseProgress = 0, RequiresCapture = false };
+            Current = Current with { Phase = DirectInteractionPhase.CheekRelease, ReleaseProgress = 0, RequiresCapture = false,
+                CheekPull=cheek with { SpringRelease=cheek.PullDips>0&&!HasCheekCarry,ReleasedPullDips=cheek.PullDips,RecoilOffset=0,RecoilLift=0 } };
             return Current;
         }
         if (Current.Phase == DirectInteractionPhase.CheekRelease)
         {
             _phaseElapsedMilliseconds += Math.Max(0, delta.TotalMilliseconds);
-            var progress = Math.Clamp(_phaseElapsedMilliseconds / CheekReleaseDuration.TotalMilliseconds, 0, 1);
+            var duration=cheek.SpringRelease
+                ? (Current.IsAttachedCheek?CheekSpringMotion.ReturnMilliseconds:CheekSpringMotion.DurationMilliseconds)
+                : CheekReleaseDuration.TotalMilliseconds;
+            var progress = Math.Clamp(_phaseElapsedMilliseconds / duration, 0, 1);
             if (progress >= 1) { Cancel(); return Current; }
-            var pull = _releaseCheekPullDips * (1 - progress * progress * (3 - 2 * progress));
-            Current = Current with { CheekPull = cheek with { PullDips = pull }, Strength = Math.Abs(pull) / MaximumCheekPull,
+            var pull = _releaseCheekPullDips * (cheek.SpringRelease?CheekSpringMotion.Remaining(_phaseElapsedMilliseconds):1-progress*progress*(3-2*progress));
+            Current = Current with { CheekPull = cheek with { PullDips = pull,
+                RecoilOffset=cheek.SpringRelease&&!Current.IsAttachedCheek?CheekSpringMotion.Offset(_phaseElapsedMilliseconds,_releaseCheekPullDips):0,
+                RecoilLift=cheek.SpringRelease&&!Current.IsAttachedCheek?CheekSpringMotion.Lift(_phaseElapsedMilliseconds,_releaseCheekPullDips):0 }, Strength = Math.Abs(pull) / MaximumCheekPull,
                 ReleaseProgress = progress, RequiresCapture = false };
             return Current;
         }

@@ -58,7 +58,7 @@ public class DisappearanceRegressionTests
     [InlineData("TaskListOverlayWnd",true)]
     [InlineData("tooltips_class32",true)]
     [InlineData("SysShadow",true)]
-    [InlineData("#32768",false)]
+    [InlineData("#32768",true)]
     [InlineData("SomeOtherApplicationWindow",false)]
     public void Shell_preview_crossing_bar_does_not_remove_support_but_ordinary_window_does(string className,bool preview)
     {
@@ -73,7 +73,7 @@ public class DisappearanceRegressionTests
         scene=native.Capture(TimeSpan.FromMilliseconds(160))!;
         pose=motion.Advance(new(TimeSpan.FromMilliseconds(16),position,position,foot,PlatformGeometry.Build(scene,63),false,true));
         Assert.Equal(preview?PlatformPhase.Supported:PlatformPhase.Falling,pose.Phase);
-        if(preview){Assert.Equal(929,pose.Position.Y);Assert.False(scene.Windows[0].CanSupport);Assert.False(scene.Windows[0].CanOcclude);}
+        if(preview){Assert.Equal(929,pose.Position.Y);Assert.False(scene.Windows[0].CanSupport);Assert.Equal(className=="#32768",scene.Windows[0].CanOcclude);}
     }
 
     [Fact]

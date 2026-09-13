@@ -7,8 +7,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $artifacts = Join-Path $root 'artifacts/installer'
-$runtime = Join-Path $root 'artifacts/product-shell/candidate-20260912-1751/runtime'
-$archive = Join-Path $root 'artifacts/product-shell/candidate-20260912-1751/Dororong-win-x64.zip'
+$runtime = Join-Path $root 'artifacts/product-shell/candidate-20260914-idle-blink-01/runtime'
+$archive = Join-Path $root 'artifacts/product-shell/candidate-20260914-idle-blink-01/Dororong-win-x64.zip'
 $builder = Join-Path $root 'tools/Build-Installer.ps1'
 if (-not $CompilerPath) { $CompilerPath = Join-Path $artifacts 'toolchain-inno-7.1.0-x64-20260912-02/ISCC.exe' }
 function Check([bool]$condition, [string]$message) { if (-not $condition) { throw $message } }

@@ -4,7 +4,12 @@ namespace Dororong.Core.Platforms;
 
 public enum EdgePerchPhase { None, Entering, Attached }
 
-public readonly record struct PerchContact(double Left, double Right, double GripY, double VisibleTop);
+public readonly record struct PerchContact(double Left, double Right, double GripY, double VisibleTop)
+{
+    // Held silhouette's bottom in the same local coordinates as the grip.
+    // Only entry uses this; attached registration always uses the neutral grip.
+    public double? HeldSoleY { get; init; }
+}
 
 public readonly record struct PerchSurface(PlatformSurface Surface, int ZOrder);
 
@@ -18,6 +23,7 @@ public sealed class EdgePerch
 {
     private const double EntrySeconds = .16;
     private const double MaximumGripDistance = 20;
+    private const double GeometryRoundoff = .000001;
 
     private SurfaceKey? owner;
     private long? monitorId;
@@ -49,7 +55,11 @@ public sealed class EdgePerch
     // Preview and release share the exact selection; preview never acquires an owner.
     public bool CanBegin(PointD displayed, PerchContact contact,
         IReadOnlyList<PerchSurface> surfaces, IReadOnlyList<DesktopMonitor> monitors) =>
-        SelectCandidate(displayed, contact, surfaces, monitors) is not null;
+        FindCandidate(displayed, contact, surfaces, monitors) is not null;
+
+    public PlatformSurface? FindCandidate(PointD displayed, PerchContact contact,
+        IReadOnlyList<PerchSurface> surfaces, IReadOnlyList<DesktopMonitor> monitors) =>
+        SelectCandidate(displayed, contact, surfaces, monitors)?.Perch.Surface;
 
     private static EntryCandidate? SelectCandidate(PointD displayed, PerchContact contact,
         IReadOnlyList<PerchSurface> surfaces, IReadOnlyList<DesktopMonitor> monitors)
@@ -79,15 +89,34 @@ public sealed class EdgePerch
                 continue;
             }
 
-            var distance = worldGrip - candidate.Surface.Top;
             var targetY = candidate.Surface.Top - contact.GripY;
-            if (!Finite(distance) || distance < 0 || distance > MaximumGripDistance ||
+            var entryStartY = targetY;
+            var entryTolerance = 0d;
+            if (candidate.Surface.Kind == PlatformKind.Taskbar &&
+                candidate.Surface.Bottom is { } bottom &&
+                Math.Abs(bottom - monitor.Bounds.Bottom) <= GeometryRoundoff && contact.HeldSoleY is { } sole)
+            {
+                // Independently mapped rectangle bottoms may differ by roundoff
+                // at fractional DPI. A real physical-pixel gap is not a match.
+                // The full held silhouette is clamped to the monitor bottom.
+                // Move (do not widen) the entry band into reachable space when
+                // that clamp would truncate it. Ordinary window edges retain
+                // the original below-edge band. Never relax the screen clamp.
+                var lastReachableY = monitor.Bounds.Bottom - sole;
+                entryStartY = Math.Min(targetY, lastReachableY - MaximumGripDistance);
+                // GetMovementArea reconstructs this same bound via rectangle
+                // height. Tilt can leave the clamped Y a few ulps past it.
+                // Do not turn that rounding into a one-frame cue/release miss.
+                entryTolerance = GeometryRoundoff;
+            }
+            var entryDistance = displayed.Y - entryStartY;
+            if (!Finite(entryDistance) || entryDistance < -entryTolerance || entryDistance > MaximumGripDistance + entryTolerance ||
                 !HasHeadroom(targetY, contact, monitor))
             {
                 continue;
             }
 
-            var eligible = new EntryCandidate(candidate, monitor, distance);
+            var eligible = new EntryCandidate(candidate, monitor, Math.Abs(worldGrip - candidate.Surface.Top));
             if (selected is null || ComesBefore(eligible, selected.Value))
             {
                 selected = eligible;
@@ -237,7 +266,8 @@ public sealed class EdgePerch
     private static bool Valid(PerchContact contact) =>
         Finite(contact.Left) && Finite(contact.Right) &&
         Finite(contact.GripY) && Finite(contact.VisibleTop) &&
-        contact.Left <= contact.Right && contact.VisibleTop <= contact.GripY;
+        contact.Left <= contact.Right && contact.VisibleTop <= contact.GripY &&
+        (contact.HeldSoleY is not { } sole || Finite(sole) && sole >= contact.VisibleTop);
 
     private static bool Valid(PlatformSurface surface) =>
         Finite(surface.Left) && Finite(surface.Right) && Finite(surface.Top) &&

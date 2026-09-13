@@ -35,8 +35,9 @@ public sealed class HuntingLoopTests
         var image=(System.Windows.Controls.Image)h.Presenter.FindName("DororongImage");
         Assert.IsNotType<System.Windows.Media.Imaging.BitmapImage>(image.Source);
         h.Pointer=PointerSample.Unavailable;
-        // Finish recovery, then remain awake until fresh inactivity elapses.
-        for(var i=0;i<15;i++)h.Tick();
+        // Departure now cancels immediately. The one-second sleep delay starts
+        // without the old extra recovery animation holding the brain awake.
+        for(var i=0;i<5;i++)h.Tick();
         Assert.NotEqual(PetState.Sleep,h.Snapshot.State);
         for(var i=0;i<30;i++)h.Tick();
         Assert.Equal(PetState.Sleep,h.Snapshot.State);

@@ -7,6 +7,21 @@ namespace Dororong.App.Tests.Controls;
 
 public class FlutterOutlineTests
 {
+    [Theory]
+    [InlineData(16)] [InlineData(64)] [InlineData(180)] [InlineData(240)]
+    public void Raised_front_paw_remains_visible_in_empty_space_beside_the_hair(int milliseconds) => CheekProductTests.Sta(() =>
+    {
+        var source = ForelegFlutterTests.Source();
+        var before = PremultipliedFrame.From(source).Pixels;
+        // The forward paw rotates into this empty texel below the left hair tip.
+        // A coordinate-only head rectangle must not erase the exposed white paw.
+        Assert.Equal(0, before[(54 * 96 + 30) * 4 + 3]);
+        var image = new Image { Source = source };
+        new PerchReadinessPresentation().Apply(image, true, true, TimeSpan.FromMilliseconds(milliseconds));
+        var after = PremultipliedFrame.From((BitmapSource)image.Source).Pixels;
+        Assert.True(after[(54 * 96 + 30) * 4 + 3] >= 128, "Empty head-mask space erased the raised front paw.");
+    });
+
     [Fact]
     public void Old_wrist_antialias_fringe_is_cleared_without_erasing_the_torso_join() => CheekProductTests.Sta(() =>
     {

@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using System.Windows.Controls;
@@ -19,31 +20,34 @@ public sealed class SuppliedBodyDragFramesTests
     public void Hanging_ribbon_middle_loop_retains_authored_white_on_black(int x, int y) => RunOnSta(() =>
     {
         var presenter = new DororongPresenter();
-        var raw = PremultipliedFrame.From(new BitmapImage(new Uri(
-            "pack://application:,,,/Dororong.App;component/Assets/user-body-drag/08.png")));
-        var expected = raw.Pixels.AsSpan((y * 100 + x) * 4, 4).ToArray();
+        var canonical = PremultipliedFrame.From(new BitmapImage(new Uri(
+            "pack://application:,,,/Dororong.App;component/Assets/dororong-canonical.png")));
+        // The user now requests the ordinary ribbon, including its white RGB,
+        // rather than the JPEG's 254/255 colour noise in these same texels.
+        var expected = canonical.Pixels.AsSpan(((y+6) * 96 + x-8) * 4, 4).ToArray();
         Assert.Equal(255, expected[3]);
         foreach (var phase in new[] { DirectInteractionPhase.BodyDragEntry, DirectInteractionPhase.BodyDragHold })
         {
             var actual = Render(presenter, phase, 1);
             Assert.Equal(expected, actual.Pixels.AsSpan(((y - 10) * 96 + x + 3) * 4, 4).ToArray());
-            // Just outside the open lower corner is background, not ribbon.
-            Assert.Equal(0, actual.Pixels[(31 * 96 + 78) * 4 + 3]);
+            // The previously open corner (78,31) now contains the restored
+            // canonical stroke. Beyond the repaired loop is still background.
+            Assert.Equal(0, actual.Pixels[(31 * 96 + 81) * 4 + 3]);
         }
     });
 
     // Independently measured from the eight supplied100px source files.
     [Theory]
-    [InlineData(1, -13, 3316, "7A326475A80D34A49B5123300C8752874A2B0FDD83130F914115E0A378AC6F11")]
-    [InlineData(2, -9, 3553, "03702322627917D0C100E65F7DB33415DAF0D10F47E623D8C625E5E4603792F0")]
-    [InlineData(3, -9, 3628, "BCA1E8133AF2121BE3D50F174A35279E3345553D960EB5881645A3609C5FF761")]
-    [InlineData(4, -10, 3732, "95969CD393586272D3637DF7D761A69A98A485135B5E6DC40C3AB557440F5D96")]
-    [InlineData(5, -10, 3728, "F21CE8CF8C45E1F9F8E1A8A46BBF9A3CFD3FAC8DB12F02B015E5A8FA41B9738A")]
-    [InlineData(6, -10, 3722, "BDBB0418F996514BEA5EFC588C71EF366541C12889D5A013A2BE2925A7ED080C")]
-    [InlineData(7, -10, 3658, "787054C28417D7D6544554F7875018DA6FEBFC48CDFF7794A7173C36FB5EB53A")]
-    [InlineData(8, -10, 3642, "DAF9726E9DBA7A2274EF421828826BD56CF556B9DC6801B2428D6D74BBCF2E56")]
-    public void Actual_presenter_keeps_supplied_interior_and_removes_only_exterior_white_matte(
-        int number, int offsetY, int foregroundCount, string sha256)
+    [InlineData(1, -13, "7A326475A80D34A49B5123300C8752874A2B0FDD83130F914115E0A378AC6F11")]
+    [InlineData(2, -9, "03702322627917D0C100E65F7DB33415DAF0D10F47E623D8C625E5E4603792F0")]
+    [InlineData(3, -9, "BCA1E8133AF2121BE3D50F174A35279E3345553D960EB5881645A3609C5FF761")]
+    [InlineData(4, -10, "95969CD393586272D3637DF7D761A69A98A485135B5E6DC40C3AB557440F5D96")]
+    [InlineData(5, -10, "F21CE8CF8C45E1F9F8E1A8A46BBF9A3CFD3FAC8DB12F02B015E5A8FA41B9738A")]
+    [InlineData(6, -10, "BDBB0418F996514BEA5EFC588C71EF366541C12889D5A013A2BE2925A7ED080C")]
+    [InlineData(7, -10, "787054C28417D7D6544554F7875018DA6FEBFC48CDFF7794A7173C36FB5EB53A")]
+    [InlineData(8, -10, "DAF9726E9DBA7A2274EF421828826BD56CF556B9DC6801B2428D6D74BBCF2E56")]
+    public void Actual_presenter_keeps_supplied_interior_outside_repaired_head_and_ribbon(
+        int number, int offsetY, string sha256)
     {
         RunOnSta(() =>
         {
@@ -58,7 +62,10 @@ public sealed class SuppliedBodyDragFramesTests
                 $"pack://application:,,,/Dororong.App;component/Assets/user-body-drag/{number:D2}.png")).Stream;
             Assert.Equal(sha256, Convert.ToHexString(SHA256.HashData(embedded)));
             var actual = Render(presenter, DirectInteractionPhase.BodyDragEntry, (number - 1) / 7.0);
-            Assert.Equal(foregroundCount, Enumerable.Range(0, 96 * 96).Count(i => actual.Pixels[i * 4 + 3] != 0));
+            var approved = ReadApprovedFrame((number-1)*16);
+            AssertOutsideHeadRepair(approved, actual.Pixels, (number-1)/7d);
+            // Adding the missing ribbon outline intentionally changes total
+            // support. Exact outside-patch pixel preservation remains below.
             Assert.True(Enumerable.Range(0, 96 * 96).Count(i => actual.Pixels[i * 4 + 3] is > 0 and < 255) > 30,
                 "Supplied outline still has a binary cutout instead of a translucent exterior edge.");
             for (var y = 0; y < 100; y++)
@@ -66,6 +73,7 @@ public sealed class SuppliedBodyDragFramesTests
             {
                 var input = (y * 100 + x) * 4;
                 var targetY = y + offsetY;
+                if (InHeadRepair(x+3,targetY,(number-1)/7d)) continue;
                 if (raw.Pixels.AsSpan(input, 3).ToArray().Min() >= 240)
                 {
                     if (targetY is >= 0 and < 96 && x + 3 < 96)
@@ -82,7 +90,10 @@ public sealed class SuppliedBodyDragFramesTests
                 var alpha = actual.Pixels[output + 3];
                 if (alpha < 255)
                 {
-                    Assert.True(IsExteriorBoundary(actual, x + 3, targetY), "Interior pixel was modified.");
+                    // A formerly exterior texel can now be inside the restored
+                    // ribbon support; it must still equal the frozen old pixel.
+                    Assert.True(IsExteriorBoundary(actual, x + 3, targetY) ||
+                        actual.Pixels.AsSpan(output,4).SequenceEqual(approved.AsSpan(output,4)), "Interior pixel was modified.");
                     for (var channel = 0; channel < 3; channel++)
                     {
                         Assert.InRange(actual.Pixels[output + channel], 0, alpha);
@@ -165,10 +176,12 @@ public sealed class SuppliedBodyDragFramesTests
         {
             var presenter = new DororongPresenter();
             var strength = (frame - 1) / 112d;
+            var approved = ReadApprovedFrame(frame-1);
+            Assert.Equal(sha, Convert.ToHexString(SHA256.HashData(approved)));
             foreach (var phase in new[] { DirectInteractionPhase.BodyDragEntry, DirectInteractionPhase.BodyDragSettle })
             {
                 var pixels = Render(presenter, phase, strength, 1 - strength).Pixels;
-                Assert.Equal(sha, Convert.ToHexString(SHA256.HashData(pixels)));
+                AssertOutsideHeadRepair(approved,pixels,strength);
             }
         });
     }
@@ -186,9 +199,42 @@ public sealed class SuppliedBodyDragFramesTests
         }, TimeSpan.Zero);
         var pixels = PremultipliedFrame.From((BitmapSource)((Image)presenter.FindName("DororongImage")).Source).Pixels;
         // From pose41 to pose25: 2.5 authored intervals - (2/7)*3.5 = 1.5.
+        var approved=ReadApprovedFrame(24);
         Assert.Equal("4FE4E90D27D162C1863191A9C6C72D347779477F179BCB16BB0D1A8AC04874C4",
-            Convert.ToHexString(SHA256.HashData(pixels)));
+            Convert.ToHexString(SHA256.HashData(approved)));
+        AssertOutsideHeadRepair(approved,pixels,24/112d);
+        Assert.Equal(PremultipliedFrame.From(LayeredPullFrames.Sample(24/112d)).Pixels,pixels);
     });
+
+    // Keep the independently frozen preview hashes above. Only the requested
+    // lower-head correction is exempt from exact per-pixel preview parity.
+    private static byte[] ReadApprovedFrame(int index)
+    {
+        using var stream=typeof(DororongPresenter).Assembly.GetManifestResourceStream("Dororong.App.Assets.layered-pull.pbgra.gz")!;
+        using var gzip=new GZipStream(stream,CompressionMode.Decompress);
+        var bytes=new byte[96*96*4];
+        for(var i=0;i<=index;i++)gzip.ReadExactly(bytes);
+        return bytes;
+    }
+
+    private static void AssertOutsideHeadRepair(byte[] expected,byte[] actual,double progress)
+    {
+        for(var y=0;y<96;y++)for(var x=0;x<96;x++)
+            if(!InHeadRepair(x,y,progress))
+                Assert.Equal(expected.AsSpan((y*96+x)*4,4).ToArray(),actual.AsSpan((y*96+x)*4,4).ToArray());
+    }
+
+    private static bool InHeadRepair(int x,int y,double progress)
+    {
+        // Independent measured registration bounds; do not call repair logic
+        // here, or an accidentally widened production mask could exempt itself.
+        (double X,double Y)[] shifts=[(0,-1),(0,-3),(1,-7),(2,-11),(4,-13),(6,-15),(8,-15),(11,-16)];
+        var position=progress*7;var index=Math.Min(6,(int)position);var t=position-index;
+        var dx=shifts[index].X+(shifts[index+1].X-shifts[index].X)*t;
+        var dy=shifts[index].Y+(shifts[index+1].Y-shifts[index].Y)*t;
+        return x>=Math.Floor(19+dx)&&x<=Math.Ceiling(53+dx)&&y>=Math.Floor(57+dy)&&y<=Math.Ceiling(72+dy) ||
+            x>=Math.Floor(60+dx)&&x<=Math.Ceiling(70+dx)&&y>=Math.Floor(36+dy)&&y<=Math.Ceiling(61+dy);
+    }
 
     private static PremultipliedFrame Render(DororongPresenter presenter, DirectInteractionPhase phase, double strength, double release = 0)
     {

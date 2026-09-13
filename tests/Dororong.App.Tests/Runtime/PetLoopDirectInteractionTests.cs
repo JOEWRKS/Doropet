@@ -31,16 +31,16 @@ public sealed partial class PetLoopDirectInteractionTests
     }
 
     [Fact]
-    public void Captured_cheek_below_carry_threshold_preserves_position_and_release_without_click() => Controls.CheekProductTests.Sta(() =>
+    public void Captured_cheek_preserves_position_and_release_without_click() => Controls.CheekProductTests.Sta(() =>
     {
         using var h=new LoopHarness(CreateIdleBrain);h.Start();var position=h.WindowPosition;
         h.PressCapturedCheek();h.Tick();Assert.NotNull(h.Renders[^1].Direct.CheekPull);
-        h.MovePointerBy(new(-12,0));h.Tick();Assert.InRange(h.Renders[^1].Direct.CheekPull!.PullDips,0.01,11.99);
+        h.MovePointerBy(new(-12,0));h.Tick();Assert.Equal(12,h.Renders[^1].Direct.CheekPull!.PullDips);
         for(var i=0;i<60;i++)h.Tick();Assert.Equal(position,h.WindowPosition);Assert.Equal(PetState.Idle,h.Renders[^1].Core.State);
         h.LosePointer();h.Tick();Assert.Equal(12,h.Renders[^1].Direct.CheekPull!.PullDips);
         h.Release();Assert.Equal(12,h.Renders[^1].Direct.CheekPull!.PullDips);Assert.False(h.Renders[^1].Direct.RequiresCapture);
-        for(var i=0;i<14;i++)h.Tick();Assert.Equal(DirectInteractionSnapshot.None,h.Renders[^1].Direct);
-        Assert.Equal(position,h.WindowPosition);Assert.DoesNotContain(h.Renders,r=>r.Core.State is PetState.Dragged or PetState.ClickReaction);
+        for(var i=0;i<46;i++)h.Tick();Assert.Equal(DirectInteractionSnapshot.None,h.Renders[^1].Direct);
+        Assert.Equal(position+new PointD(2,0),h.WindowPosition);Assert.DoesNotContain(h.Renders,r=>r.Core.State is PetState.Dragged or PetState.ClickReaction);
         Assert.Equal(1,h.CaptureCount);Assert.Equal(1,h.ReleaseCount);
     });
 

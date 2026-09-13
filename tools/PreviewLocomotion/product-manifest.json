@@ -19,7 +19,7 @@
   ],
   "sources": {
     "rig.js": "1197399d3cb06ebb6c5eec3dc3368c812c451d4eb51f5d4297eab6755467d22c",
-    "render.js": "141ddc7afb7d3c774252b303b00d4f2dfa4552e268745ff3268a2c904f721e7e",
+    "render.js": "777bacd66ec310feab90e6e96b132355d245b00b4724a168b0097bf33b3fcebf",
     "authored-sit.js": "b041644cb376439c775c7c012e6808d58ed75f59b5ed301f6786badb42bd5dd2",
     "sit-correspondence.js": "811ec046bfe282e3b2a514952644467258db0992de50918e191fa7720ce75c87",
     "../GenerateLayeredPull/contour.js": "0ca46516b66384f39335652930b36a75bd0ca90dcdad10a8da674499fe57c6da",
@@ -28,7 +28,7 @@
     "assets/seated-final-10-2.png": "c0c19bc79337a9628e5b301153788928d9346357dd4284ea6167ae9dff76a5b7",
     "assets/seated-final-10-2-bank.png": "5e44ed3923809ffb247aad698eb209b19efd18707c1a9fa934b8e64851e49846"
   },
-  "rawSha256": "c069b8e90c7a6a9b8d0f4a3cb240e24b3f3940dc372231625e0a2a3dbbe366c2",
+  "rawSha256": "160597e37be7a899e7df335e96d3d72044b9d1086638cd3adac87c40738e60c7",
   "frames": [
     {
       "index": 0,
@@ -1638,7 +1638,7 @@
     {
       "index": 321,
       "name": "sit-closed-0",
-      "sha256": "2ba52178f7567fe60af35fee8ae7a6b4cf55984de920d3a2c714f0193b2851ab"
+      "sha256": "21b32e68a6ee690989a54f84ce77228c3c544d8376339a1382c8f3e0c4a885fc"
     },
     {
       "index": 322,

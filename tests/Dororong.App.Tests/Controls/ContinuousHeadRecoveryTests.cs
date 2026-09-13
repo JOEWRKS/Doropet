@@ -35,7 +35,7 @@ public class ContinuousHeadRecoveryTests
         }
         var completed = Pixels((BitmapSource)image.Source);
         p.Render(pet with { State = PetState.Idle }, DirectInteractionSnapshot.None, TimeSpan.Zero);
-        Assert.Equal(completed, Pixels((BitmapSource)image.Source));
+        Assert.Equal(UprightRumpTests.CleanFixture(completed), Pixels((BitmapSource)image.Source));
     });
 
     private static byte[] Pixels(BitmapSource source)

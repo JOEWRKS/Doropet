@@ -10,7 +10,7 @@ namespace Dororong.App.Tests.Runtime;
 public partial class PetLoopPlatformTests
 {
     [Theory]
-    [InlineData(0)] [InlineData(1)] [InlineData(2)] [InlineData(3)] [InlineData(4)] [InlineData(5)] [InlineData(6)]
+    [InlineData(0)] [InlineData(1)] [InlineData(2)] [InlineData(3)] [InlineData(4)] [InlineData(5)]
     public void Active_carry_matches_legacy_controller_while_support_moves_and_disappears(int target) => Controls.CheekProductTests.Sta(()=>
     {
         using var enabled=new Harness();using var legacy=new Harness(platformEnabled:false);
@@ -71,7 +71,9 @@ public partial class PetLoopPlatformTests
         Assert.Equal(new PointD(120,70),h.Position);
         Assert.Equal(sole,h.Presenter.MeasurePlatformContact()!.Value.SoleY,6);
         h.PressReal(target,new(x,y));h.Tick();var held=h.Position;
-        h.Native.Scene=Scene(windows:false);h.Tick(80);Assert.Equal(held,h.Position);Assert.Null(h.LastPose);
+        h.Native.Scene=Scene(windows:false);h.Tick(80);
+        if(target==6){Assert.Equal(held.X,h.Position.X);Assert.True(h.Position.Y>held.Y);Assert.NotNull(h.LastPose);}
+        else{Assert.Equal(held,h.Position);Assert.Null(h.LastPose);}
         h.Down=false;h.Tick();
         var count=0;
         while(h.Direct.Target!=DirectInteractionTarget.None && count++<60)h.Tick();
@@ -177,12 +179,15 @@ public partial class PetLoopPlatformTests
 
     [Theory]
     [InlineData(0)] [InlineData(1)] [InlineData(2)] [InlineData(3)] [InlineData(4)] [InlineData(5)] [InlineData(6)]
-    public void Direct_head_five_body_regions_and_captured_cheek_hold_position_when_support_moves_or_disappears(int target) => Controls.CheekProductTests.Sta(()=>
+    public void Carry_owns_position_but_local_cheek_keeps_platform_physics_when_support_changes(int target) => Controls.CheekProductTests.Sta(()=>
     {
         using var h=new Harness();h.Start();h.Tick();h.Press(target);h.Tick();
         var held=h.Position;h.Native.Scene=Scene(120,170);h.Tick(80);
-        Assert.Equal(held,h.Position); Assert.Null(h.LastPose);
-        h.Native.Scene=Scene(windows:false);h.Tick(80); Assert.Equal(held,h.Position);
+        if(target==6){Assert.Equal(new PointD(120,70),h.Position);Assert.NotNull(h.LastPose);held=h.Position;}
+        else{Assert.Equal(held,h.Position);Assert.Null(h.LastPose);}
+        h.Native.Scene=Scene(windows:false);h.Tick(80);
+        if(target==6){Assert.Equal(held.X,h.Position.X);Assert.True(h.Position.Y>held.Y);}
+        else Assert.Equal(held,h.Position);
         Assert.Equal(h.Position,h.Core.Position);Assert.True(h.Core.IsDirectInteractionPending || h.Captures==1);
         h.Down=false;h.Tick();
         // Even zero-distance release hands control straight to the surface solver.
@@ -230,14 +235,15 @@ public partial class PetLoopPlatformTests
         internal bool Down,ThrowWrite;internal int WritesThisTick,Captures,Releases;
         internal PetSnapshot Core;internal DirectInteractionSnapshot Direct;internal PlatformPose? LastPose;internal Exception? Fault;
         private TimeSpan elapsed;private EventHandler? tick;
-        internal Harness(Func<IReadOnlyList<DesktopMonitor>>? fallback=null,bool realPresenter=false,bool refuseLegacyArea=false,bool platformEnabled=true,bool walking=false,bool perchEnabled=false)
+        internal Harness(Func<IReadOnlyList<DesktopMonitor>>? fallback=null,bool realPresenter=false,bool refuseLegacyArea=false,bool platformEnabled=true,bool walking=false,bool perchEnabled=false,double readbackStep=0)
         {
             if(realPresenter)Presenter=new DororongPresenter{Width=144,Height=144};
             Platforms=new PetPlatformRuntime(new(Native),_=>Map,()=> Presenter is null ? (new(20,100,100,10),new(10,10,100,90)) : Presenter.MeasurePlatformGeometry(),
                 (pose,sole)=>{LastPose=pose;Presenter?.ApplyPlatformPose(pose,sole);},fallback,
                 perchEnabled ? facing => Presenter?.MeasureEdgePerchContact(facing) ?? new PerchContact(44,74,94,48) : null,
                 perchEnabled ? (phase,facing,delta,immediate)=>Presenter?.ApplyEdgePerch(phase,facing,delta,immediate) : null);
-            var host=new PetLoopHost(()=>refuseLegacyArea?throw new InvalidOperationException("legacy primary area used"):new(0,0,800,600),()=>Presenter is null?new(120,100):new(144,144),()=>new(4,4),()=>Pointer,()=>Down,()=>Position,
+            var host=new PetLoopHost(()=>refuseLegacyArea?throw new InvalidOperationException("legacy primary area used"):new(0,0,800,600),()=>Presenter is null?new(120,100):new(144,144),()=>new(4,4),()=>Pointer,()=>Down,
+                ()=>readbackStep>0 ? new(Math.Round(Position.X/readbackStep)*readbackStep,Math.Round(Position.Y/readbackStep)*readbackStep) : Position,
                 p=>{if(ThrowWrite)throw new InvalidOperationException("host failure");Position=p;WritesThisTick++;},
                 (core,direct)=>{Core=core;Direct=direct;if(Presenter is not null){Presenter.Render(core,direct);Presenter.Measure(new(144,144));Presenter.Arrange(new(0,0,144,144));Presenter.UpdateLayout();}},()=>{Captures++;return true;},()=>{Releases++;Loop!.NotifyDirectInteractionCanceled();}){Platforms=platformEnabled?Platforms:null};
             Loop=new(new(()=>elapsed,()=>{},()=>{}),new(h=>tick+=h,h=>tick-=h,()=>{},()=>{}),host,

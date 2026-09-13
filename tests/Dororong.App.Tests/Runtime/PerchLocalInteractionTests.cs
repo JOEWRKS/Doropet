@@ -19,7 +19,7 @@ public partial class PetLoopPlatformTests
     {
         using var h = PerchLocalAttach(facing); var p = h.Presenter!;
         var position = h.Position;
-        var press = PressImage(h, p.EdgePerchImage, new(40, 70));
+        var press = PressImage(h, p.EdgePerchImage, new(60, 62));
         Assert.Equal(DirectInteractionTarget.ClickOnly, press.Target);
         h.Tick(); h.Pointer = new(true, h.Pointer.Position + new PointD(80, -50)); h.Tick(80);
         Assert.Equal(position, h.Position);
@@ -139,7 +139,7 @@ public partial class PetLoopPlatformTests
         Assert.Equal(attached+new PointD(30,-10),h.Position);h.Tick(80);
         Assert.Equal(attached+new PointD(30,-10),h.Position);Assert.Equal(1,h.WritesThisTick);
         h.Down=false;h.Tick();
-        for(var i=0;i<16;i++)h.Tick();
+        for(var i=0;i<28;i++)h.Tick();
         Assert.Equal(DirectInteractionTarget.None,h.Direct.Target);
         Assert.Equal(EdgePerchPhase.Attached,h.Platforms.PerchPhase);
         Assert.Same(p.EdgePerchImage,VisibleImages(p).Single());

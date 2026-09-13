@@ -7,7 +7,9 @@ internal enum DirectInteractionTarget
     LeftCheek,
     RightCheek,
     FiveRegionBody,
-    ClickOnly
+    ClickOnly,
+    PerchLeftPaw,
+    PerchRightPaw
 }
 
 internal enum DirectInteractionPhase
@@ -21,5 +23,7 @@ internal enum DirectInteractionPhase
     CheekPull,
     CheekRelease,
     BodyLocalPull,
-    BodyLocalSettle
+    BodyLocalSettle,
+    PawHold,
+    PawRelease
 }

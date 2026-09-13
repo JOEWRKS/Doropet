@@ -1,0 +1,11 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>도로롱 · 볼 탄성 미리보기</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f1f3;color:#382c34;font:15px system-ui,sans-serif}main{max-width:1000px;margin:36px auto;padding:0 24px}h1{font-size:25px;margin:0 0 10px}p{color:#73636e;line-height:1.6}section{background:#fff;border:1px solid #ded4db;border-radius:18px;overflow:hidden}.labels{display:grid;grid-template-columns:1fr 1fr;text-align:center;padding-top:22px;font-weight:600}.labels small{display:block;font-weight:400;color:#8a7481;margin-top:6px}canvas{width:100%;display:block;touch-action:none;cursor:grab}.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:18px;border-top:1px solid #eee}button{border:1px solid #c9acbd;border-radius:9px;background:white;color:#543c4a;padding:10px 16px;cursor:pointer}button:first-child{background:#80516b;color:white}button:focus-visible,input:focus-visible{outline:3px solid #c173a2;outline-offset:3px}label{display:flex;gap:8px;align-items:center}output{font-variant-numeric:tabular-nums;margin-left:auto;color:#7a626f;font-size:13px}.note{font-size:13px}.dark section{background:#18151a}.dark .labels{color:#f1dce7}.dark canvas{background:#18151a}.dark .controls{background:#fff}
+</style><main><h1>놓으면 찹! 작아지는 두 번의 되튕김</h1>
+<p>살짝 당겨도 통통! 끝까지 당겼다 놓으면 뒤로 조금 더 튕겨. 두 버튼으로 당김 세기에 따른 반동을 비교해 봐.</p>
+<section><div class="labels"><div>비교 기준 · v5<small>볼만 당겼다 복귀</small></div><div>수정안 · v7<small>살짝 당겨도 반동 · 최대 당김은 뒤로 살짝 · 눈 감기 없음</small></div></div>
+<canvas width="1024" height="330" aria-label="기존과 수정안 볼 당기기 비교"></canvas>
+<div class="controls"><button id="light">살짝 당겼다 놓기</button><button id="demo">최대로 당겼다 놓기</button><button id="hold">최대로 당겨 보기</button><button id="release">놓기</button><button id="flip">방향 반전</button><button id="theme">검은 배경</button><label>당김 <input id="amount" type="range" min="0" max="20" step=".25" value="0"></label><output>불러오는 중…</output></div></section>
+<p class="note">실제 설치본은 변경하지 않은 비교용 미리보기야. 원본 크기도 각 캐릭터 아래에 표시해 뒀어.<br>약 90ms에 찹! 돌아온 뒤 크게 한 번, 작게 한 번. 볼 길이와 깔끔한 윤곽은 유지하고, 놓는 순간의 반동만 세기에 따라 더했어.</p></main>
+<script type="module" src="/preview.mjs"></script></html>

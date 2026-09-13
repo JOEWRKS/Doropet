@@ -18,7 +18,7 @@ internal static class ForelegFlutterFrame
         new(new(39,77), [new(32,76),new(50,76),new(50,85),new(47,89),new(41,90),new(35,86),new(32,81)])
     ];
 
-    internal static byte[] Render(PremultipliedFrame frame, bool hanging, double phase, Point? pin)
+    internal static byte[] Render(PremultipliedFrame frame, bool hanging, double phase, Point? pin, HuntPose? bodyPose = null)
     {
         var width = frame.Source.PixelWidth;
         var pad = width == 160 ? 32 : 0;
@@ -26,6 +26,12 @@ internal static class ForelegFlutterFrame
         var strippedTorsoInk = new bool[width * width];
         var armCoverage = new double[width * width];
         var arms = hanging ? Hanging : Canonical;
+        if (bodyPose is { } pose)
+        {
+            Point Map(Point p) { var mapped = pose.Map(p.X,p.Y); return new(mapped.X,mapped.Y); }
+            arms = Canonical.Select(a => new Arm(Map(a.Root),a.Mask.Select(Map).ToArray())).ToArray();
+        }
+        bool Foreground(int x,int y) => bodyPose is null && HeadForeground(hanging,x,y);
         var layers = new List<(Arm Arm, byte[] Pixels, double Angle)>();
         for (var armIndex = 0; armIndex < arms.Length; armIndex++)
         {
@@ -35,7 +41,7 @@ internal static class ForelegFlutterFrame
             var layer = new byte[frame.Pixels.Length];
             for (var y = 0; y < 96; y++) for (var x = 0; x < 96; x++)
             {
-                if (HeadForeground(hanging,x,y) || !Inside(arm.Mask, x + .5, y + .5)) continue;
+                if (Foreground(x,y) || !Inside(arm.Mask, x + .5, y + .5)) continue;
                 var at = ((y + pad) * width + x + pad) * 4;
                 // The first paw meets the static torso here. Keep its left
                 // contour, but clear the old tip's inner antialias fringe.
@@ -76,12 +82,16 @@ internal static class ForelegFlutterFrame
             var angle = (52 + 13 * Math.Sin(phase * Math.PI * 2 - armIndex * Math.PI)) * Math.PI / 180;
             layers.Add((arm, layer, angle));
         }
+        // The head is a foreground cutout, not an opaque rectangle. Remove its
+        // base copy before drawing paws, then composite its actual coverage once.
+        for (var y = 0; y < 96; y++) for (var x = 0; x < 96; x++)
+            if (Foreground(x,y)) Array.Clear(result, ((y + pad) * width + x + pad) * 4, 4);
         foreach (var (arm, layer, angle) in layers)
         {
             var cos = Math.Cos(angle); var sin = Math.Sin(angle);
             for (var y = 0; y < 96; y++) for (var x = 0; x < 96; x++)
             {
-                if (hanging ? y < 52 || y >= 69 || x >= 63 : y < 67 || y >= 91 || x >= 53) continue;
+                if (bodyPose is null && (hanging ? y < 48 || y >= 69 || x >= 63 : y < 63 || y >= 91 || x >= 53)) continue;
                 var dx = x - arm.Root.X; var dy = y - arm.Root.Y;
                 var sx = arm.Root.X + cos * dx + sin * dy + pad;
                 var sy = arm.Root.Y - sin * dx + cos * dy + pad;
@@ -116,12 +126,19 @@ internal static class ForelegFlutterFrame
                     (frame.Pixels[donor+c]*result[at+3]+frame.Pixels[donor+3]/2)/frame.Pixels[donor+3]);
             }
         }
-        // Exact head foreground and pointer pin win over every layer/closure.
+        // Transparent space beside the hair must reveal the raised paw. Opaque
+        // head texels remain exact; antialiased edges cover the paw only once.
         for(var y=0;y<96;y++) for(var x=0;x<96;x++)
         {
-            var protect = HeadForeground(hanging,x,y);
-            if(pin is { } p) protect |= Math.Abs(x+pad-p.X)<=3 && Math.Abs(y+pad-p.Y)<=3;
-            if(protect) Array.Copy(frame.Pixels,((y+pad)*width+x+pad)*4,result,((y+pad)*width+x+pad)*4,4);
+            var at = ((y + pad) * width + x + pad) * 4;
+            if (Foreground(x,y))
+            {
+                var uncovered = 1 - frame.Pixels[at+3] / 255d;
+                for (var c = 0; c < 4; c++)
+                    result[at+c] = (byte)Math.Clamp(Math.Round(frame.Pixels[at+c] + result[at+c] * uncovered), 0, 255);
+            }
+            if(pin is { } p && Math.Abs(x+pad-p.X)<=3 && Math.Abs(y+pad-p.Y)<=3)
+                Array.Copy(frame.Pixels,at,result,at,4);
         }
         return result;
     }

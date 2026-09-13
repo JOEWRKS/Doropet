@@ -24,7 +24,12 @@ public sealed record DesktopWindow(
     bool CanSupport,
     bool CanOcclude,
     bool Taskbar,
-    bool HorizontalTaskbar);
+    bool HorizontalTaskbar)
+{
+    // Menus retain ordinary occlusion; only their own shell process's taskbar
+    // treats them as transient UI rather than a removed supporting edge.
+    public bool IsTransientMenu { get; init; }
+}
 
 public sealed record DesktopScene(
     long Revision,

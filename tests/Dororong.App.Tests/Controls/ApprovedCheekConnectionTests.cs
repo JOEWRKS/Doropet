@@ -23,7 +23,7 @@ public sealed class ApprovedCheekConnectionTests
             var pull = ms < 240 ? ms / 12d : 20;
             if (ms > 400) { var t = Math.Clamp((ms - 400) / 220d, 0, 1); pull = 20 * (1 - t * t * (3 - 2 * t)); }
             Draw(presenter, capture, pull, ms > 400, ms == 0 ? 0 : 20);
-            Assert.True(Read($"motion-{ms:D3}.png").SequenceEqual(Pixels(presenter)), $"Approved motion mismatch at {ms} ms");
+            Assert.True(Read($"motion-{ms:D3}.png",true).SequenceEqual(Pixels(presenter)), $"Approved motion mismatch at {ms} ms");
             if (ms == 400) Draw(presenter, capture, pull, true, 0);
         }
     });
@@ -36,7 +36,7 @@ public sealed class ApprovedCheekConnectionTests
         Draw(presenter, capture, 20, false, 10000);
         var pixels = Pixels(presenter);
         Assert.True(Enumerable.Range(53, 12).Count(y => pixels[(y * 96 + 3) * 4 + 3] >= 128) >= 4, "Approved tip must have a rounded, non-pointed span");
-        Assert.Equal(Read("max-native.png"), pixels);
+        Assert.Equal(Read("max-native.png",true), pixels);
         Assert.NotEqual(CheekProductTests.Read("max-native.png"), pixels);
     });
 
@@ -49,7 +49,7 @@ public sealed class ApprovedCheekConnectionTests
         Draw(presenter, capture, 20, false, 100); var followed = Pixels(presenter);
         Assert.False(initial.SequenceEqual(followed), "Eye/hair follow must consume actual elapsed time");
         Draw(presenter, capture, 20, true, 73); Assert.Equal(followed, Pixels(presenter));
-        Draw(presenter, capture, 0, true, 220); Assert.Equal(Read("rest-native.png"), Pixels(presenter));
+        Draw(presenter, capture, 0, true, 220); Assert.Equal(Read("rest-native.png",true), Pixels(presenter));
         presenter.Render(new(PetState.Idle, new(100, 100), FacingDirection.Right, 0, false, null), DirectInteractionSnapshot.None);
         Draw(presenter, capture, 20, false, 0); Assert.Equal(initial, Pixels(presenter));
     });
@@ -106,7 +106,7 @@ public sealed class ApprovedCheekConnectionTests
         {
             Draw(presenter, capture, pull, false, 10000); CheekProductTests.Layout(presenter);
             var actual = (BitmapSource)CheekLiveConnectionTests.Overlay(presenter).Source;
-            Assert.Equal(Read(pull == 0 ? "rest-native.png" : pull == 10 ? "half-native.png" : "max-native.png"), Pixels(presenter));
+            Assert.Equal(Read(pull == 0 ? "rest-native.png" : pull == 10 ? "half-native.png" : "max-native.png",true), Pixels(presenter));
             frames.Add(actual);
         }
         var destination = Environment.GetEnvironmentVariable("DORORONG_CHEEK_PROOF");
@@ -147,7 +147,7 @@ public sealed class ApprovedCheekConnectionTests
     }
 
     internal static byte[] Pixels(DororongPresenter presenter) => CheekLiveConnectionTests.Pixels(CheekLiveConnectionTests.Overlay(presenter));
-    internal static byte[] Read(string name)
+    internal static byte[] Read(string name,bool cleanedRump=false)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "DororongDesktopPet.sln"))) directory = directory.Parent;
@@ -155,6 +155,6 @@ public sealed class ApprovedCheekConnectionTests
         var path = Path.Combine(directory.FullName, "tests", "Dororong.App.Tests", "Fixtures", "ApprovedRoundedCheek", name);
         var decoder = BitmapDecoder.Create(new Uri(path), BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
         var bitmap = new FormatConvertedBitmap(decoder.Frames[0], PixelFormats.Bgra32, null, 0);
-        var pixels = new byte[96 * 96 * 4]; bitmap.CopyPixels(pixels, 384, 0); return pixels;
+        var pixels = new byte[96 * 96 * 4]; bitmap.CopyPixels(pixels, 384, 0); return cleanedRump?UprightRumpTests.CleanFixture(pixels):pixels;
     }
 }

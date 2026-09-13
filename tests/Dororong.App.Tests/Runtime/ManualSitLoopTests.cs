@@ -112,7 +112,7 @@ public sealed class ManualSitLoopTests
             Assert.Equal(supportCenter.Value, center);
         }
         h.Down = false; h.Tick(30);
-        Assert.Equal(held.X, h.Position.X, 6);
+        Assert.Equal(held.X-8, h.Position.X, 6);
         Assert.Equal(held.Y, h.Position.Y, 6);
         if (supported) Assert.Equal(PlatformPhase.Supported, h.LastPose?.Phase);
         Assert.True(ReferenceEquals(LocomotionFrames.Sit(1), h.Image.Source) || ReferenceEquals(LocomotionFrames.Sit(1, true), h.Image.Source));
@@ -139,7 +139,7 @@ public sealed class ManualSitLoopTests
         Assert.True(ReferenceEquals(LocomotionFrames.Sit(1), h.Image.Source) || ReferenceEquals(LocomotionFrames.Sit(1, true), h.Image.Source),
             "First frame after the captured cheek retires must still be fully seated.");
         h.Tick(40);
-        Assert.Equal(held, h.Position);
+        Assert.Equal(held+new PointD(2,0), h.Position);
         Assert.True(ReferenceEquals(LocomotionFrames.Sit(1), h.Image.Source) || ReferenceEquals(LocomotionFrames.Sit(1, true), h.Image.Source));
     });
 

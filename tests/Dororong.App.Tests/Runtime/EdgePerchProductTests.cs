@@ -49,8 +49,7 @@ public partial class PetLoopPlatformTests
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
-    [InlineData(6)]
-    public void Actual_head_body_and_cheek_carry_state_can_attach_but_local_sessions_cannot(int target) => Controls.CheekProductTests.Sta(() =>
+    public void Actual_head_and_body_carry_state_can_attach_but_local_sessions_cannot(int target) => Controls.CheekProductTests.Sta(() =>
     {
         using var h = new Harness(realPresenter: true, perchEnabled: true);
         h.Start(); h.Press(target); h.Tick(80);

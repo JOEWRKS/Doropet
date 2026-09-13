@@ -13,7 +13,7 @@ $output = Assert-InstallerOutputPath -OutputPath $OutputPath
 $payload = Get-InstallerPayload -PackagePath $PackagePath
 $archive = (Resolve-Path -LiteralPath $ArchivePath).Path
 $archiveHash = (Get-FileHash -LiteralPath $archive).Hash
-if ($archiveHash -cne '7BB45700A174D98123383B52FB39C913CA2F9EDA924827CBD14D97C136E20BC6') {
+if ($archiveHash -cne 'D32CE2FEA6304EA7BFEEB85922649A693BDB7FB118EE85FC5EAD9D01455ABA6A') {
     throw 'Archive hash does not match the approved 0.1.0 candidate.'
 }
 $compiler = (Resolve-Path -LiteralPath $CompilerPath).Path

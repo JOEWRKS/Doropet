@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF><ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Dororong.App.Tests</AssemblyName>
+    <ProductDirectory Condition="'$(ProductDirectory)' == ''">C:/Users/tjdwo/AppData/Local/Programs/JOEWRKS/Dororong</ProductDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Dororong.App"><HintPath>$(ProductDirectory)/Dororong.App.dll</HintPath></Reference>
+    <Reference Include="Dororong.Core"><HintPath>$(ProductDirectory)/Dororong.Core.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

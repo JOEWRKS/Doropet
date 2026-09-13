@@ -38,7 +38,7 @@ internal sealed class PetPlatformRuntime
     {
         _source=source; _map=map; _measure=measure; _present=present; _fallbackMonitors=fallbackMonitors;
         _presentPerch=presentPerch;
-        if(measurePerch is not null) _perch=new(measurePerch);
+        if(measurePerch is not null) _perch=new(measurePerch, () => _hasGeometry ? Contact.SoleY : null);
     }
     internal bool SuspendsAutonomousMotion => _perch is { Current.Phase: not EdgePerchPhase.None } || !_reliable || !_hasGeometry ||
         _motion.Current.Phase is PlatformPhase.Falling or PlatformPhase.Landing or PlatformPhase.Lifting;
@@ -130,15 +130,22 @@ internal sealed class PetPlatformRuntime
     {
         if(_perch is null || _scene is null || _sceneHealth is not (SceneReadHealth.Fresh or SceneReadHealth.Cached)) return false;
         var surfaces=BuildPerchSurfaces();
-        if(!_perch.TryBegin(displayed,facing,surfaces,_scene.Monitors,carryReleased,pointerReliable,sceneReliable:true)) return false;
+        var readbackTolerance = _previousMap is { } map
+            ? new SizeD(1.000001 / map.ScaleX, 1.000001 / map.ScaleY) : default;
+        if(!_perch.TryBegin(displayed,facing,surfaces,_scene.Monitors,carryReleased,pointerReliable,
+            sceneReliable:true,readbackTolerance)) return false;
         _motion.Reset(displayed);_lastPosition=displayed;_framePosition=displayed;_immediatePerchRestore=false;
         return true;
     }
 
-    internal bool CanBeginPerch(PointD displayed, FacingDirection facing, bool heldCarry, bool pointerReliable) =>
-        heldCarry && pointerReliable && _perch is not null && _scene is not null &&
-        _sceneHealth is SceneReadHealth.Fresh or SceneReadHealth.Cached &&
-        _perch.CanBegin(displayed, facing, BuildPerchSurfaces(), _scene.Monitors);
+    internal bool CanBeginPerch(PointD displayed, FacingDirection facing, bool heldCarry, bool pointerReliable,
+        bool advertise = false)
+    {
+        if (advertise) _perch?.ClearReadiness();
+        return heldCarry && pointerReliable && _perch is not null && _scene is not null &&
+            _sceneHealth is SceneReadHealth.Fresh or SceneReadHealth.Cached &&
+            _perch.CanBegin(displayed, facing, BuildPerchSurfaces(), _scene.Monitors, advertise);
+    }
 
     internal bool TryAdvancePerch(TimeSpan delta,PointD displayed,out PointD position)
     {
@@ -242,6 +249,7 @@ internal sealed class PetPlatformRuntime
     internal void Reset(PointD displayed) {_motion.Reset(displayed);_lastPosition=displayed;_landingClearanceHeight=null;}
     internal void Clear(PointD displayed)
     {
+        _perch?.ClearReadiness();
         ReleasePerch(displayed,immediate:true);Reset(displayed);_present(null,null);Measure();
         _presentPerch?.Invoke(EdgePerchPhase.None,_perch?.Facing ?? FacingDirection.Right,TimeSpan.Zero,true);
         _immediatePerchRestore=false;
