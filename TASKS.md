@@ -12,8 +12,13 @@
   and 641-frame preservation validators PASS. Diff check and generated-output
   exclusion checks PASS;139source/docs files staged, no oversized or credential
   filename candidates. Main is clean and an ancestor of this approved branch.
-- [ ] Commit current product work, fast-forward main, verify merged checkout,
-  then push without force. Preserve working tree and local backups.
+- [x] Product/README checkpoint335de2b committed; clean main fast-forwarded.
+  Fresh main checkout rebuilt: Core241/App1072 PASS (0failed,0skipped).
+  README links PASS; merged tree exactly matches approved feature checkout.
+  Normal push succeeded; origin/main verified335de2b49539bc3e566ab64cf616f7d7ec0911ce.
+  Source push only, no release asset upload or installed-program change.
+  Historical tracked art/proof artifacts retained; no newly generated binaries,
+  installer packages or TestResults committed. Worktree and backups preserved.
 
 ## Idle black rump spur reproduced — 2026-09-14
 
